@@ -1,1 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
+[project]
+name = "auratrace"
+version = "1.0.0"
+authors = [{ name="Sunil Singh", email="sunilsinghrajput192@gmail.com" }]
+description = "Official Python Telemetry & Crash Reporting SDK for AuraTrace"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "httpx>=0.24.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/sunilsingh175/auratrace"

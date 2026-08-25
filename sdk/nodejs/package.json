@@ -1,1 +1,14 @@
-
+{
+  "name": "@auratrace/node",
+  "version": "1.0.0",
+  "description": "Official Node.js Telemetry & Crash Diagnostic SDK for AuraTrace",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": ["observability", "apm", "telemetry", "tracing", "auratrace", "crash-reporting"],
+  "author": "Sunil Singh <sunilsinghrajput192@gmail.com>",
+  "license": "MIT",
+  "dependencies": {}
+}
