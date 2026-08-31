@@ -1,75 +1,38 @@
-"""
-AuraTrace pgvector Similarity Search
-Performs Approximate Nearest Neighbor (ANN) cosine distance queries on the Knowledge Base.
-"""
+import os
+import sys
+from sqlalchemy import select
 
-from typing import List, Dict, Any, Optional
-from sqlalchemy import select, func, text
-from sqlalchemy.ext.asyncio import AsyncSession
+# Ensure workspace and current dir are in sys.path for standalone and package execution
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from backend.shared.database import AsyncSessionLocal, IncidentKnowledgeBase
 try:
-    from .embeddings import embedding_engine
+    from .embeddings import embedder
+except (ImportError, ValueError):
+    from embeddings import embedder
+
+try:
+    from backend.shared.database import AsyncSessionLocal, IncidentReport
 except ImportError:
-    from embeddings import embedding_engine
-from backend.shared.logger import get_logger
-
-logger = get_logger("rag-vector-store")
-
+    from shared.database import AsyncSessionLocal, IncidentReport
 
 class VectorStore:
-    async def search_similar_incidents(
-        self,
-        stack_trace: str,
-        error_type: Optional[str] = None,
-        top_k: int = 3
-    ) -> List[Dict[str, Any]]:
-        """
-        Computes the vector embedding of the query stack trace and performs
-        cosine distance similarity search against PostgreSQL pgvector index.
-        """
-        query_vector = embedding_engine.embed_text(stack_trace)
-        results = []
+    async def search_similar_incidents(self, stack_trace: str, error_type: str, top_k: int = 3):
+        search_query = f"{error_type} {stack_trace}"
+        query_embedding = embedder.get_embedding(search_query)
+        
+        async with AsyncSessionLocal() as session:
+            # Query pgvector for cosine similarity using hnsw index
+            stmt = select(IncidentReport).order_by(
+                IncidentReport.embedding.cosine_distance(query_embedding)
+            ).limit(top_k)
+            
+            result = await session.execute(stmt)
+            incidents = result.scalars().all()
+            
+            return [
+                {"root_cause": inc.ai_root_cause, "patch": inc.ai_suggested_patch}
+                for inc in incidents if inc.ai_root_cause
+            ]
 
-        try:
-            async with AsyncSessionLocal() as session:
-                # pgvector cosine distance operator is <=>
-                # 1 - cosine_distance gives cosine similarity
-                stmt = select(
-                    IncidentKnowledgeBase.id,
-                    IncidentKnowledgeBase.error_type,
-                    IncidentKnowledgeBase.stack_trace_pattern,
-                    IncidentKnowledgeBase.root_cause,
-                    IncidentKnowledgeBase.recommended_patch,
-                    IncidentKnowledgeBase.embedding.cosine_distance(query_vector).label("distance"),
-                ).order_by(
-                    IncidentKnowledgeBase.embedding.cosine_distance(query_vector)
-                ).limit(top_k)
-
-                res = await session.execute(stmt)
-                rows = res.all()
-
-                for row in rows:
-                    similarity = max(0.0, 1.0 - float(row.distance if row.distance is not None else 1.0))
-                    results.append({
-                        "id": row.id,
-                        "error_type": row.error_type,
-                        "stack_trace_pattern": row.stack_trace_pattern,
-                        "root_cause": row.root_cause,
-                        "recommended_patch": row.recommended_patch,
-                        "similarity_score": round(similarity, 3),
-                    })
-
-                logger.info(
-                    "Retrieved %d matching knowledge base records for error '%s' (Top similarity: %.2f)",
-                    len(results), error_type or "Unknown", results[0]["similarity_score"] if results else 0.0
-                )
-
-        except Exception as e:
-            logger.error("Vector search failed in pgvector: %s", str(e), exc_info=True)
-
-        return results
-
-
-# Global Singleton VectorStore
 vector_store = VectorStore()
