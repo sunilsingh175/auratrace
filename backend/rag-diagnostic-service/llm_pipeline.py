@@ -1,6 +1,5 @@
 import os
 import sys
-import google.generativeai as genai
 
 # Ensure workspace is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -11,11 +10,22 @@ except ImportError:
     from shared.logger import get_logger
 
 logger = get_logger("llm-pipeline")
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash')
+
+try:
+    import google.generativeai as genai
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception:
+    genai = None
+    model = None
 
 class LLMDoctor:
     async def diagnose_incident(self, service_id, error_type, stack_trace, reason, similar_records):
+        if not model:
+            return f"Anomaly detected in {service_id}: {error_type}. (Configure GEMINI_API_KEY for full AI diagnosis)", "Inspect logs and verify service dependencies."
+        
         context = "\n".join([f"- Cause: {r['root_cause']}\n  Patch: {r['patch']}" for r in similar_records])
         
         prompt = f"""

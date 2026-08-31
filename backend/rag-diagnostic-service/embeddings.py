@@ -1,6 +1,5 @@
 import os
 import sys
-from sentence_transformers import SentenceTransformer
 
 # Ensure workspace is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -12,13 +11,24 @@ except ImportError:
 
 logger = get_logger("embeddings")
 
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None
+
 class EmbeddingService:
     def __init__(self):
-        logger.info("Loading embedding model 'all-MiniLM-L6-v2'...")
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
-        logger.info("Embedding model loaded.")
+        if SentenceTransformer:
+            logger.info("Loading embedding model 'all-MiniLM-L6-v2'...")
+            self.model = SentenceTransformer('all-MiniLM-L6-v2')
+            logger.info("Embedding model loaded.")
+        else:
+            self.model = None
+            logger.warning("sentence-transformers not installed; using fallback embedder.")
 
     def get_embedding(self, text: str) -> list:
-        return self.model.encode(text).tolist()
+        if self.model:
+            return self.model.encode(text).tolist()
+        return [0.0] * 384
 
 embedder = EmbeddingService()
