@@ -53,8 +53,21 @@ yarn-error.log*
 Thumbs.db
 Desktop.ini
 
+# Conflict & Backup Files
+*-HP.*
+*-HP
+*-HP-*
+*.orig
+*.bak
+
+# Archives & Packages
+*.tgz
+*.tar.gz
+*.zip
+
 # IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
+

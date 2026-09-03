@@ -37,12 +37,22 @@ async def process_stream():
     while True:
         try:
             messages = await redis_client.xread({REDIS_STREAM_KEY: last_id}, count=50, block=2000)
+            if not messages:
+                continue
+                
             for stream, entries in messages:
                 for message_id, message_data in entries:
                     last_id = message_id
-                    payload = json.loads(message_data["payload"])
+                    
+                    # Safely handle payload parsing
+                    raw_payload = message_data.get("payload")
+                    if not raw_payload:
+                        continue
+                        
+                    payload = json.loads(raw_payload)
                     buffer.add_log(payload)
                     
+                    # Extract features and evaluate using the updated buffer dimensions
                     features = buffer.extract_features()
                     if payload.get("level") == "ERROR" and detector.predict(features):
                         alert = {

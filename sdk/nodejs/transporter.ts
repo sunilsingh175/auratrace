@@ -1,71 +1,58 @@
 /**
- * AuraTrace Node.js HTTP Transporter
- * Non-blocking event buffering and batch dispatch.
+ * AuraTrace Batch Transporter
  */
 
 export interface TelemetryPayload {
   service_id: string;
-  timestamp?: string;
-  level: "DEBUG" | "INFO" | "WARN" | "ERROR" | "CRITICAL";
-  latency_ms?: number;
-  error_type?: string;
   message?: string;
-  stack_trace?: string;
+  error_type?: string;
+  raw_stack_trace?: string;
+  anomaly_score?: number;
   metadata?: Record<string, any>;
+  level?: "DEBUG" | "INFO" | "WARN" | "ERROR" | "CRITICAL";
+  timestamp?: string;
+}
+
+export interface TransporterConfig {
+  endpoint?: string;
+  apiKey: string;
+  serviceId: string;
 }
 
 export class BatchTransporter {
-  private queue: TelemetryPayload[] = [];
-  private timer: NodeJS.Timeout | null = null;
   private endpoint: string;
   private apiKey: string;
-  private batchSize: number;
-  private flushIntervalMs: number;
+  private serviceId: string;
 
-  constructor(endpoint: string, apiKey: string, batchSize: number = 50, flushIntervalMs: number = 1000) {
-    this.endpoint = endpoint.replace(/\/$/, "");
-    this.apiKey = apiKey;
-    this.batchSize = batchSize;
-    this.flushIntervalMs = flushIntervalMs;
-    this.startTimer();
+  constructor(config: TransporterConfig) {
+    this.endpoint = (config.endpoint || "http://localhost:8000").replace(/\/$/, "");
+    this.apiKey = config.apiKey;
+    this.serviceId = config.serviceId;
   }
 
-  public enqueue(item: TelemetryPayload) {
-    if (this.queue.length >= 10000) {
-      this.queue.shift(); // Drop oldest under backpressure
-    }
-    this.queue.push({
-      ...item,
-      timestamp: item.timestamp || new Date().toISOString(),
-    });
-
-    if (this.queue.length >= this.batchSize) {
-      this.flush();
-    }
-  }
-
-  private startTimer() {
-    this.timer = setInterval(() => {
-      this.flush();
-    }, this.flushIntervalMs);
-    if (this.timer.unref) this.timer.unref();
-  }
-
-  public async flush() {
-    if (this.queue.length === 0) return;
-    const batch = this.queue.splice(0, this.batchSize);
-
+  async send(payload: Partial<TelemetryPayload>) {
     try {
-      await fetch(`${this.endpoint}/api/v1/telemetry/batch`, {
+      const response = await fetch(`${this.endpoint}/api/v1/telemetry`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-API-Key": this.apiKey,
         },
-        body: JSON.stringify({ events: batch }),
+        body: JSON.stringify({
+          service_id: this.serviceId,
+          ...payload,
+        }),
       });
-    } catch {
-      // Fail silently to avoid breaking the main application thread
+
+      if (!response.ok) {
+        throw new Error(`Telemetry ingestion failed with status ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("AuraTrace Transporter Error:", error);
+      throw error;
     }
   }
 }
+

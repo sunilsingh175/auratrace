@@ -3,6 +3,7 @@ import sys
 import json
 import asyncio
 import uuid
+from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 import redis.asyncio as aioredis
 from sqlalchemy import select
@@ -14,9 +15,11 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 try:
     from .vector_store import vector_store
     from .llm_pipeline import llm_doctor
+    from .embeddings import embedder
 except (ImportError, ValueError):
     from vector_store import vector_store
     from llm_pipeline import llm_doctor
+    from embeddings import embedder
 
 try:
     from backend.shared.database import AsyncSessionLocal, IncidentReport
@@ -81,13 +84,24 @@ class RAGWorker:
         if incident_id:
             try:
                 inc_uuid = uuid.UUID(incident_id)
+                emb = embedder.get_embedding(f"{error_type} {stack_trace}")
                 async with AsyncSessionLocal() as session:
                     res = await session.execute(select(IncidentReport).where(IncidentReport.id == inc_uuid))
-                    incident = res.scalars().first()
+                    incident: Any = res.scalars().first()
                     
                     if not incident:
-                        incident = IncidentReport(id=inc_uuid, service_id=service_id, error_type=error_type, stack_trace=stack_trace, reason=reason)
+                        incident = IncidentReport(
+                            id=inc_uuid,
+                            service_id=service_id,
+                            error_type=error_type,
+                            stack_trace=stack_trace,
+                            reason=reason,
+                            embedding=emb
+                        )
                         session.add(incident)
+                    else:
+                        if not incident.embedding:
+                            incident.embedding = emb
                         
                     incident.ai_root_cause = root_cause
                     incident.ai_suggested_patch = patch
