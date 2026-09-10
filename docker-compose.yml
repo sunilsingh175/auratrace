@@ -4,114 +4,89 @@ services:
     container_name: auratrace-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_password_123
-      POSTGRES_DB: auratrace_db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-auratrace_db}
+    ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./database/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ./database/02-seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d auratrace_db" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-auratrace_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - auratrace-net
+    networks: [auratrace-net]
 
   redis-broker:
     image: redis:7.2-alpine
     container_name: auratrace-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
+    ports: ["6379:6379"]
+    volumes: [redisdata:/data]
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - auratrace-net
+    networks: [auratrace-net]
 
   ingestion-service:
-    build:
-      context: .
-      dockerfile: backend/ingestion-service/Dockerfile
+    build: {context: ., dockerfile: backend/ingestion_service/Dockerfile}
     container_name: auratrace-ingestion
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres_password_123@postgres-db:5432/auratrace_db
-      - REDIS_HOST=redis-broker
-      - REDIS_STREAM_KEY=telemetry_stream
-    ports:
-      - "8000:8000"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change_me}@postgres-db:5432/${POSTGRES_DB:-auratrace_db}
+      REDIS_HOST: redis-broker
+      REDIS_STREAM_KEY: telemetry_stream
+      AURA_MASTER_API_KEY: ${AURA_MASTER_API_KEY:-change_me}
+    ports: ["8000:8000"]
     depends_on:
-      postgres-db:
-        condition: service_healthy
-      redis-broker:
-        condition: service_healthy
-    networks:
-      - auratrace-net
+      postgres-db: {condition: service_healthy}
+      redis-broker: {condition: service_healthy}
+    networks: [auratrace-net]
 
   ml-anomaly-service:
-    build:
-      context: .
-      dockerfile: backend/ml-anomaly-service/Dockerfile
+    build: {context: ., dockerfile: backend/ml-anomaly-service/Dockerfile}
     container_name: auratrace-ml-worker
     restart: unless-stopped
     environment:
-      - REDIS_HOST=redis-broker
-      - REDIS_STREAM_KEY=telemetry_stream
-      - REDIS_ANOMALY_CHANNEL=anomaly_events
-    depends_on:
-      - redis-broker
-    networks:
-      - auratrace-net
+      REDIS_HOST: redis-broker
+      REDIS_STREAM_KEY: telemetry_stream
+      REDIS_ANOMALY_CHANNEL: anomaly_events
+    depends_on: [redis-broker]
+    networks: [auratrace-net]
 
   rag-diagnostic-service:
-    build:
-      context: .
-      dockerfile: backend/rag-diagnostic-service/Dockerfile
+    build: {context: ., dockerfile: backend/rag-diagnostic-service/Dockerfile}
     container_name: auratrace-rag-doctor
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres_password_123@postgres-db:5432/auratrace_db
-      - REDIS_HOST=redis-broker
-      - REDIS_ANOMALY_CHANNEL=anomaly_events
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change_me}@postgres-db:5432/${POSTGRES_DB:-auratrace_db}
+      REDIS_HOST: redis-broker
+      REDIS_ANOMALY_CHANNEL: anomaly_events
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     depends_on:
-      postgres-db:
-        condition: service_healthy
-      redis-broker:
-        condition: service_healthy
-    networks:
-      - auratrace-net
+      postgres-db: {condition: service_healthy}
+      redis-broker: {condition: service_healthy}
+    networks: [auratrace-net]
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    build: {context: ./frontend, dockerfile: Dockerfile}
     container_name: auratrace-frontend
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    ports: ["3000:3000"]
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws/telemetry
-    depends_on:
-      - ingestion-service
-    networks:
-      - auratrace-net
+      AURA_API_URL: http://ingestion-service:8000
+      AURA_MASTER_API_KEY: ${AURA_MASTER_API_KEY:-change_me}
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000/ws/telemetry
+    depends_on: [ingestion-service]
+    networks: [auratrace-net]
 
 networks:
-  auratrace-net:
-    driver: bridge
-
+  auratrace-net: {driver: bridge}
 volumes:
   pgdata:
   redisdata:
