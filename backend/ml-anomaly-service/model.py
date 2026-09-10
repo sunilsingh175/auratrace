@@ -14,14 +14,20 @@ class AnomalyDetector:
         self._load_model()
 
     def _load_model(self):
-        if os.path.exists(self.model_path_pkl):
-            with open(self.model_path_pkl, 'rb') as f:
-                self.model = pickle.load(f)
-        elif joblib and os.path.exists(self.model_path_joblib):
+        if joblib and os.path.exists(self.model_path_joblib):
             try:
                 self.model = joblib.load(self.model_path_joblib)
-            except Exception:
-                pass
+                return
+            except Exception as e:
+                print(f"Failed to load joblib model: {e}")
+        
+        if os.path.exists(self.model_path_pkl):
+            try:
+                with open(self.model_path_pkl, 'rb') as f:
+                    self.model = pickle.load(f)
+                return
+            except Exception as e:
+                print(f"Failed to load pickle model: {e}")
 
     def predict(self, features: list) -> bool:
         if not self.model:

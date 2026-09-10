@@ -4,6 +4,17 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import datetime
 import uuid
+import os
+import sys
+
+# Ensure workspace and local modules are resolvable
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+try:
+    from .producer import push_log_to_stream
+except (ImportError, ValueError):
+    from producer import push_log_to_stream
 
 app = FastAPI(title="AuraTrace Ingestion Service")
 
@@ -61,6 +72,7 @@ async def ingest_telemetry(
         "type": "LOG_ENTRY",
         "service_id": payload.service_id,
         "message": payload.message or "No message provided",
+        "log_message": payload.message or "No message provided",
         "level": "ERROR" if payload.error_type else "INFO",
         "error_type": payload.error_type,
         "raw_stack_trace": payload.raw_stack_trace,
@@ -69,7 +81,14 @@ async def ingest_telemetry(
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
     }
 
+    # Broadcast to live WebSocket clients
     await manager.broadcast(log_event)
+
+    # Push to Redis Stream for ML Anomaly Worker
+    try:
+        await push_log_to_stream(log_event)
+    except Exception as e:
+        print(f"Error publishing to Redis stream: {e}")
     
     return {
         "status": "success",
@@ -104,4 +123,9 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket)        
+        manager.disconnect(websocket)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+        
