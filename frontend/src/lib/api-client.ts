@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = "/api/aura";
 
 export interface Incident {
   id: string;
@@ -33,11 +33,7 @@ export interface ServiceItem {
 async function request(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
-  return fetch(path.startsWith("http") ? path : `${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    cache: "no-store",
-  });
+  return fetch(`${API_BASE_URL}${path}`, { ...options, headers, cache: "no-store" });
 }
 
 export async function fetchIncidents(params?: { status?: string; service_id?: string; limit?: number }): Promise<Incident[]> {
@@ -46,43 +42,28 @@ export async function fetchIncidents(params?: { status?: string; service_id?: st
     if (params?.status) query.set("status_filter", params.status);
     if (params?.service_id) query.set("service_id", params.service_id);
     if (params?.limit) query.set("limit", String(params.limit));
-    const res = await request(`/api/v1/incidents?${query.toString()}`);
+    const res = await request(`/incidents?${query}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (error) {
-    console.error("Failed to fetch incidents:", error);
-    return [];
-  }
+  } catch (error) { console.error("Failed to fetch incidents:", error); return []; }
 }
 
 export async function fetchIncidentById(id: string): Promise<Incident | null> {
-  try {
-    const res = await request(`/api/v1/incidents/${encodeURIComponent(id)}`);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (error) {
-    console.error(`Failed to fetch incident ${id}:`, error);
-    return null;
-  }
+  try { const res = await request(`/incidents/${encodeURIComponent(id)}`); return res.ok ? await res.json() : null; }
+  catch (error) { console.error(`Failed to fetch incident ${id}:`, error); return null; }
 }
 
 export async function updateIncidentStatus(id: string, status: "OPEN" | "INVESTIGATING" | "RESOLVED"): Promise<Incident | null> {
   try {
-    const res = await request(`/api/v1/incidents/${encodeURIComponent(id)}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    });
+    const res = await request(`/incidents/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (error) {
-    console.error("Failed to update incident status:", error);
-    return null;
-  }
+  } catch (error) { console.error("Failed to update incident status:", error); return null; }
 }
 
 export async function fetchSystemStats(): Promise<SystemStats> {
   try {
-    const res = await request("/api/v1/stats");
+    const res = await request("/stats");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch {
@@ -91,22 +72,14 @@ export async function fetchSystemStats(): Promise<SystemStats> {
 }
 
 export async function fetchServices(): Promise<ServiceItem[]> {
-  try {
-    const res = await request("/api/v1/services");
-    if (!res.ok) return [];
-    return await res.json();
-  } catch {
-    return [];
-  }
+  try { const res = await request("/services"); return res.ok ? await res.json() : []; }
+  catch { return []; }
 }
 
 export async function registerService(data: { id: string; name: string; environment: string }): Promise<ServiceItem | null> {
   try {
-    const res = await request("/api/v1/services", { method: "POST", body: JSON.stringify(data) });
+    const res = await request("/services", { method: "POST", body: JSON.stringify(data) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (error) {
-    console.error("Failed to register service:", error);
-    return null;
-  }
+  } catch (error) { console.error("Failed to register service:", error); return null; }
 }
