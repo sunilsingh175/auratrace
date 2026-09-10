@@ -1,0 +1,11 @@
+{
+  "service_id": "rag-final-test",
+  "message": "Database connection failed during final pipeline test",
+  "error_type": "ConnectionError",
+  "raw_stack_trace": "ConnectionError: PostgreSQL unavailable",
+  "anomaly_score": 0.95,
+  "metadata": {
+    "environment": "development",
+    "test": "final-e2e"
+  }
+}
