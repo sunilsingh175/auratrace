@@ -1,9 +1,4 @@
-/**
- * AuraTrace REST API Client
- */
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const MASTER_API_KEY = "aura_secret_key_123";
+const API_BASE_URL = "/api/aura";
 
 export interface Incident {
   id: string;
@@ -35,115 +30,56 @@ export interface ServiceItem {
   created_at: string;
 }
 
-export async function fetchIncidents(params?: {
-  status?: string;
-  service_id?: string;
-  limit?: number;
-}): Promise<Incident[]> {
-  try {
-    const url = new URL(`${API_BASE_URL}/api/v1/incidents`);
-    if (params?.status) url.searchParams.append("status", params.status);
-    if (params?.service_id) url.searchParams.append("service_id", params.service_id);
-    if (params?.limit) url.searchParams.append("limit", params.limit.toString());
+async function request(path: string, options: RequestInit = {}) {
+  const headers = new Headers(options.headers);
+  headers.set("Content-Type", "application/json");
+  return fetch(`${API_BASE_URL}?path=${encodeURIComponent(path.replace(/^\//, ""))}`, { ...options, headers, cache: "no-store" });
+}
 
-    const res = await fetch(url.toString(), {
-      headers: { "X-API-Key": MASTER_API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+export async function fetchIncidents(params?: { status?: string; service_id?: string; limit?: number }): Promise<Incident[]> {
+  try {
+    const query = new URLSearchParams();
+    if (params?.status) query.set("status_filter", params.status);
+    if (params?.service_id) query.set("service_id", params.service_id);
+    if (params?.limit) query.set("limit", String(params.limit));
+    const res = await request(`incidents?${query}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (error) {
-    console.error("Failed to fetch incidents:", error);
-    return [];
-  }
+  } catch (error) { console.error("Failed to fetch incidents:", error); return []; }
 }
 
 export async function fetchIncidentById(id: string): Promise<Incident | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/incidents/${id}`, {
-      headers: { "X-API-Key": MASTER_API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (error) {
-    console.error(`Failed to fetch incident ${id}:`, error);
-    return null;
-  }
+  try { const res = await request(`incidents/${encodeURIComponent(id)}`); return res.ok ? await res.json() : null; }
+  catch (error) { console.error(`Failed to fetch incident ${id}:`, error); return null; }
 }
 
-export async function updateIncidentStatus(
-  id: string,
-  status: "OPEN" | "INVESTIGATING" | "RESOLVED"
-): Promise<Incident | null> {
+export async function updateIncidentStatus(id: string, status: "OPEN" | "INVESTIGATING" | "RESOLVED"): Promise<Incident | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/incidents/${id}/status`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": MASTER_API_KEY,
-      },
-      body: JSON.stringify({ status }),
-    });
-    if (!res.ok) throw new Error(`Status update failed ${res.status}`);
+    const res = await request(`incidents/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (error) {
-    console.error(`Failed to update incident status:`, error);
-    return null;
-  }
+  } catch (error) { console.error("Failed to update incident status:", error); return null; }
 }
 
 export async function fetchSystemStats(): Promise<SystemStats> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/stats`, {
-      headers: { "X-API-Key": MASTER_API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    const res = await request("stats");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (error) {
-    return {
-      total_logs_ingested: 0,
-      ingestion_rate_per_sec: 0,
-      error_rate_percent: 0,
-      p95_latency_ms: 0,
-      open_incidents_count: 0,
-      active_services_count: 0,
-    };
+  } catch {
+    return { total_logs_ingested: 0, ingestion_rate_per_sec: 0, error_rate_percent: 0, p95_latency_ms: 0, open_incidents_count: 0, active_services_count: 0 };
   }
 }
 
 export async function fetchServices(): Promise<ServiceItem[]> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/services`, {
-      headers: { "X-API-Key": MASTER_API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    return await res.json();
-  } catch (error) {
-    return [];
-  }
+  try { const res = await request("services"); return res.ok ? await res.json() : []; }
+  catch { return []; }
 }
 
-export async function registerService(data: {
-  id: string;
-  name: string;
-  environment: string;
-}): Promise<ServiceItem | null> {
+export async function registerService(data: { id: string; name: string; environment: string }): Promise<ServiceItem | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/services`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": MASTER_API_KEY,
-      },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`Registration failed`);
+    const res = await request("services", { method: "POST", body: JSON.stringify(data) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (error) {
-    console.error("Failed to register service:", error);
-    return null;
-  }
+  } catch (error) { console.error("Failed to register service:", error); return null; }
 }

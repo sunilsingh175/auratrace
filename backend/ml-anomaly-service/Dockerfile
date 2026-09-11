@@ -1,9 +1,8 @@
 FROM python:3.11-slim
 WORKDIR /app
-COPY backend/ml-anomaly-service/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/ml-anomaly-service/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY backend/shared/ /app/backend/shared/
 COPY backend/ml-anomaly-service/ /app/backend/ml-anomaly-service/
-COPY scripts/datasets/ /app/scripts/datasets/
-RUN python /app/backend/ml-anomaly-service/train_model.py || true
-CMD ["python", "-m", "backend.ml-anomaly-service.worker"]
+COPY scripts/ /app/scripts/
+CMD ["python", "/app/backend/ml-anomaly-service/worker.py"]
