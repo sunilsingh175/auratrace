@@ -1,28 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = process.env.AURA_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const MASTER_KEY = process.env.AURA_MASTER_API_KEY || "";
-
-export async function GET(request: NextRequest) {
-  return proxy(request);
-}
-
-export async function POST(request: NextRequest) {
-  return proxy(request);
-}
-
-export async function PATCH(request: NextRequest) {
-  return proxy(request);
-}
+const API_URL =
+  process.env.AURA_BACKEND_URL ||
+  process.env.AURA_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000";
+const MASTER_KEY =
+  process.env.AURA_MASTER_API_KEY || "aura_secret_key_123";
 
 async function proxy(request: NextRequest) {
   if (!MASTER_KEY) {
-    return NextResponse.json({ detail: "AURA_MASTER_API_KEY is not configured" }, { status: 500 });
+    return NextResponse.json(
+      { detail: "AURA_MASTER_API_KEY is not configured" },
+      { status: 500 }
+    );
   }
 
   const targetPath = request.nextUrl.searchParams.get("path");
   if (!targetPath || targetPath.includes("..") || targetPath.startsWith("/")) {
-    return NextResponse.json({ detail: "Invalid proxy path" }, { status: 400 });
+    return NextResponse.json(
+      { detail: "Invalid proxy path" },
+      { status: 400 }
+    );
   }
 
   const query = new URLSearchParams(request.nextUrl.searchParams);
@@ -35,7 +34,12 @@ async function proxy(request: NextRequest) {
   headers.delete("host");
   headers.delete("content-length");
 
-  const init: RequestInit = { method: request.method, headers, redirect: "follow" };
+  const init: RequestInit = {
+    method: request.method,
+    headers,
+    redirect: "follow",
+    cache: "no-store",
+  };
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = await request.text();
   }
@@ -45,9 +49,24 @@ async function proxy(request: NextRequest) {
     const body = await response.text();
     return new NextResponse(body, {
       status: response.status,
-      headers: { "Content-Type": response.headers.get("content-type") || "application/json" },
+      headers: {
+        "Content-Type":
+          response.headers.get("content-type") || "application/json",
+      },
     });
-  } catch {
-    return NextResponse.json({ detail: "AuraTrace backend is unavailable" }, { status: 502 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        detail: "AuraTrace backend is unavailable",
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 502 }
+    );
   }
 }
+
+export const GET = proxy;
+export const POST = proxy;
+export const PATCH = proxy;
+export const PUT = proxy;
+export const DELETE = proxy;

@@ -1,171 +1,74 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { ShieldAlert, Sparkles, ArrowRight, Search, Filter, RefreshCw, CheckCircle2, Clock } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, RefreshCw, Search, ShieldAlert, Sparkles } from "lucide-react";
 import { useIncidents } from "@/hooks/use-incidents";
 import { formatTimeAgo } from "@/lib/utils";
 
-export default function IncidentsPage() {
-  const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const { incidents, loading, refresh } = useIncidents(5000);
+const filters = ["ALL", "OPEN", "INVESTIGATING", "RESOLVED"];
 
-  const filteredIncidents = incidents.filter((inc) => {
+export default function IncidentsPage() {
+  const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+  const { incidents, refresh } = useIncidents(5000);
+
+  const filtered = useMemo(() => incidents.filter((inc) => {
     if (selectedStatus !== "ALL" && inc.status !== selectedStatus) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const match =
-        (inc.error_type && inc.error_type.toLowerCase().includes(q)) ||
-        (inc.service_id && inc.service_id.toLowerCase().includes(q)) ||
-        (inc.ai_root_cause && inc.ai_root_cause.toLowerCase().includes(q));
-      if (!match) return false;
-    }
-    return true;
-  });
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return [inc.error_type, inc.service_id, inc.ai_root_cause, inc.raw_stack_trace].some((v) => v?.toLowerCase().includes(q));
+  }), [incidents, selectedStatus, searchQuery]);
 
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            Incident Intelligence Hub
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Real-time anomaly reports, root-cause syntheses, and self-healing recommendations.
-          </p>
+          <p className="label">Operations</p>
+          <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight text-white"><ShieldAlert className="h-6 w-6 text-rose-400" /> Incident Intelligence</h1>
+          <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">Review anomaly events, AI diagnostic results, root-cause analysis and recovery recommendations.</p>
         </div>
-
-        <button
-          onClick={() => refresh()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-slate-800 text-xs text-slate-300 transition-colors self-start sm:self-auto shadow"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh
-        </button>
+        <button onClick={() => refresh()} className="button-secondary self-start sm:self-auto"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-surface/80 border border-border rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg">
-        {/* Status Tabs */}
-        <div className="flex items-center gap-1 bg-background/80 border border-border rounded-lg p-1">
-          {["ALL", "OPEN", "INVESTIGATING", "RESOLVED"].map((st) => (
-            <button
-              key={st}
-              onClick={() => setSelectedStatus(st)}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                selectedStatus === st
-                  ? "bg-rose-500 text-white font-semibold shadow"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {st}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <div className="relative flex-1 max-w-xs">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search error types, services..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-background/80 border border-border rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500/80"
-          />
+      <div className="panel p-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-800 bg-slate-950/50 p-1">
+            {filters.map((st) => <button key={st} onClick={() => setSelectedStatus(st)} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold transition ${selectedStatus === st ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-200"}`}>{st}</button>)}
+          </div>
+          <div className="relative w-full lg:w-80">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-600" />
+            <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search incidents..." className="field pl-9" />
+          </div>
         </div>
       </div>
 
-      {/* Incident Reports Table / Card View */}
-      <div className="bg-surface/90 border border-border rounded-xl overflow-hidden shadow-2xl">
-        <div className="divide-y divide-border">
-          {filteredIncidents.length === 0 ? (
-            <div className="py-16 text-center text-slate-500">
-              <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-emerald-400/40" />
-              <p className="text-base font-semibold text-slate-300">No matching incidents found</p>
-              <p className="text-xs text-slate-500 mt-1">Try selecting a different status filter or clear search.</p>
-            </div>
-          ) : (
-            filteredIncidents.map((incident) => {
-              const scorePct = Math.round(incident.anomaly_score * 100);
-
-              return (
-                <div
-                  key={incident.id}
-                  className="p-4 sm:p-5 hover:bg-surface-raised/60 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 group"
-                >
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      {/* Status Tag */}
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                          incident.status === "OPEN"
-                            ? "bg-rose-950 text-rose-300 border border-rose-800/80"
-                            : incident.status === "INVESTIGATING"
-                            ? "bg-amber-950 text-amber-300 border border-amber-800/80"
-                            : "bg-emerald-950 text-emerald-300 border border-emerald-800/80"
-                        }`}
-                      >
-                        {incident.status}
-                      </span>
-
-                      {/* Service tag */}
-                      <span className="text-xs font-mono text-cyan-400 font-semibold">
-                        [{incident.service_id}]
-                      </span>
-
-                      {/* Created Time */}
-                      <span className="text-xs text-slate-500 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {formatTimeAgo(incident.created_at)}
-                      </span>
-                    </div>
-
-                    <h3 className="text-sm font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
-                      {incident.error_type || "Unclassified Anomaly"}
-                    </h3>
-
-                    {/* AI Diagnosis Snippet */}
-                    {incident.ai_root_cause && (
-                      <p className="text-xs text-slate-400 line-clamp-2 max-w-3xl">
-                        {incident.ai_root_cause.replace(/\*\*/g, "")}
-                      </p>
-                    )}
+      <section className="panel overflow-hidden">
+        <div className="panel-header"><div><h2 className="text-sm font-bold text-white">Incident reports</h2><p className="text-[10px] text-slate-500">{filtered.length} matching records</p></div><span className="text-[10px] font-mono text-slate-500">Auto-refresh 5s</span></div>
+        <div className="divide-y divide-slate-800/80">
+          {filtered.length === 0 ? <div className="py-16 text-center"><CheckCircle2 className="mx-auto h-9 w-9 text-emerald-400/50" /><p className="mt-3 text-sm font-semibold text-slate-300">No matching incidents</p><p className="mt-1 text-xs text-slate-600">Adjust the status filter or search query.</p></div> : filtered.map((incident) => {
+            const score = Math.round(incident.anomaly_score * 100);
+            const statusClass = incident.status === "OPEN" ? "status-open" : incident.status === "INVESTIGATING" ? "status-investigating" : "status-resolved";
+            return <article key={incident.id} className="p-4 transition hover:bg-slate-800/25 sm:p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase ${statusClass}`}>{incident.status}</span>
+                    <span className="font-mono text-[10px] font-semibold text-blue-300">[{incident.service_id}]</span>
+                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-600"><Clock3 className="h-3 w-3" />{formatTimeAgo(incident.created_at)}</span>
                   </div>
-
-                  {/* Actions & Score */}
-                  <div className="flex items-center justify-between md:justify-end gap-6 shrink-0 border-t md:border-t-0 pt-2 md:pt-0 border-border/40">
-                    <div className="text-right">
-                      <span className="text-xs text-slate-500 block">Anomaly Score</span>
-                      <span
-                        className={`text-base font-mono font-bold ${
-                          scorePct >= 80 ? "text-rose-400" : "text-amber-400"
-                        }`}
-                      >
-                        {scorePct}%
-                      </span>
-                    </div>
-
-                    <Link
-                      href={`/incidents/${incident.id}`}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500 hover:text-slate-950 text-cyan-400 font-semibold text-xs border border-cyan-500/30 transition-all shadow"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Diagnostics
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
+                  <h3 className="mt-2 text-sm font-bold text-slate-200">{incident.error_type || "Unclassified anomaly"}</h3>
+                  <p className="mt-1 line-clamp-2 max-w-4xl text-xs leading-5 text-slate-500">{incident.ai_root_cause || incident.raw_stack_trace || "No diagnostic summary available."}</p>
                 </div>
-              );
-            })
-          )}
+                <div className="flex items-center justify-between gap-5 lg:justify-end">
+                  <div className="text-right"><span className="block text-[9px] uppercase tracking-wider text-slate-600">Anomaly score</span><span className={`font-mono text-lg font-bold ${score >= 80 ? "text-rose-400" : "text-amber-400"}`}>{score}%</span></div>
+                  <Link href={`/incidents/${incident.id}`} className="button-secondary hover:!border-blue-500/40 hover:!text-blue-300"><Sparkles className="h-3.5 w-3.5" /> Diagnostics <ArrowRight className="h-3.5 w-3.5" /></Link>
+                </div>
+              </div>
+            </article>;
+          })}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

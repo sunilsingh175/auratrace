@@ -1,67 +1,28 @@
 "use client";
 
-import React from "react";
 import Link from "next/link";
-import { AlertOctagon, ArrowRight, X, Sparkles } from "lucide-react";
+import { AlertOctagon, ArrowRight, Sparkles, X } from "lucide-react";
 import { AnomalyAlertEvent } from "@/hooks/use-websocket";
 
-interface AnomalyAlertBannerProps {
-  alert: AnomalyAlertEvent | null;
-  onDismiss: () => void;
-}
-
-export function AnomalyAlertBanner({ alert, onDismiss }: AnomalyAlertBannerProps) {
+export function AnomalyAlertBanner({ alert, onDismiss }: { alert: AnomalyAlertEvent | null; onDismiss: () => void }) {
   if (!alert) return null;
-
   return (
-    <div className="relative overflow-hidden rounded-xl border border-rose-500/60 bg-gradient-to-r from-rose-950/90 via-red-950/80 to-purple-950/90 p-4 shadow-2xl backdrop-blur-md animate-pulse-fast">
-      {/* Background radial glow */}
-      <div className="absolute -left-10 -top-10 h-32 w-32 rounded-full bg-rose-500/20 blur-2xl pointer-events-none" />
-
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
-        <div className="flex items-start sm:items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/40 shrink-0">
-            <AlertOctagon className="w-6 h-6 animate-bounce" />
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white tracking-wide uppercase">
-                Anomaly Detected
-              </span>
-              <span className="text-xs text-rose-300 font-mono">
-                Score: {(alert.anomaly_score * 100).toFixed(0)}%
-              </span>
-              <span className="text-xs text-slate-400 font-mono">
-                [{alert.service_id}]
-              </span>
+    <div className="relative overflow-hidden rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-3 shadow-lg">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-rose-500/25 bg-rose-500/10 text-rose-300"><AlertOctagon className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Anomaly detected</span>
+              <span className="font-mono text-[10px] text-rose-300">Score {(alert.anomaly_score * 100).toFixed(0)}%</span>
+              <span className="font-mono text-[10px] text-slate-500">[{alert.service_id}]</span>
             </div>
-
-            <h4 className="text-sm font-semibold text-slate-100 mt-1">
-              {alert.error_type || "System Metric Deviation"}:{" "}
-              <span className="text-slate-300 font-normal">{alert.reason || alert.message}</span>
-            </h4>
+            <p className="mt-1 truncate text-xs font-semibold text-slate-200">{alert.error_type || "System metric deviation"}: <span className="font-normal text-slate-400">{alert.reason || alert.message || "Anomaly detected in telemetry"}</span></p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-          {alert.incident_id && (
-            <Link
-              href={`/incidents/${alert.incident_id}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors shadow-md"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              AI Diagnostics
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          )}
-
-          <button
-            onClick={onDismiss}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        <div className="flex items-center gap-2 self-end sm:self-center">
+          {alert.incident_id && <Link href={`/incidents/${alert.incident_id}`} className="button-primary !bg-rose-500 hover:!bg-rose-400"><Sparkles className="h-3.5 w-3.5" /> AI Diagnostics <ArrowRight className="h-3.5 w-3.5" /></Link>}
+          <button onClick={onDismiss} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-white"><X className="h-4 w-4" /></button>
         </div>
       </div>
     </div>

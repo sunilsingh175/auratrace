@@ -3,93 +3,33 @@
 import React, { useState } from "react";
 import { Check, Copy, FileCode2, Sparkles } from "lucide-react";
 
-interface CodeDiffViewerProps {
-  diffText: string;
-  title?: string;
-}
-
-export function CodeDiffViewer({ diffText, title = "Recommended AI Patch" }: CodeDiffViewerProps) {
+export function CodeDiffViewer({ diffText, title = "Recommended AI Patch" }: { diffText: string; title?: string }) {
   const [copied, setCopied] = useState(false);
-
-  // Clean raw diff text of markdown backticks if present
-  const cleanedDiff = diffText
-    .replace(/^```diff\s*/i, "")
-    .replace(/\s*```$/, "")
-    .trim();
-
-  const lines = cleanedDiff.split("\n");
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(cleanedDiff);
+  const cleanedDiff = diffText.replace(/^```(?:diff)?\s*/i, "").replace(/\s*```$/, "").trim();
+  const lines = cleanedDiff ? cleanedDiff.split("\n") : [];
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(cleanedDiff);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 1800);
   };
-
   return (
-    <div className="bg-slate-950 border border-border rounded-xl overflow-hidden shadow-2xl">
-      {/* Diff Header */}
-      <div className="bg-surface-raised/90 border-b border-border px-4 py-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded bg-cyan-500/10 text-cyan-400">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <span className="text-xs font-semibold text-slate-200 tracking-wide">
-            {title}
-          </span>
+    <section className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400"><FileCode2 className="h-4 w-4" /></span>
+          <div><h3 className="text-sm font-bold text-white">{title}</h3><p className="text-[10px] text-slate-500">Generated recovery guidance</p></div>
         </div>
-
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface hover:bg-slate-800 border border-border text-xs text-slate-300 transition-colors"
-        >
-          {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-emerald-400">Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3.5 h-3.5 text-slate-400" />
-              <span>Copy Patch</span>
-            </>
-          )}
-        </button>
+        <button onClick={handleCopy} disabled={!cleanedDiff} className="button-secondary !px-2.5 !py-1.5">{copied ? <><Check className="h-3.5 w-3.5 text-emerald-400" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy patch</>}</button>
       </div>
-
-      {/* Code Body */}
-      <div className="p-3 font-mono text-xs overflow-x-auto leading-relaxed divide-y divide-slate-900/40">
-        {lines.length === 0 || !cleanedDiff ? (
-          <div className="text-slate-500 text-center py-6">
-            No code diff patch available for this incident.
-          </div>
-        ) : (
-          lines.map((line, idx) => {
-            let lineClass = "text-slate-300 bg-transparent";
-            let prefixBg = "";
-
-            if (line.startsWith("+")) {
-              lineClass = "bg-emerald-950/40 text-emerald-300 border-l-2 border-emerald-500";
-              prefixBg = "text-emerald-400 font-bold";
-            } else if (line.startsWith("-")) {
-              lineClass = "bg-rose-950/40 text-rose-300 border-l-2 border-rose-500";
-              prefixBg = "text-rose-400 font-bold";
-            } else if (line.startsWith("@")) {
-              lineClass = "bg-cyan-950/30 text-cyan-300 font-semibold";
-            } else if (line.startsWith("diff ") || line.startsWith("---") || line.startsWith("+++")) {
-              lineClass = "text-slate-400 font-semibold";
-            }
-
-            return (
-              <div key={idx} className={`flex items-start px-2 py-0.5 ${lineClass}`}>
-                <span className="w-8 text-[10px] text-slate-600 select-none text-right pr-3 shrink-0">
-                  {idx + 1}
-                </span>
-                <span className="whitespace-pre flex-1">{line}</span>
-              </div>
-            );
-          })
-        )}
+      <div className="overflow-x-auto bg-slate-950 p-2 font-mono text-[10px] leading-5">
+        {lines.length === 0 ? <div className="p-5 text-center text-slate-600">No code diff patch available for this incident.</div> : lines.map((line, i) => {
+          let cls = "text-slate-400";
+          if (line.startsWith("+")) cls = "border-l-2 border-emerald-500 bg-emerald-500/5 text-emerald-300";
+          else if (line.startsWith("-")) cls = "border-l-2 border-rose-500 bg-rose-500/5 text-rose-300";
+          else if (line.startsWith("@@")) cls = "bg-blue-500/5 font-semibold text-blue-300";
+          return <div key={i} className={`flex min-w-max px-2 py-0.5 ${cls}`}><span className="w-8 shrink-0 pr-3 text-right text-slate-700">{i + 1}</span><span className="whitespace-pre">{line}</span></div>;
+        })}
       </div>
-    </div>
+    </section>
   );
 }
