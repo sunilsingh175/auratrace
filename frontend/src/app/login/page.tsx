@@ -8,13 +8,14 @@ import {
   Key,
   Lock,
   ArrowRight,
-  ShieldCheck,
-  Activity,
-  Terminal,
-  Server,
   User,
   Shield,
+  UserPlus,
+  LogIn,
   CheckCircle2,
+  Radio,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 
@@ -22,23 +23,31 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, loginWithGoogle } = useAuth();
 
-  const [apiKey, setApiKey] = useState("");
+  // Tab State: "login" vs "register"
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+
+  // Form Fields
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [selectedRole, setSelectedRole] = useState<"Developer" | "Admin">("Developer");
   const [authMode, setAuthMode] = useState<"credentials" | "apikey">("credentials");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Google Modal State
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleEmailInput, setGoogleEmailInput] = useState("sunilsinghrajput192@gmail.com");
   const [googleNameInput, setGoogleNameInput] = useState("Sunil Singh");
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMessage(null);
+    setSuccessMessage(null);
 
     const result = await login({
       email: authMode === "credentials" ? email : undefined,
@@ -48,13 +57,18 @@ export default function LoginPage() {
     });
 
     if (result.success) {
-      if (result.role === "Admin" || selectedRole === "Admin") {
-        router.push("/admin/dashboard");
-      } else {
-        router.push("/dashboard");
+      if (activeTab === "register") {
+        setSuccessMessage("Account created successfully! Redirecting...");
       }
+      setTimeout(() => {
+        if (result.role === "Admin" || selectedRole === "Admin") {
+          router.push("/admin/dashboard");
+        } else {
+          router.push("/dashboard");
+        }
+      }, 400);
     } else {
-      setErrorMessage(result.error || "Authentication failed.");
+      setErrorMessage(result.error || "Authentication failed. Please check your credentials.");
       setLoading(false);
     }
   };
@@ -87,14 +101,14 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4 bg-[#080c14] relative overflow-hidden">
-      {/* Dynamic Background Glows */}
+      {/* Ambient Glows */}
       <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-blue-600/15 blur-[120px] pointer-events-none" />
       <div className="absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-indigo-600/15 blur-[120px] pointer-events-none" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[500px] rounded-full bg-purple-600/5 blur-[140px] pointer-events-none" />
 
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-md my-8">
         <div className="panel border-slate-800/90 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-2xl">
-          {/* Logo & Platform Name */}
+          {/* Logo & Platform Title */}
           <div className="text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-1 shadow-[0_0_30px_rgba(59,130,246,0.35)]">
               <div className="flex h-full w-full items-center justify-center rounded-[12px] bg-slate-950">
@@ -109,10 +123,48 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {/* Tab Switcher: Sign In vs Register */}
+          <div className="mt-6 flex rounded-xl border border-slate-800 bg-slate-950 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("login");
+                setErrorMessage(null);
+              }}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition ${
+                activeTab === "login"
+                  ? "bg-slate-800 text-white shadow"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              <span>Sign In</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("register");
+                setErrorMessage(null);
+                setAuthMode("credentials");
+              }}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition ${
+                activeTab === "register"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>Register</span>
+            </button>
+          </div>
+
           {/* Role Selector Tabs */}
-          <div className="mt-6">
-            <span className="label block mb-2 text-center text-slate-500">Select Access Role</span>
-            <div className="flex rounded-xl border border-slate-800 bg-slate-950 p-1">
+          <div className="mt-4">
+            <span className="label block mb-1.5 text-center text-slate-500">
+              {activeTab === "register" ? "Select Account Role" : "Select Sign In Role"}
+            </span>
+            <div className="flex rounded-xl border border-slate-800/80 bg-slate-950/70 p-1">
               <button
                 type="button"
                 onClick={() => setSelectedRole("Developer")}
@@ -140,14 +192,14 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Google Sign-in Button */}
+          {/* Google Quick Sign-in */}
           <div className="mt-4">
             <button
               type="button"
               onClick={() => setShowGoogleModal(true)}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-700/80 bg-slate-950/80 py-2.5 px-4 text-xs font-bold text-slate-200 shadow-md transition hover:border-slate-500 hover:bg-slate-900"
             >
-              <svg className="h-4 w-4" viewBox="0 0 24 24">
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
@@ -174,38 +226,56 @@ export default function LoginPage() {
               <div className="w-full border-t border-slate-800" />
             </div>
             <div className="relative flex justify-center text-[10px] uppercase font-mono">
-              <span className="bg-slate-900 px-2 text-slate-500">or sign in with password</span>
+              <span className="bg-slate-900 px-2 text-slate-500">
+                {activeTab === "register" ? "or register with email" : "or sign in with password"}
+              </span>
             </div>
           </div>
 
-          {/* Mode Switch: Credentials vs API Key */}
-          <div className="flex rounded-xl border border-slate-800/80 bg-slate-950/60 p-1">
-            <button
-              type="button"
-              onClick={() => setAuthMode("credentials")}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-semibold transition ${
-                authMode === "credentials"
-                  ? "bg-slate-800 text-white"
-                  : "text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              <Lock className="h-3 w-3" /> Credentials
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuthMode("apikey")}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-semibold transition ${
-                authMode === "apikey"
-                  ? "bg-slate-800 text-white"
-                  : "text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              <Key className="h-3 w-3" /> Master API Key
-            </button>
-          </div>
+          {/* Mode Switch (Only for Sign In tab) */}
+          {activeTab === "login" && (
+            <div className="flex rounded-xl border border-slate-800/80 bg-slate-950/60 p-1 mb-4">
+              <button
+                type="button"
+                onClick={() => setAuthMode("credentials")}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-semibold transition ${
+                  authMode === "credentials"
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                <Lock className="h-3 w-3" /> Credentials
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthMode("apikey")}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-semibold transition ${
+                  authMode === "apikey"
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                <Key className="h-3 w-3" /> Master API Key
+              </button>
+            </div>
+          )}
 
           {/* Form */}
-          <form onSubmit={handleLogin} className="mt-4 space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3.5">
+            {activeTab === "register" && (
+              <div>
+                <label className="label">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Sunil Singh"
+                  className="field mt-1"
+                />
+              </div>
+            )}
+
             {authMode === "credentials" ? (
               <>
                 <div>
@@ -215,27 +285,37 @@ export default function LoginPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={selectedRole === "Admin" ? "admin@auratrace.io" : "sunil@auratrace.io"}
-                    className="field mt-1.5"
+                    placeholder={selectedRole === "Admin" ? "admin@auratrace.io" : "engineer@auratrace.io"}
+                    className="field mt-1"
                   />
                 </div>
 
                 <div>
-                  <label className="label">Password</label>
+                  <div className="flex items-center justify-between">
+                    <label className="label">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1"
+                    >
+                      {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      <span>{showPassword ? "Hide" : "Show"}</span>
+                    </button>
+                  </div>
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="field mt-1.5 font-mono"
+                    className="field mt-1 font-mono"
                   />
                 </div>
               </>
             ) : (
               <div>
                 <label className="label">AuraTrace Master API Key</label>
-                <div className="relative mt-1.5">
+                <div className="relative mt-1">
                   <Key className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
                   <input
                     type="password"
@@ -258,47 +338,71 @@ export default function LoginPage() {
               </div>
             )}
 
+            {successMessage && (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
-              className={`mt-2 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold text-white shadow-lg transition ${
+              className={`mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold text-white shadow-lg transition ${
                 selectedRole === "Admin"
                   ? "bg-gradient-to-r from-indigo-600 to-purple-600 shadow-indigo-600/25 hover:from-indigo-500 hover:to-purple-500"
                   : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-600/25 hover:from-blue-500 hover:to-indigo-500"
               }`}
             >
               {loading ? (
-                <span>Authenticating Cluster...</span>
+                <span>{activeTab === "register" ? "Creating Account..." : "Authenticating Cluster..."}</span>
               ) : (
                 <>
-                  <span>Sign In as {selectedRole}</span>
+                  <span>
+                    {activeTab === "register"
+                      ? `Create ${selectedRole} Account`
+                      : `Sign In as ${selectedRole}`}
+                  </span>
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Quick Role Demo Shortcuts */}
-          <div className="mt-6 border-t border-slate-800/80 pt-4 text-center space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-              Quick Demo Access
-            </span>
-            <div className="flex items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => handleDemoBypass("Developer")}
-                className="text-xs font-bold text-cyan-400 hover:text-cyan-300 transition"
+          {/* Quick Demo Access & Guest Exploration Link */}
+          <div className="mt-6 border-t border-slate-800/80 pt-4 space-y-3">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">Just exploring?</span>
+              <Link
+                href="/dashboard"
+                className="font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition"
               >
-                Developer Workspace →
-              </button>
-              <span className="text-slate-700">•</span>
-              <button
-                type="button"
-                onClick={() => handleDemoBypass("Admin")}
-                className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition"
-              >
-                Admin Command Center →
-              </button>
+                <span>Browse Dashboard as Guest</span>
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800/50 text-center">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                Quick Demo Shortcuts
+              </span>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleDemoBypass("Developer")}
+                  className="text-xs font-bold text-cyan-400 hover:text-cyan-300 transition"
+                >
+                  Developer Demo →
+                </button>
+                <span className="text-slate-700">•</span>
+                <button
+                  type="button"
+                  onClick={() => handleDemoBypass("Admin")}
+                  className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition"
+                >
+                  Admin Demo →
+                </button>
+              </div>
             </div>
           </div>
         </div>
