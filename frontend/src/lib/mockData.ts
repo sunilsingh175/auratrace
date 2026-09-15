@@ -270,6 +270,7 @@ export const MOCK_PERFORMANCE_METRICS: PerformanceDataPoint[] = [
   { time: "10:50", latency: 1820, errors: 19, requests: 2300 },
   { time: "10:55", latency: 850, errors: 9, requests: 1950 },
 ];
+export const MOCK_PERFORMANCE_DATA = MOCK_PERFORMANCE_METRICS;
 
 export const MOCK_TELEMETRY_LOGS: TelemetryLog[] = [
   { id: "log-1", timestamp: "10:42:01.102", level: "INFO", service_id: "payment-api", message: "HTTP POST /api/v1/checkout - payload validated (user_id=usr_8392)" },

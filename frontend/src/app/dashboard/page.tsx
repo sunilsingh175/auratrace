@@ -1,222 +1,292 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
-  Server,
   Activity,
-  ShieldAlert,
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
   Cpu,
   Database,
+  Flame,
+  Layers,
+  Radio,
   RefreshCw,
-  CheckCircle2,
-  AlertTriangle,
-  Lock,
-  Globe
+  Server,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PerformanceChart } from "@/components/dashboard/PerformanceChart";
+import { IncidentOverview } from "@/components/dashboard/IncidentOverview";
+import { fetchSystemStats, fetchIncidents, fetchServices } from "@/lib/api-client";
+import { SystemStats, Incident, Service } from "@/types";
+import { MOCK_PERFORMANCE_METRICS, MOCK_INCIDENTS, MOCK_SERVICES } from "@/lib/mockData";
 
-interface ClusterStats {
-  events_per_sec: number;
-  total_logs_ingested: number;
-  p95_latency_ms: number;
-  error_ratio: number;
-  active_services_count: number;
-}
+export default function DeveloperDashboardPage() {
+  const [stats, setStats] = useState<SystemStats | null>(null);
+  const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
+  const [services, setServices] = useState<Service[]>(MOCK_SERVICES);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<ClusterStats>({
-    events_per_sec: 142,
-    total_logs_ingested: 18450,
-    p95_latency_ms: 18,
-    error_ratio: 0.02,
-    active_services_count: 3,
-  });
-  const [loading, setLoading] = useState(false);
+  const loadDashboardData = async () => {
+    try {
+      const [statsData, incidentsData, servicesData] = await Promise.all([
+        fetchSystemStats(),
+        fetchIncidents({ limit: 5 }),
+        fetchServices(),
+      ]);
+      setStats(statsData);
+      if (incidentsData && incidentsData.length > 0) setIncidents(incidentsData);
+      if (servicesData && servicesData.length > 0) setServices(servicesData);
+    } catch (e) {
+      console.warn("Failed loading live telemetry data, fallback to cached state:", e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+    const interval = setInterval(loadDashboardData, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleRefresh = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-    }, 600);
+    setRefreshing(true);
+    loadDashboardData();
   };
+
+  const activeServicesCount = stats?.active_services_count ?? services.length;
+  const ingestionRate = stats?.ingestion_rate_per_sec ?? 1420;
+  const p95Latency = stats?.p95_latency_ms ?? 18;
+  const errorRate = stats?.error_rate_percent ?? 0.8;
+  const openIncidentsCount = stats?.open_incidents_count ?? incidents.filter((i) => i.status === "OPEN").length;
 
   return (
     <AppShell
-      title="Admin Command Center"
-      subtitle="Fleet-wide infrastructure health, microservice registry, and global telemetry governance."
+      title="Developer Observability Hub"
+      subtitle="Real-time telemetry streams, ML anomaly detection, and automated AI diagnosis."
     >
       <div className="space-y-6">
-        {/* Action Header */}
+        {/* Action / Banner Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Cluster Operational (Docker Swarm / Compose)
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              Pipeline Live: Redis Stream + pgvector Active
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-cyan-400 border border-blue-500/20">
+              <Sparkles className="w-3 h-3 text-cyan-300" />
+              AI Doctor RAG Triaging
             </span>
           </div>
-          <button
-            onClick={handleRefresh}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-cyan-400" : ""}`} />
-            <span>Sync Cluster Metrics</span>
-          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="button-secondary"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-cyan-400" : ""}`} />
+              <span>Refresh Metrics</span>
+            </button>
+
+            <Link href="/telemetry" className="button-primary">
+              <Radio className="h-3.5 w-3.5 text-cyan-200" />
+              <span>Live Telemetry Stream</span>
+            </Link>
+          </div>
         </div>
 
-        {/* Global KPI Cards Grid */}
+        {/* Top KPI Cards Grid */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="panel p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ingestion Velocity</span>
-              <Activity className="h-4 w-4 text-cyan-400" />
-            </div>
-            <p className="mt-3 text-2xl font-extrabold text-white">
-              {stats.events_per_sec} <span className="text-xs font-normal text-slate-400">evt/sec</span>
-            </p>
-            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-emerald-400">
-              <CheckCircle2 className="h-3 w-3" />
-              <span>Redis Stream Pipeline Healthy</span>
-            </div>
+          <MetricCard
+            title="Ingestion Velocity"
+            value={ingestionRate.toLocaleString()}
+            unit="events/s"
+            delta="+8.4%"
+            deltaType="increase"
+            subtitle="Redis Stream buffer active"
+            icon={Activity}
+            tone="cyan"
+          />
+
+          <MetricCard
+            title="P95 Cluster Latency"
+            value={p95Latency}
+            unit="ms"
+            delta="-3ms"
+            deltaType="decrease"
+            subtitle="Target latency threshold < 50ms"
+            icon={Cpu}
+            tone="indigo"
+          />
+
+          <MetricCard
+            title="Global Error Rate"
+            value={`${errorRate.toFixed(1)}%`}
+            unit=""
+            delta={errorRate > 2 ? "Elevated" : "Nominal"}
+            deltaType={errorRate > 2 ? "increase" : "neutral"}
+            subtitle="Calculated over 5m sliding window"
+            icon={Zap}
+            tone={errorRate > 2 ? "rose" : "emerald"}
+          />
+
+          <MetricCard
+            title="Active Incidents"
+            value={openIncidentsCount}
+            unit="open"
+            delta="AI Triaged"
+            deltaType="neutral"
+            subtitle="pgvector RAG diagnosis connected"
+            icon={AlertTriangle}
+            tone={openIncidentsCount > 0 ? "rose" : "emerald"}
+          />
+        </div>
+
+        {/* Waveform Chart + Incident Overview (2 columns) */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <PerformanceChart data={MOCK_PERFORMANCE_METRICS} />
           </div>
 
-          <div className="panel p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">P95 Latency</span>
-              <Cpu className="h-4 w-4 text-blue-400" />
-            </div>
-            <p className="mt-3 text-2xl font-extrabold text-blue-400">
-              {stats.p95_latency_ms} <span className="text-xs font-normal text-slate-400">ms</span>
-            </p>
-            <div className="mt-2 text-[10px] text-slate-400">
-              Target threshold &lt; 50ms
-            </div>
-          </div>
-
-          <div className="panel p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Global Error Ratio</span>
-              <ShieldAlert className="h-4 w-4 text-rose-400" />
-            </div>
-            <p className="mt-3 text-2xl font-extrabold text-rose-400">
-              {(stats.error_ratio * 100).toFixed(1)}%
-            </p>
-            <div className="mt-2 text-[10px] text-amber-400">
-              Normal operating bounds (&lt; 5.0%)
-            </div>
-          </div>
-
-          <div className="panel p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Services</span>
-              <Server className="h-4 w-4 text-purple-400" />
-            </div>
-            <p className="mt-3 text-2xl font-extrabold text-white">
-              {stats.active_services_count} <span className="text-xs font-normal text-slate-400">Nodes</span>
-            </p>
-            <div className="mt-2 text-[10px] text-purple-300">
-              Node & Python SDK Connected
-            </div>
+          <div className="lg:col-span-5">
+            <IncidentOverview incidents={incidents} onRefresh={loadDashboardData} />
           </div>
         </div>
 
-        {/* Microservice Fleet Registry Table */}
-        <div className="panel overflow-hidden p-0">
-          <div className="border-b border-slate-800/80 bg-slate-950/40 p-5">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white">Registered Microservices Fleet</h3>
-            <p className="mt-0.5 text-xs text-slate-400">Active telemetry-emitting containers and SDK instances.</p>
+        {/* Monitored Microservices Fleet Summary */}
+        <div className="panel p-0 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-800/80 bg-slate-950/40 p-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <Server className="h-4 w-4 text-cyan-400" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                  Monitored Microservices Fleet ({services.length})
+                </h3>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-400">
+                Connected service instances streaming metrics and error traces to AuraTrace.
+              </p>
+            </div>
+
+            <Link
+              href="/services"
+              className="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition"
+            >
+              <span>Manage Services</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="border-b border-slate-800 bg-slate-950/20 text-slate-400">
-                <tr>
-                  <th className="p-4 font-medium">Service Identifier</th>
-                  <th className="p-4 font-medium">Runtime Stack</th>
-                  <th className="p-4 font-medium">API Key Prefix</th>
-                  <th className="p-4 font-medium">Ingestion Status</th>
-                  <th className="p-4 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/50 text-slate-300">
-                <tr>
-                  <td className="p-4 font-bold text-white flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-                    node-sdk-service
-                  </td>
-                  <td className="p-4 text-slate-400">Node.js 18 / TypeScript</td>
-                  <td className="p-4 text-slate-500">aura_sec_****123</td>
-                  <td className="p-4 text-emerald-400">Streaming Active</td>
-                  <td className="p-4 text-right">
-                    <button className="rounded bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-700">Configure</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="p-4 font-bold text-white flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-                    python-fastapi-backend
-                  </td>
-                  <td className="p-4 text-slate-400">Python 3.11 / FastAPI</td>
-                  <td className="p-4 text-slate-500">aura_sec_****987</td>
-                  <td className="p-4 text-emerald-400">Streaming Active</td>
-                  <td className="p-4 text-right">
-                    <button className="rounded bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-700">Configure</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="p-4 font-bold text-white flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-amber-400"></span>
-                    hdfs-datanode-simulator
-                  </td>
-                  <td className="p-4 text-slate-400">Python Script / Benchmark</td>
-                  <td className="p-4 text-slate-500">aura_sec_****123</td>
-                  <td className="p-4 text-amber-400">Intermittent / Batch</td>
-                  <td className="p-4 text-right">
-                    <button className="rounded bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-700">Configure</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="grid grid-cols-1 divide-y divide-slate-800/60 md:grid-cols-3 md:divide-x md:divide-y-0">
+            {services.slice(0, 3).map((service) => {
+              const isHealthy = service.status === "healthy";
+              const isCritical = service.status === "critical";
+
+              return (
+                <div key={service.id} className="p-5 space-y-3 hover:bg-slate-900/30 transition">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-white">{service.name}</span>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                        isCritical
+                          ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                          : isHealthy
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                          : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          isCritical
+                            ? "bg-rose-400 animate-pulse"
+                            : isHealthy
+                            ? "bg-emerald-400"
+                            : "bg-amber-400"
+                        }`}
+                      />
+                      {service.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                    <div className="rounded-lg bg-slate-950/60 p-2 border border-slate-800/60">
+                      <span className="text-[10px] text-slate-500 uppercase block">Latency</span>
+                      <span className="text-white font-bold">{service.latency_ms}ms</span>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/60 p-2 border border-slate-800/60">
+                      <span className="text-[10px] text-slate-500 uppercase block">Error Rate</span>
+                      <span className={service.error_rate > 3 ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>
+                        {service.error_rate}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                    <span className="font-mono text-slate-500">ID: {service.id}</span>
+                    <Link
+                      href={`/telemetry?service=${service.id}`}
+                      className="text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-1"
+                    >
+                      <span>Logs</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Global System Settings */}
+        {/* Developer Integration Quickstart */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="panel p-5 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
-              <Database className="h-4 w-4 text-cyan-400" />
-              PostgreSQL Vector Store & pgvector Status
-            </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Vector extension is active on PostgreSQL 16. HNSW indexes are indexing 384-dimensional sentence transformer embeddings for real-time error semantic searching.
+          <div className="panel p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-cyan-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                Python SDK Integration
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400">
+              Integrate the AuraTrace Python SDK directly into FastAPI, Django, or Flask applications.
             </p>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] text-slate-300 space-y-1">
-              <div className="flex justify-between"><span>Extension:</span> <span className="text-emerald-400">vector (v0.5.1+)</span></div>
-              <div className="flex justify-between"><span>Index Type:</span> <span className="text-cyan-400">HNSW (vector_cosine_ops)</span></div>
-              <div className="flex justify-between"><span>Stored Vectors:</span> <span className="text-white">1,420 Embeddings</span></div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] text-cyan-300 overflow-x-auto">
+              <code>
+                from auratrace import AuraClient
+                <br />
+                aura = AuraClient(service_name=&quot;payment-api&quot;)
+                <br />
+                aura.capture_exception(e, request_context=ctx)
+              </code>
             </div>
           </div>
 
-          <div className="panel p-5 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
-              <Lock className="h-4 w-4 text-amber-400" />
-              Master API Key & Security Governance
-            </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              All client SDK transports enforce mandatory <code className="text-slate-200">X-API-Key</code> request headers validated directly against the backend ingestion gateway.
+          <div className="panel p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-indigo-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                Node.js / TypeScript SDK
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400">
+              Zero-configuration error capture and distributed telemetry middleware for Express & Next.js.
             </p>
-            <div className="flex gap-2">
-              <input
-                type="password"
-                readOnly
-                value="aura_secret_key_123"
-                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-300"
-              />
-              <button
-                onClick={() => alert("Master API key copied to clipboard!")}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-blue-500 shrink-0"
-              >
-                Copy Key
-              </button>
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] text-indigo-300 overflow-x-auto">
+              <code>
+                import &#123; AuraTrace &#125; from &apos;@auratrace/node&apos;;
+                <br />
+                AuraTrace.init(&#123; serviceId: &apos;order-service&apos; &#125;);
+                <br />
+                app.use(AuraTrace.expressMiddleware());
+              </code>
             </div>
           </div>
         </div>
