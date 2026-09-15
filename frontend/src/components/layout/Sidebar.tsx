@@ -261,18 +261,18 @@ export function Sidebar() {
         ) : (
           <Link
             href="/login"
-            className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs font-semibold text-slate-300 transition hover:border-slate-700 hover:bg-slate-900"
+            className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-xs font-semibold text-slate-300 transition hover:border-slate-700 hover:bg-slate-900"
           >
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-cyan-400">
                 <User className="h-4 w-4" />
               </div>
               <div>
-                <p className="font-bold text-white text-xs">Public Explorer</p>
-                <p className="text-[10px] text-cyan-400">Sign in for Admin</p>
+                <p className="font-bold text-white text-xs">Guest Mode</p>
+                <p className="text-[10px] text-cyan-400">Sign In / Register</p>
               </div>
             </div>
-            <ArrowRight className="h-4 w-4 text-slate-500" />
+            <ArrowRight className="h-4 w-4 text-slate-400" />
           </Link>
         )}
       </div>

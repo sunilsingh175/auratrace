@@ -29,8 +29,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY_USER = "auratrace_active_user";
-const STORAGE_KEY_USERS_LIST = "auratrace_users_list";
+const STORAGE_KEY_USER_SESSION = "auratrace_auth_session_v2";
+const STORAGE_KEY_USERS_LIST = "auratrace_users_list_v2";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -38,29 +38,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<UserAccount[]>(MOCK_USERS);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize from localStorage on mount
+  // Initialize on mount - Purge any old legacy auto-login keys
   useEffect(() => {
     try {
-      const storedUsers = localStorage.getItem(STORAGE_KEY_USERS_LIST);
-      if (storedUsers) {
-        setUsers(JSON.parse(storedUsers));
-      } else {
-        localStorage.setItem(STORAGE_KEY_USERS_LIST, JSON.stringify(MOCK_USERS));
-      }
+      // Clean up legacy keys that auto-logged in as Admin
+      localStorage.removeItem("auratrace_active_user");
+      localStorage.removeItem("auratrace_users_list");
+      localStorage.removeItem("auratrace_user");
 
-      const storedUser = localStorage.getItem(STORAGE_KEY_USER);
-      if (storedUser) {
+      const sessionUser = sessionStorage.getItem(STORAGE_KEY_USER_SESSION);
+      if (sessionUser) {
         try {
-          setUser(JSON.parse(storedUser));
+          setUser(JSON.parse(sessionUser));
         } catch {
           setUser(null);
-          localStorage.removeItem(STORAGE_KEY_USER);
+          sessionStorage.removeItem(STORAGE_KEY_USER_SESSION);
         }
       } else {
+        // Default to unauthenticated guest mode
         setUser(null);
       }
     } catch (e) {
-      console.warn("Failed to read auth state from localStorage:", e);
+      console.warn("Failed to initialize auth state:", e);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -92,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         created_at: new Date().toISOString().split("T")[0],
       };
       setUser(adminUser);
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(adminUser));
+      sessionStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(adminUser));
       return { success: true, role: "Admin" };
     }
 
@@ -109,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: "This user account has been suspended by an Admin." };
       }
       setUser(matchedUser);
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(matchedUser));
+      sessionStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(matchedUser));
       return { success: true, role: matchedUser.role === "Admin" ? "Admin" : "Developer" };
     }
 
@@ -130,8 +129,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updatedList = [newUserObj, ...users];
     setUsers(updatedList);
     setUser(newUserObj);
-    localStorage.setItem(STORAGE_KEY_USERS_LIST, JSON.stringify(updatedList));
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newUserObj));
+    sessionStorage.setItem(STORAGE_KEY_USERS_LIST, JSON.stringify(updatedList));
+    sessionStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(newUserObj));
 
     return { success: true, role: assignedRole };
   };
@@ -156,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: selectedRole,
       };
       setUser(matchedUser);
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(matchedUser));
+      sessionStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(matchedUser));
       return { success: true, role: selectedRole };
     }
 
@@ -173,15 +172,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updatedList = [newGoogleUser, ...users];
     setUsers(updatedList);
     setUser(newGoogleUser);
-    localStorage.setItem(STORAGE_KEY_USERS_LIST, JSON.stringify(updatedList));
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newGoogleUser));
+    sessionStorage.setItem(STORAGE_KEY_USERS_LIST, JSON.stringify(updatedList));
+    sessionStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(newGoogleUser));
 
     return { success: true, role: selectedRole };
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY_USER);
+    sessionStorage.removeItem(STORAGE_KEY_USER_SESSION);
+    localStorage.removeItem("auratrace_active_user");
+    localStorage.removeItem("auratrace_users_list");
     router.push("/login");
   };
 
