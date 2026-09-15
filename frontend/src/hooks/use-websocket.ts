@@ -3,13 +3,17 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 export interface LogEvent {
+  id?: string;
   service_id: string;
   timestamp: string;
   level: "DEBUG" | "INFO" | "WARN" | "ERROR" | "CRITICAL";
-  latency_ms: number;
+  latency_ms?: number;
   error_type?: string;
   message?: string;
+  log_message?: string;
   stack_trace?: string;
+  raw_stack_trace?: string;
+  anomaly_score?: number;
   metadata?: Record<string, any>;
 }
 
