@@ -6,10 +6,10 @@ import { SystemStats } from "@/lib/api-client";
 
 export function MetricGauges({ stats, isConnected }: { stats: SystemStats; isConnected: boolean }) {
   const cards = [
-    { label: "Ingestion rate", value: stats.ingestion_rate_per_sec, unit: "events/sec", sub: `${stats.total_logs_ingested.toLocaleString()} total logs ingested`, icon: Activity, tone: "text-cyan-400", bar: "bg-cyan-500" },
-    { label: "P95 latency", value: stats.p95_latency_ms, unit: "ms", sub: stats.p95_latency_ms < 300 ? "High performance" : "Elevated latency", icon: Clock3, tone: "text-violet-400", bar: "bg-violet-500" },
-    { label: "Error ratio", value: `${stats.error_rate_percent.toFixed(1)}%`, unit: "of window", sub: stats.error_rate_percent === 0 ? "Clean stream" : "Errors detected", icon: AlertTriangle, tone: "text-rose-400", bar: "bg-rose-500" },
-    { label: "Active incidents", value: stats.open_incidents_count, unit: "open", sub: `${stats.active_services_count} active services`, icon: Server, tone: "text-emerald-400", bar: "bg-emerald-500" },
+    { label: "Ingestion rate", value: stats?.ingestion_rate_per_sec ?? 0, unit: "events/sec", sub: `${(stats?.total_logs_ingested ?? 0).toLocaleString()} total logs ingested`, icon: Activity, tone: "text-cyan-400", bar: "bg-cyan-500" },
+    { label: "P95 latency", value: stats?.p95_latency_ms ?? 0, unit: "ms", sub: (stats?.p95_latency_ms ?? 0) < 300 ? "High performance" : "Elevated latency", icon: Clock3, tone: "text-violet-400", bar: "bg-violet-500" },
+    { label: "Error ratio", value: `${(stats?.error_rate_percent ?? 0).toFixed(1)}%`, unit: "of window", sub: (stats?.error_rate_percent ?? 0) === 0 ? "Clean stream" : "Errors detected", icon: AlertTriangle, tone: "text-rose-400", bar: "bg-rose-500" },
+    { label: "Active incidents", value: stats?.open_incidents_count ?? 0, unit: "open", sub: `${stats?.active_services_count ?? 0} active services`, icon: Server, tone: "text-emerald-400", bar: "bg-emerald-500" },
   ];
 
   return (

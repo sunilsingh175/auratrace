@@ -1,5 +1,5 @@
 "use client";
- 
+
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
@@ -10,9 +10,7 @@ export default function RootPage() {
 
   useEffect(() => {
     if (!isLoading) {
-      if (!user) {
-        router.replace("/login");
-      } else if (user.role === "Admin") {
+      if (user?.role === "Admin") {
         router.replace("/admin/dashboard");
       } else {
         router.replace("/dashboard");

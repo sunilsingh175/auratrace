@@ -172,90 +172,100 @@ export function Topbar({ title, subtitle }: TopbarProps) {
           </Link>
         )}
 
-        {/* Active User Badge & Dropdown */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => {
-              setShowUserMenu(!showUserMenu);
-              setShowNotifications(false);
-            }}
-            className="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900/80 px-2.5 py-1.5 transition hover:border-slate-700 hover:bg-slate-800"
-          >
-            <div
-              className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold ${
-                isAdmin
-                  ? "bg-indigo-500/20 text-indigo-300"
-                  : "bg-blue-500/10 text-cyan-400"
-              }`}
+        {/* Active User Badge or Sign In Button */}
+        {user ? (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setShowUserMenu(!showUserMenu);
+                setShowNotifications(false);
+              }}
+              className="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900/80 px-2.5 py-1.5 transition hover:border-slate-700 hover:bg-slate-800"
             >
-              {userInitials}
-            </div>
-
-            <div className="hidden sm:block text-left">
-              <p className="text-xs font-bold text-slate-200 leading-tight">
-                {user?.name || "Sunil Rajput"}
-              </p>
-              <span
-                className={`text-[9px] font-bold uppercase tracking-wider ${
-                  isAdmin ? "text-indigo-400" : "text-cyan-400"
+              <div
+                className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold ${
+                  isAdmin
+                    ? "bg-indigo-500/20 text-indigo-300"
+                    : "bg-blue-500/10 text-cyan-400"
                 }`}
               >
-                {user?.role || "Developer"}
-              </span>
-            </div>
-          </button>
+                {userInitials}
+              </div>
 
-          {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-2xl">
-              <div className="border-b border-slate-800 pb-2.5">
-                <p className="text-xs font-bold text-white">{user?.name}</p>
-                <p className="text-[10px] text-slate-400 truncate">{user?.email}</p>
+              <div className="hidden sm:block text-left">
+                <p className="text-xs font-bold text-slate-200 leading-tight">
+                  {user.name}
+                </p>
                 <span
-                  className={`mt-1 inline-block rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase ${
-                    isAdmin ? "bg-indigo-500/20 text-indigo-300" : "bg-blue-500/10 text-cyan-400"
+                  className={`text-[9px] font-bold uppercase tracking-wider ${
+                    isAdmin ? "text-indigo-400" : "text-cyan-400"
                   }`}
                 >
-                  Role: {user?.role}
+                  {user.role}
                 </span>
               </div>
+            </button>
 
-              <div className="mt-2 space-y-1">
-                {isAdmin ? (
-                  <Link
-                    href="/admin/users-services"
-                    onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
+            {showUserMenu && (
+              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-2xl">
+                <div className="border-b border-slate-800 pb-2.5">
+                  <p className="text-xs font-bold text-white">{user.name}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
+                  <span
+                    className={`mt-1 inline-block rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                      isAdmin ? "bg-indigo-500/20 text-indigo-300" : "bg-blue-500/10 text-cyan-400"
+                    }`}
                   >
-                    <Shield className="h-3.5 w-3.5 text-indigo-400" />
-                    <span>Manage Team & Access</span>
-                  </Link>
-                ) : (
-                  <Link
-                    href="/services"
-                    onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
-                  >
-                    <User className="h-3.5 w-3.5 text-cyan-400" />
-                    <span>My Services</span>
-                  </Link>
-                )}
+                    Role: {user.role}
+                  </span>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    logout();
-                  }}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 transition"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  <span>Sign Out</span>
-                </button>
+                <div className="mt-2 space-y-1">
+                  {isAdmin ? (
+                    <Link
+                      href="/admin/users-services"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                    >
+                      <Shield className="h-3.5 w-3.5 text-indigo-400" />
+                      <span>Manage Team & Access</span>
+                    </Link>
+                  ) : (
+                    <Link
+                      href="/services"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                    >
+                      <User className="h-3.5 w-3.5 text-cyan-400" />
+                      <span>My Services</span>
+                    </Link>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      logout();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 transition"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition hover:from-blue-500 hover:to-indigo-500"
+          >
+            <User className="h-3.5 w-3.5" />
+            <span>Sign In</span>
+          </Link>
+        )}
       </div>
     </header>
   );

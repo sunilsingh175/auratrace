@@ -236,7 +236,15 @@ export async function fetchSystemStats(): Promise<SystemStats> {
   try {
     const res = await request("stats");
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      return {
+        total_logs_ingested: Number(data.total_logs_ingested ?? 0),
+        ingestion_rate_per_sec: Number(data.ingestion_rate_per_sec ?? data.events_per_sec ?? 0),
+        error_rate_percent: Number(data.error_rate_percent ?? (typeof data.error_ratio === "number" ? data.error_ratio * 100 : 0)),
+        p95_latency_ms: Number(data.p95_latency_ms ?? 0),
+        open_incidents_count: Number(data.open_incidents_count ?? localIncidents.filter((i) => i.status === "OPEN").length),
+        active_services_count: Number(data.active_services_count ?? localServices.length),
+      };
     }
   } catch {
     // fallback

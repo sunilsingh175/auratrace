@@ -16,24 +16,17 @@ interface AppShellProps {
 
 export function AppShell({ children, title, subtitle }: AppShellProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const { user, isLoading, logout } = useAuth();
 
   const isAdminRoute = pathname?.startsWith("/admin");
   const isAuthorized = !isAdminRoute || user?.role === "Admin";
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.replace("/login");
-    }
-  }, [isLoading, user, router]);
-
-  if (isLoading || !user) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-[#080c14] flex items-center justify-center text-slate-400 font-mono text-xs">
         <div className="flex flex-col items-center gap-3">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-          <span>Verifying AuraTrace session...</span>
+          <span>Loading AuraTrace...</span>
         </div>
       </div>
     );
@@ -54,9 +47,15 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
                 Admin Privileges Required
               </h2>
               <p className="mt-2 text-xs text-slate-400 leading-relaxed">
-                You are currently signed in as <strong>{user?.name}</strong> (
-                <span className="text-cyan-400 font-bold">{user?.role}</span>). This administrative
-                section is restricted to users with the <strong>Admin</strong> role.
+                {user ? (
+                  <>
+                    You are currently signed in as <strong>{user.name}</strong> (
+                    <span className="text-cyan-400 font-bold">{user.role}</span>). This administrative
+                    section is restricted to users with the <strong>Admin</strong> role.
+                  </>
+                ) : (
+                  <>This administrative section is restricted to authorized Administrators. Please sign in with an Admin account.</>
+                )}
               </p>
 
               <div className="mt-6 flex items-center justify-center gap-3">
@@ -64,16 +63,15 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
                   href="/dashboard"
                   className="button-primary"
                 >
-                  <ArrowLeft className="h-4 w-4" /> Return to Developer Dashboard
+                  <ArrowLeft className="h-4 w-4" /> Return to Dashboard
                 </Link>
 
-                <button
-                  type="button"
-                  onClick={logout}
+                <Link
+                  href="/login"
                   className="button-secondary"
                 >
                   Sign In as Admin
-                </button>
+                </Link>
               </div>
             </div>
           ) : (

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   BarChart3,
   Cpu,
   LayoutDashboard,
@@ -15,6 +16,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  User,
   Users,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
@@ -94,10 +96,14 @@ export function Sidebar() {
             <span className="font-extrabold tracking-tight text-white">AuraTrace</span>
             <span
               className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider ${
-                isAdmin ? "bg-indigo-500/20 text-indigo-300" : "bg-blue-500/10 text-cyan-400"
+                isAdmin
+                  ? "bg-indigo-500/20 text-indigo-300"
+                  : user
+                  ? "bg-blue-500/10 text-cyan-400"
+                  : "bg-slate-800 text-slate-400"
               }`}
             >
-              {isAdmin ? "Admin" : "Dev"}
+              {isAdmin ? "Admin" : user ? "Dev" : "Live"}
             </span>
           </div>
           <p className="text-[10px] font-medium text-slate-500">Autonomous Observability</p>
@@ -210,47 +216,65 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Logged in User Profile Footer */}
+      {/* User Profile Footer or Sign In Button */}
       <div className="border-t border-slate-800/80 p-3">
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-lg font-bold text-xs shrink-0 ${
-                  isAdmin
-                    ? "bg-indigo-500/20 text-indigo-300"
-                    : "bg-blue-500/10 text-cyan-400"
-                }`}
-              >
-                {userInitials}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-bold text-slate-200">
-                  {user?.name || "Sunil Rajput"}
-                </p>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      isAdmin ? "bg-indigo-400" : "bg-cyan-400"
-                    }`}
-                  />
-                  <p className="truncate text-[10px] font-medium text-slate-400">
-                    {user?.role || "Developer"}
+        {user ? (
+          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg font-bold text-xs shrink-0 ${
+                    isAdmin
+                      ? "bg-indigo-500/20 text-indigo-300"
+                      : "bg-blue-500/10 text-cyan-400"
+                  }`}
+                >
+                  {userInitials}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-bold text-slate-200">
+                    {user.name}
                   </p>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        isAdmin ? "bg-indigo-400" : "bg-cyan-400"
+                      }`}
+                    />
+                    <p className="truncate text-[10px] font-medium text-slate-400">
+                      {user.role}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={logout}
-              title="Sign Out"
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+              <button
+                type="button"
+                onClick={logout}
+                title="Sign Out"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <Link
+            href="/login"
+            className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs font-semibold text-slate-300 transition hover:border-slate-700 hover:bg-slate-900"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-cyan-400">
+                <User className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="font-bold text-white text-xs">Public Explorer</p>
+                <p className="text-[10px] text-cyan-400">Sign in for Admin</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-slate-500" />
+          </Link>
+        )}
       </div>
     </aside>
   );
