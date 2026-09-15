@@ -50,22 +50,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const storedUser = localStorage.getItem(STORAGE_KEY_USER);
       if (storedUser) {
-        setUser(JSON.parse(storedUser));
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch {
+          setUser(null);
+          localStorage.removeItem(STORAGE_KEY_USER);
+        }
       } else {
-        // Default initial session: Developer (Sunil Rajput)
-        const defaultUser: UserAccount = {
-          id: "usr-01",
-          name: "Sunil Rajput",
-          email: "sunil@auratrace.io",
-          role: "Developer",
-          status: "Active",
-          created_at: "2026-08-01",
-        };
-        setUser(defaultUser);
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(defaultUser));
+        setUser(null);
       }
     } catch (e) {
       console.warn("Failed to read auth state from localStorage:", e);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }

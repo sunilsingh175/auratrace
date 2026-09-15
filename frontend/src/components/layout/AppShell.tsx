@@ -22,10 +22,19 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
   const isAdminRoute = pathname?.startsWith("/admin");
   const isAuthorized = !isAdminRoute || user?.role === "Admin";
 
-  if (isLoading) {
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace("/login");
+    }
+  }, [isLoading, user, router]);
+
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-[#080c14] flex items-center justify-center text-slate-400 font-mono text-xs">
-        Loading AuraTrace session...
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+          <span>Verifying AuraTrace session...</span>
+        </div>
       </div>
     );
   }
