@@ -377,7 +377,7 @@ export default function LoginPage() {
                 href="/dashboard"
                 className="font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition"
               >
-                <span>Browse Dashboard as Guest</span>
+                <span>Return to Live Dashboard</span>
                 <ArrowRight className="h-3 w-3" />
               </Link>
             </div>

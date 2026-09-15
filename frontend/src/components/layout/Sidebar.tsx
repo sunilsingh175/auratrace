@@ -259,21 +259,22 @@ export function Sidebar() {
             </div>
           </div>
         ) : (
-          <Link
-            href="/login"
-            className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-xs font-semibold text-slate-300 transition hover:border-slate-700 hover:bg-slate-900"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-cyan-400">
-                <User className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="font-bold text-white text-xs">Guest Mode</p>
-                <p className="text-[10px] text-cyan-400">Sign In / Register</p>
-              </div>
+          <div className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-3 space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-300">AuraTrace Engine</span>
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Online
+              </span>
             </div>
-            <ArrowRight className="h-4 w-4 text-slate-400" />
-          </Link>
+            <Link
+              href="/login"
+              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600/20 to-indigo-600/20 border border-blue-500/30 py-1.5 px-3 text-xs font-bold text-cyan-300 transition hover:bg-blue-600/30 hover:border-blue-400 w-full"
+            >
+              <User className="h-3.5 w-3.5" />
+              <span>Sign In / Register</span>
+            </Link>
+          </div>
         )}
       </div>
     </aside>
