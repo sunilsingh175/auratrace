@@ -1347,6 +1347,18 @@ async def simulate_crash(
     tags=["System Health"],
     summary="System health check",
 )
+@app.get(
+    "/health",
+    tags=["System Health"],
+    summary="System health check (alias)",
+    include_in_schema=False,
+)
+@app.get(
+    "/",
+    tags=["System Health"],
+    summary="Root service ping",
+    include_in_schema=False,
+)
 async def health_check():
     return {
         "status": "healthy",
@@ -1359,6 +1371,7 @@ async def health_check():
 # 7. WebSocket Live Stream
 @app.websocket("/ws")
 @app.websocket("/ws/telemetry")
+@app.websocket("/ws/telementry")
 @app.websocket("/api/v1/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
