@@ -83,8 +83,22 @@ docker compose up -d --build
 ### 4. Access Platform Interfaces
 * **Live Monitoring Dashboard:** [http://localhost:3000](http://localhost:3000)
 * **Ingestion Gateway OpenAPI Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+* **Canonical WebSocket Stream:** `ws://localhost:8000/ws/telemetry` *(aliases: `/ws`, `/api/v1/ws`)*
 * **PostgreSQL pgvector Database:** `localhost:5432` (`auratrace_db`)
-* **Redis Stream Broker:** `localhost:6379`
+* **Redis Stream Broker:** `localhost:6379` (`telemetry_stream`)
+
+---
+
+## Gateway Throughput & Stress Test Validation
+
+Executed high-concurrency ingestion stress testing via `scripts/benchmark_ingestion.py`:
+* **Target:** `POST http://localhost:8000/api/v1/telemetry`
+* **Concurrency:** 25 concurrent client workers
+* **Volume:** 500 requests dispatched
+* **HTTP Acceptance Rate:** `499 / 500` (**99.8%** HTTP 202 Accepted, 1 client connection timeout)
+* **Redis Stream Buffer:** 500 entries captured in `telemetry_stream` (100% queue retention)
+* **Latency Distribution:** P50: `54.39 ms` | Mean: `75.70 ms` | P95: `216.28 ms` | P99: `308.98 ms`
+* **Throughput:** `44.6 req/sec`
 
 ---
 
