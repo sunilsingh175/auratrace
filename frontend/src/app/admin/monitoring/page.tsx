@@ -220,7 +220,7 @@ export default function AdminMonitoringPage() {
                 </div>
               </div>
               <span className="rounded-full bg-purple-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-purple-300">
-                Gemini 3.8 Flash
+                Gemini 2.5 Flash
               </span>
             </div>
 

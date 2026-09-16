@@ -50,7 +50,7 @@ export function AIAnalysis({
                 AuraTrace RAG AI Crash Doctor
               </h2>
               <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[9px] font-bold text-cyan-300">
-                Gemini 3.8 Flash RAG
+                Gemini 2.5 Flash RAG
               </span>
             </div>
             <p className="text-xs text-slate-400">

@@ -161,7 +161,7 @@ Welcome to the **AuraTrace High-Performance Ingestion Engine**. This gateway acc
 - **Redis Stream**: `telemetry_stream`
 - **PostgreSQL 16**: `pgvector` HNSW vector indexes (384-d sentence transformers)
 - **ML Isolation Forest Daemon**: Contamination threshold `0.05`
-- **AI Doctor**: Automated Root-Cause Synthesis via Gemini 3.8 Flash
+- **AI Doctor**: Automated Root-Cause Synthesis via Gemini 2.5 Flash
     """,
     docs_url=None,  # We will serve our custom styled Swagger UI at /docs
     redoc_url=None,

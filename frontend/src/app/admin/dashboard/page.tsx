@@ -189,7 +189,7 @@ export default function AdminDashboardPage() {
 
             <SystemHealthCard
               name="RAG Doctor LLM"
-              role="Gemini 3.8 Flash"
+              role="Gemini 2.5 Flash"
               status={infra?.rag_doctor_status || "healthy"}
               latency={`${infra?.llm_latency_ms || 680}ms`}
               metricLabel="Embed"
