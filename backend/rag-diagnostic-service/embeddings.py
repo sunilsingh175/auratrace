@@ -31,15 +31,15 @@ except ImportError:
 class EmbeddingService:
 
     def __init__(self):
+        model_name = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
         if SentenceTransformer:
-
             logger.info(
-                "Loading embedding model 'all-MiniLM-L6-v2'..."
+                f"Loading embedding model '{model_name}'..."
             )
 
             self.model = SentenceTransformer(
-                "all-MiniLM-L6-v2"
+                model_name
             )
 
             logger.info(

@@ -54,15 +54,17 @@ export function useWebSocket(onAnomalyAlert?: (alert: AnomalyAlertEvent) => void
       socket.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
+          const alertData = payload.data || payload;
+
           if (payload.type === "TELEMETRY_LOG" && payload.data) {
             setLogs((prev) => [payload.data, ...prev].slice(0, 300));
-          } else if (payload.type === "ANOMALY_ALERT" && payload.data) {
+          } else if (
+            payload.type === "ANOMALY_ALERT" ||
+            payload.type === "ANOMALY_DETECTED" ||
+            payload.type === "INCIDENT_DIAGNOSED"
+          ) {
             if (alertCallbackRef.current) {
-              alertCallbackRef.current(payload.data);
-            }
-          } else if (payload.type === "ANOMALY_DETECTED" || payload.type === "INCIDENT_DIAGNOSED") {
-            if (alertCallbackRef.current) {
-              alertCallbackRef.current(payload);
+              alertCallbackRef.current(alertData);
             }
           } else if (payload.service_id && payload.timestamp) {
             // Direct telemetry event

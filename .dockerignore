@@ -3,18 +3,30 @@
 
 .env
 .env.*
+!.env.example
 telemetry.json
 
 node_modules
-frontend/node_modules
-frontend/.next
+node_modules/**
+**/node_modules/**
+frontend/node_modules/**
+frontend/.next/**
+**/.next/**
 
 __pycache__
+**/__pycache__/**
 *.py[cod]
 
 .venv
+.venv/**
 venv
+venv/**
 env
+env/**
+backend/venv
+backend/venv/**
+**/venv/**
+**/.venv/**
 
 .pytest_cache
 .mypy_cache
@@ -25,3 +37,10 @@ htmlcov
 .huggingface
 
 *.log
+.vscode
+.idea
+scripts/datasets
+scripts/datasets/**
+*.npz
+*.parquet
+*.h5

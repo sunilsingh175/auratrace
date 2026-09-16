@@ -7,6 +7,7 @@ import os
 import json
 import uuid
 import logging
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
@@ -47,7 +48,9 @@ logger = logging.getLogger("auratrace-ingestion")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis-broker")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 STREAM_KEY = os.getenv("REDIS_STREAM_KEY", "telemetry_stream")
+REDIS_ANOMALY_CHANNEL = os.getenv("REDIS_ANOMALY_CHANNEL", "anomaly_events")
 MASTER_API_KEY = os.getenv("AURA_MASTER_API_KEY", "aura_secret_key_123")
+ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "false").lower() in ("true", "1", "yes")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Redis Async Client
@@ -95,6 +98,47 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# Background task reference
+pubsub_task: Optional[asyncio.Task] = None
+
+async def redis_pubsub_bridge():
+    """
+    Subscribes to Redis Pub/Sub channel 'anomaly_events' and relays all
+    anomalies (ANOMALY_DETECTED) and diagnoses (INCIDENT_DIAGNOSED)
+    to connected WebSocket clients with explicit top-level and data fields.
+    """
+    while True:
+        try:
+            pubsub = redis_client.pubsub()
+            await pubsub.subscribe(REDIS_ANOMALY_CHANNEL)
+            logger.info(f"Subscribed to Redis Pub/Sub channel '{REDIS_ANOMALY_CHANNEL}'. Ready to bridge alerts to WebSocket.")
+
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    raw_data = message["data"]
+                    try:
+                        payload = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+                        event_type = payload.get("type") or payload.get("event") or "ANOMALY_ALERT"
+
+                        # Deliver both structured event type and wrapped data payload
+                        ws_message = {
+                            "type": event_type,
+                            "data": payload,
+                            **payload,
+                        }
+                        ws_message["type"] = event_type
+
+                        logger.info(f"Broadcasting Redis event [{event_type}] to {len(manager.active_connections)} WebSocket client(s)")
+                        await manager.broadcast(ws_message)
+                    except Exception as parse_err:
+                        logger.warning(f"Error parsing Redis Pub/Sub message: {parse_err}")
+        except asyncio.CancelledError:
+            logger.info("Redis Pub/Sub bridge task cancelled.")
+            break
+        except Exception as exc:
+            logger.warning(f"Redis Pub/Sub bridge connection error: {exc}. Reconnecting in 3s...")
+            await asyncio.sleep(3)
+
 # ============================================================
 # FastAPI App Initialization (Custom Docs URL)
 # ============================================================
@@ -131,6 +175,21 @@ Welcome to the **AuraTrace High-Performance Ingestion Engine**. This gateway acc
     ],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    global pubsub_task
+    pubsub_task = asyncio.create_task(redis_pubsub_bridge())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global pubsub_task
+    if pubsub_task:
+        pubsub_task.cancel()
+        try:
+            await pubsub_task
+        except asyncio.CancelledError:
+            pass
+
 # CORS Middleware for Next.js frontend and external clients
 app.add_middleware(
     CORSMiddleware,
@@ -143,10 +202,18 @@ app.add_middleware(
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 async def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)):
-    """Validates incoming requests against master API key."""
+    """
+    Validates incoming requests against master API key.
+    When ENABLE_API_AUTH=true, enforces strict master API key verification.
+    When ENABLE_API_AUTH=false (default development mode), permits requests with guest context.
+    """
     if api_key and api_key == MASTER_API_KEY:
         return api_key
-    # Allow permissive fallback for dashboard read routes during development
+    if ENABLE_API_AUTH:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-API-Key header. Access denied.",
+        )
     return api_key or "guest"
 
 # ============================================================
@@ -1284,6 +1351,7 @@ async def health_check():
 
 # 7. WebSocket Live Stream
 @app.websocket("/ws/telemetry")
+@app.websocket("/api/v1/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
