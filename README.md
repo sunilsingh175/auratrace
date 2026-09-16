@@ -39,6 +39,28 @@ AuraTrace is a decoupled, event-driven observability and automated root-cause an
 
 ---
 
+## Machine Learning Architecture & Benchmark Validation
+
+AuraTrace implements two complementary Isolation Forest workflows:
+
+1. **Online Production Anomaly Detection:**
+   * Operates on **8 operational telemetry features** (`error_count`, `request_count`, `error_rate`, `avg_latency_ms`, `max_latency_ms`, `p95_latency_ms`, `status_5xx_rate`, `unique_error_types`) aggregated over 5-minute per-service sliding windows.
+   * Real-time stream processing from Redis Streams (`logs:stream`).
+
+2. **Offline Research Benchmark (LogHub HDFS_v1):**
+   * Evaluates unsupervised Isolation Forest on **29 log event template counts (`E1`–`E29`)** across **575,061 block sessions** from the LogHub HDFS dataset (Xu et al., SOSP 2009).
+   * Evaluated using a **stratified 70% Train / 30% Held-Out Test split** with zero label leakage.
+   * **Full Dataset (575,061 sessions / 172,519 held-out test sessions) Empirical Results:**
+     * **Held-out ROC-AUC:** `0.9597` (95.97%)
+     * **PR-AUC (Average Precision):** `0.7147` (71.47%)
+     * **Precision:** `0.6922` (69.22%)
+     * **Recall:** `0.6076` (60.76%)
+     * **F1-Score:** `0.6471` (64.71%)
+     * **Inference Throughput:** `72,687` sessions/sec
+   * *To reproduce:* `python backend/ml_anomaly_service/evaluate_hdfs.py --samples 0`
+
+---
+
 ## Quickstart & Installation
 
 ### 1. Clone the Repository
