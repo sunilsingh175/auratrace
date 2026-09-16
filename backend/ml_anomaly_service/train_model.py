@@ -1,11 +1,22 @@
 import logging
+import sys
 from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+WORKSPACE_DIR = BASE_DIR.parent.parent
+if str(WORKSPACE_DIR) not in sys.path:
+    sys.path.insert(0, str(WORKSPACE_DIR))
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 import joblib
 import numpy as np
 from sklearn.ensemble import IsolationForest
 
-from backend.ml_anomaly_service.window_buffer import FEATURE_NAMES
+try:
+    from backend.ml_anomaly_service.window_buffer import FEATURE_NAMES
+except ImportError:
+    from window_buffer import FEATURE_NAMES
 
 
 logging.basicConfig(

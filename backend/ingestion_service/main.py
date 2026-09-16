@@ -1254,6 +1254,12 @@ async def create_service(
     summary="Inject simulated crash telemetry event",
     description="Simulates realistic crash scenarios (Timeout, Memory Leak, Socket Drop) to test the ML anomaly pipeline and UI notifications in real time.",
 )
+@app.post(
+    "/api/v1/simulate/crash",
+    tags=["Chaos & Simulation"],
+    summary="Inject simulated crash telemetry event (alias)",
+    include_in_schema=False,
+)
 async def simulate_crash(
     payload: CrashSimulationPayload,
     api_key: str = Depends(verify_api_key),
@@ -1351,6 +1357,7 @@ async def health_check():
 
 
 # 7. WebSocket Live Stream
+@app.websocket("/ws")
 @app.websocket("/ws/telemetry")
 @app.websocket("/api/v1/ws")
 async def websocket_endpoint(websocket: WebSocket):
