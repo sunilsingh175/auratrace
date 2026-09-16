@@ -49,7 +49,7 @@ REDIS_HOST = os.getenv("REDIS_HOST", "redis-broker")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 STREAM_KEY = os.getenv("REDIS_STREAM_KEY", "telemetry_stream")
 REDIS_ANOMALY_CHANNEL = os.getenv("REDIS_ANOMALY_CHANNEL", "anomaly_events")
-MASTER_API_KEY = os.getenv("AURA_MASTER_API_KEY", "aura_secret_key_123")
+MASTER_API_KEY = os.getenv("AURA_MASTER_API_KEY", "")
 ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "false").lower() in ("true", "1", "yes")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -154,8 +154,8 @@ Welcome to the **AuraTrace High-Performance Ingestion Engine**. This gateway acc
 ---
 
 ### 🔑 Authentication
-- Pass your secret key in the **`X-API-Key`** header.
-- Master Key: `aura_secret_key_123` (configured in `.env`)
+- Pass your secret key in the **`X-API-Key`** header (configured via `AURA_MASTER_API_KEY`).
+- Set `ENABLE_API_AUTH=true` in production to enforce strict validation.
 
 ### 🛰️ Core Infrastructure
 - **Redis Stream**: `telemetry_stream`
@@ -190,10 +190,11 @@ async def shutdown_event():
         except asyncio.CancelledError:
             pass
 
-# CORS Middleware for Next.js frontend and external clients
+# Configurable CORS Middleware (defaults to all origins for local dev)
+ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS if "*" not in ALLOWED_ORIGINS else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

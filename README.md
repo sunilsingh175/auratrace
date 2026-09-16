@@ -8,7 +8,7 @@ AuraTrace is a decoupled, event-driven observability and automated root-cause an
 
 * **Non-Blocking Telemetry Ingestion:** FastAPI gateway buffering logs directly into Redis Streams (`XADD`) with `<20ms` latency.
 * **Unsupervised Anomaly Detection:** Rolling-window statistical analysis via `scikit-learn` Isolation Forest to catch memory leaks, latency degradation, and error spikes.
-* **Contextual RAG Diagnosis:** Vector similarity matching in PostgreSQL (`pgvector`) against historical crash logs with LangChain-driven LLM synthesis for actionable code diffs.
+* **Contextual RAG Diagnosis:** Vector similarity matching in PostgreSQL (`pgvector`) against historical crash logs with Google GenAI (Gemini 2.5 Flash) RAG synthesis for actionable code diffs.
 * **Live WebSocket Telemetry:** Real-time event streaming to a Next.js 14 dashboard.
 * **SDG Goal 9 Alignment:** Enhances enterprise software resilience and infrastructure reliability.
 
