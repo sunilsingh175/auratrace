@@ -60,6 +60,13 @@ export function useWebSocket(onAnomalyAlert?: (alert: AnomalyAlertEvent) => void
             if (alertCallbackRef.current) {
               alertCallbackRef.current(payload.data);
             }
+          } else if (payload.type === "ANOMALY_DETECTED" || payload.type === "INCIDENT_DIAGNOSED") {
+            if (alertCallbackRef.current) {
+              alertCallbackRef.current(payload);
+            }
+          } else if (payload.service_id && payload.timestamp) {
+            // Direct telemetry event
+            setLogs((prev) => [payload, ...prev].slice(0, 300));
           }
         } catch (err) {
           console.error("Failed to parse WebSocket message:", err);

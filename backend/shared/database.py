@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    select,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import (
@@ -372,6 +373,56 @@ class HistoricalFix(Base):
     service: Mapped[Optional["Service"]] = relationship(
         back_populates="historical_fixes",
     )
+
+
+# Backward-compatibility alias
+IncidentReport = Incident
+
+
+# ============================================================
+# SERVICE RESOLUTION HELPER
+# ============================================================
+
+async def get_or_create_service_id(session: AsyncSession, identifier: str) -> uuid.UUID:
+    """
+    Resolve a service identifier (UUID or service name slug) to its database UUID.
+    If the service does not exist, it is automatically created.
+    """
+    if not identifier:
+        identifier = "unknown-service"
+
+    # Try parsing as UUID
+    try:
+        service_uuid = uuid.UUID(str(identifier))
+        result = await session.execute(
+            select(Service).where(Service.id == service_uuid)
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            return existing.id
+    except (ValueError, TypeError):
+        pass
+
+    # Lookup by name/slug
+    from sqlalchemy import select
+    result = await session.execute(
+        select(Service).where(Service.name == str(identifier))
+    )
+    service = result.scalar_one_or_none()
+    if service:
+        return service.id
+
+    # Create new service
+    new_service = Service(
+        name=str(identifier),
+        description=f"Auto-registered service for {identifier}",
+        environment="production",
+        status="ACTIVE",
+    )
+    session.add(new_service)
+    await session.commit()
+    await session.refresh(new_service)
+    return new_service.id
 
 
 # ============================================================

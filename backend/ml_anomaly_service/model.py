@@ -106,6 +106,52 @@ class AnomalyDetector:
             -1,
         )
 
+    def _heuristic_score(
+        self,
+        features,
+    ) -> float:
+        """
+        Failsafe heuristic scoring when Isolation Forest model is unavailable.
+        Evaluates error rate, 5xx rate, latency, and error diversity.
+        """
+        try:
+            arr = np.asarray(
+                features,
+                dtype=float,
+            ).flatten()
+
+            if len(arr) < 8:
+                return 0.0
+
+            error_count = arr[0]
+            request_count = arr[1]
+            error_rate = arr[2]
+            avg_latency = arr[3]
+            max_latency = arr[4]
+            status_5xx_rate = arr[6]
+            unique_errors = arr[7]
+
+            score = 0.0
+            score += min(0.45, error_rate * 0.45)
+            score += min(0.35, status_5xx_rate * 0.35)
+
+            if avg_latency > 2000.0 or max_latency > 5000.0:
+                score += 0.15
+            elif avg_latency > 500.0:
+                score += 0.05
+
+            if error_count > 0:
+                score += min(0.10, 0.02 * error_count)
+            if unique_errors > 1:
+                score += 0.05
+
+            return round(
+                min(1.0, max(0.0, score)),
+                4,
+            )
+        except Exception:
+            return 0.0
+
     def predict_score(
         self,
         features,
@@ -118,7 +164,7 @@ class AnomalyDetector:
         """
 
         if self.model is None:
-            return 0.0
+            return self._heuristic_score(features)
 
         try:
 
@@ -163,7 +209,7 @@ class AnomalyDetector:
                 f"{exc}"
             )
 
-            return 0.0
+            return self._heuristic_score(features)
 
     def predict(
         self,
@@ -197,13 +243,6 @@ class AnomalyDetector:
         The same score is used for both values so that
         AuraTrace has one consistent anomaly decision.
         """
-
-        if self.model is None:
-
-            return {
-                "is_anomaly": False,
-                "anomaly_score": 0.0,
-            }
 
         anomaly_score = (
             self.predict_score(

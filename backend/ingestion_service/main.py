@@ -158,7 +158,8 @@ class TelemetryPayload(BaseModel):
     message: Optional[str] = Field("Log event emitted", description="Log payload or exception message")
     level: Optional[str] = Field("INFO", description="Log severity: DEBUG, INFO, WARN, ERROR, CRITICAL")
     error_type: Optional[str] = Field(None, description="Exception class (e.g. 'sqlalchemy.exc.TimeoutError')")
-    raw_stack_trace: Optional[str] = Field(None, description="Complete Python/Node.js stack traceback")
+    stack_trace: Optional[str] = Field(None, description="Complete Python/Node.js stack traceback")
+    raw_stack_trace: Optional[str] = Field(None, description="Complete Python/Node.js stack traceback alias")
     latency_ms: Optional[float] = Field(0.0, ge=0, description="Measured execution duration in milliseconds")
     status_code: Optional[int] = Field(200, ge=100, le=599, description="HTTP status response code")
     anomaly_score: Optional[float] = Field(None, ge=0, le=1, description="Pre-computed anomaly confidence")
@@ -168,8 +169,9 @@ class BatchTelemetryPayload(BaseModel):
     events: List[TelemetryPayload] = Field(..., description="Batch array of telemetry payloads")
 
 class ServiceCreatePayload(BaseModel):
-    id: str = Field(..., description="Unique slug for service (e.g. 'inventory-sync')")
+    id: Optional[str] = Field(None, description="Unique slug for service (e.g. 'inventory-sync')")
     name: str = Field(..., description="Human-readable service title")
+    description: Optional[str] = Field(None, description="Service description")
     environment: str = Field("production", description="Environment: 'production', 'staging', 'development'")
 
 class IncidentStatusUpdate(BaseModel):
@@ -639,6 +641,60 @@ async def scalar_docs():
 </html>
     """)
 
+
+REDIS_ANOMALY_CHANNEL = os.getenv("REDIS_ANOMALY_CHANNEL", "anomaly_events")
+
+
+# ============================================================
+# Redis Pub/Sub -> WebSocket Bridge
+# ============================================================
+
+async def redis_pubsub_bridge():
+    """
+    Subscribes to Redis anomaly_events channel and forwards incoming
+    ML anomalies and RAG AI diagnoses live to all connected WebSocket clients.
+    """
+    while True:
+        try:
+            pubsub_client = aioredis.Redis(
+                host=REDIS_HOST,
+                port=REDIS_PORT,
+                decode_responses=True,
+            )
+            pubsub = pubsub_client.pubsub()
+            await pubsub.subscribe(REDIS_ANOMALY_CHANNEL)
+            logger.info(f"FastAPI Redis Pub/Sub Bridge subscribed to channel '{REDIS_ANOMALY_CHANNEL}'")
+
+            async for message in pubsub.listen():
+                if not message or message.get("type") != "message":
+                    continue
+                raw_data = message.get("data")
+                if not raw_data:
+                    continue
+                try:
+                    event_data = json.loads(raw_data)
+                    logger.info(
+                        f"Bridge broadcasting PubSub event: {event_data.get('type')} | "
+                        f"service={event_data.get('service_id')} | incident={event_data.get('incident_id')}"
+                    )
+                    await manager.broadcast({
+                        "type": "ANOMALY_ALERT",
+                        "data": event_data,
+                    })
+                except Exception as e:
+                    logger.warning(f"Error parsing/broadcasting PubSub event: {e}")
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.warning(f"Redis Pub/Sub bridge connection dropped ({exc}), reconnecting in 2s...")
+            await asyncio.sleep(2)
+
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(redis_pubsub_bridge())
+
+
 # ============================================================
 # API Endpoints
 # ============================================================
@@ -658,6 +714,7 @@ async def ingest_telemetry(
     event_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
     level = payload.level or ("ERROR" if payload.error_type else "INFO")
+    stack_trace = payload.stack_trace or payload.raw_stack_trace or ""
 
     log_event = {
         "id": event_id,
@@ -667,7 +724,8 @@ async def ingest_telemetry(
         "log_message": payload.message or "Log payload",
         "level": level,
         "error_type": payload.error_type,
-        "raw_stack_trace": payload.raw_stack_trace,
+        "stack_trace": stack_trace,
+        "raw_stack_trace": stack_trace,
         "latency_ms": payload.latency_ms or 0.0,
         "status_code": payload.status_code or 200,
         "anomaly_score": payload.anomaly_score,
@@ -687,7 +745,10 @@ async def ingest_telemetry(
         )
 
     # Broadcast to live UI WebSocket connections
-    await manager.broadcast(log_event)
+    await manager.broadcast({
+        "type": "TELEMETRY_LOG",
+        "data": log_event,
+    })
 
     return {
         "status": "accepted",
@@ -716,6 +777,9 @@ async def ingest_batch_telemetry(
         event_dict = event.model_dump()
         event_dict["id"] = str(uuid.uuid4())
         event_dict["received_at"] = timestamp
+        stack_val = event_dict.get("stack_trace") or event_dict.get("raw_stack_trace") or ""
+        event_dict["stack_trace"] = stack_val
+        event_dict["raw_stack_trace"] = stack_val
         pipe.xadd(STREAM_KEY, {"payload": json.dumps(event_dict)}, maxlen=10000)
         count += 1
 
@@ -742,6 +806,23 @@ async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
     except Exception:
         pass
 
+    open_incidents = 0
+    active_services = 5
+    if db_engine:
+        try:
+            async with db_engine.connect() as conn:
+                inc_res = await conn.execute(
+                    text("SELECT COUNT(*) FROM incidents WHERE status IN ('OPEN', 'INVESTIGATING')")
+                )
+                open_incidents = inc_res.scalar() or 0
+
+                srv_res = await conn.execute(
+                    text("SELECT COUNT(*) FROM services WHERE status = 'ACTIVE'")
+                )
+                active_services = srv_res.scalar() or 5
+        except Exception as e:
+            logger.warning(f"Failed to query stats from database: {e}")
+
     return {
         "events_per_sec": 142,
         "ingestion_rate_per_sec": 1420,
@@ -749,8 +830,8 @@ async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
         "p95_latency_ms": 18,
         "error_ratio": 0.024,
         "error_rate_percent": 2.4,
-        "open_incidents_count": 2,
-        "active_services_count": 5,
+        "open_incidents_count": open_incidents,
+        "active_services_count": active_services,
         "redis_stream_length": stream_length,
         "status": "operational",
     }
@@ -769,51 +850,70 @@ async def list_incidents(
     limit: int = Query(20, ge=1, le=100, description="Max incidents to return"),
     api_key: str = Depends(verify_api_key),
 ):
-    # Simulated mock incident collection with fallback
-    incidents = [
-        {
-            "id": "INC-1024",
-            "service_id": "payment-api",
-            "title": "Database Connection Pool Exhaustion",
-            "error_type": "sqlalchemy.exc.TimeoutError",
-            "severity": "critical",
-            "status": "OPEN",
-            "anomaly_score": 0.94,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "stack_trace": 'Traceback (most recent call last):\n  File "/app/services/checkout.py", line 142\n    db_session = engine.connect()\nsqlalchemy.exc.TimeoutError: QueuePool limit reached',
-            "ai_root_cause": "High volume of unclosed database transactions inside `process_transaction()` caused connection leak.",
-            "ai_suggested_patch": "Wrap database sessions inside context managers `with SessionLocal() as db:` to guarantee closure.",
-            "similar_incidents": [
-                {
-                    "id": "INC-0912",
-                    "title": "PostgreSQL connection timeout under peak load",
-                    "service_id": "payment-api",
-                    "similarity_score": 0.96,
-                    "fix_summary": "Enforced connection context managers and raised pool overflow to 20.",
-                }
-            ],
-        },
-        {
-            "id": "INC-1023",
-            "service_id": "notification-worker",
-            "title": "Redis Consumer Stream Lag Spike",
-            "error_type": "redis.exceptions.ConnectionError",
-            "severity": "high",
-            "status": "OPEN",
-            "anomaly_score": 0.87,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "stack_trace": "redis.exceptions.ConnectionError: Error 111 connecting to redis:6379. Connection refused.",
-            "ai_root_cause": "Async background consumer disconnected during transient network hiccup without backoff retry.",
-            "ai_suggested_patch": "Add exponential backoff retry loop with `tenacity` on Redis stream subscriber.",
-        },
-    ]
+    if db_engine:
+        try:
+            async with db_engine.connect() as conn:
+                query_str = """
+                    SELECT 
+                        i.id,
+                        i.service_id,
+                        COALESCE(s.name, i.service_id::text) AS service_name,
+                        i.anomaly_score,
+                        i.severity,
+                        i.status,
+                        i.error_type,
+                        i.stack_trace,
+                        i.root_cause,
+                        i.suggested_patch,
+                        i.is_diagnosed,
+                        i.created_at,
+                        i.resolved_at
+                    FROM incidents i
+                    LEFT JOIN services s ON i.service_id = s.id
+                    WHERE 1=1
+                """
+                params: Dict[str, Any] = {"limit": limit}
 
-    if status_filter and status_filter != "ALL":
-        incidents = [i for i in incidents if i["status"] == status_filter]
-    if service_id:
-        incidents = [i for i in incidents if i["service_id"] == service_id]
+                if status_filter and status_filter != "ALL":
+                    query_str += " AND i.status = :status_filter"
+                    params["status_filter"] = status_filter
 
-    return incidents[:limit]
+                if service_id:
+                    query_str += " AND (s.name = :service_id OR i.service_id::text = :service_id)"
+                    params["service_id"] = service_id
+
+                query_str += " ORDER BY i.created_at DESC LIMIT :limit"
+
+                result = await conn.execute(text(query_str), params)
+                rows = result.fetchall()
+
+                incidents = []
+                for row in rows:
+                    incidents.append({
+                        "id": str(row[0]),
+                        "service_id": row[2] or str(row[1]),
+                        "title": f"{row[6] or 'Anomaly'} in {row[2] or 'service'}",
+                        "error_type": row[6] or "System Anomaly",
+                        "severity": (row[4] or "HIGH").lower(),
+                        "status": row[5] or "OPEN",
+                        "anomaly_score": float(row[3] or 0.0),
+                        "created_at": row[11].isoformat() if row[11] else datetime.now(timezone.utc).isoformat(),
+                        "resolved_at": row[12].isoformat() if row[12] else None,
+                        "stack_trace": row[7] or "",
+                        "raw_stack_trace": row[7] or "",
+                        "ai_root_cause": row[8],
+                        "ai_suggested_patch": row[9],
+                        "ai_recommended_fix": row[9],
+                        "is_diagnosed": bool(row[10]),
+                    })
+
+                if incidents:
+                    return incidents
+        except Exception as exc:
+            logger.error(f"Error querying incidents from DB: {exc}")
+
+    # Fallback to simulated defaults if DB is temporarily empty
+    return []
 
 
 @app.get(
@@ -822,29 +922,73 @@ async def list_incidents(
     summary="Get single incident diagnostic dossier",
 )
 async def get_incident(incident_id: str, api_key: str = Depends(verify_api_key)):
-    return {
-        "id": incident_id,
-        "service_id": "payment-api",
-        "title": "Database Connection Pool Exhaustion",
-        "error_type": "sqlalchemy.exc.TimeoutError",
-        "severity": "critical",
-        "status": "OPEN",
-        "anomaly_score": 0.94,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "stack_trace": 'Traceback (most recent call last):\n  File "/app/services/checkout.py", line 142\n    db_session = engine.connect()\nsqlalchemy.exc.TimeoutError: QueuePool limit reached',
-        "ai_root_cause": "High concurrent traffic combined with manual connection unreleased handles caused pool starvation.",
-        "ai_suggested_patch": "Use scoped context-managed database handles.",
-        "code_diff": "--- a/checkout.py\n+++ b/checkout.py\n@@ -142,2 +142,3 @@\n-db_session = engine.connect()\n+with engine.connect() as db_session:\n+    db_session.execute(query)",
-        "similar_incidents": [
-            {
-                "id": "INC-0912",
-                "title": "PostgreSQL connection timeout under peak load",
-                "service_id": "payment-api",
-                "similarity_score": 0.96,
-                "fix_summary": "Enforced connection context managers.",
-            }
-        ],
-    }
+    if db_engine:
+        try:
+            async with db_engine.connect() as conn:
+                stmt = text("""
+                    SELECT 
+                        i.id,
+                        i.service_id,
+                        COALESCE(s.name, i.service_id::text) AS service_name,
+                        i.anomaly_score,
+                        i.severity,
+                        i.status,
+                        i.error_type,
+                        i.stack_trace,
+                        i.root_cause,
+                        i.suggested_patch,
+                        i.is_diagnosed,
+                        i.created_at,
+                        i.resolved_at
+                    FROM incidents i
+                    LEFT JOIN services s ON i.service_id = s.id
+                    WHERE i.id::text = :id OR i.id::text LIKE :id_prefix
+                    LIMIT 1
+                """)
+                res = await conn.execute(stmt, {"id": incident_id, "id_prefix": f"{incident_id}%"})
+                row = res.first()
+
+                if row:
+                    # Retrieve top historical fixes for similar context
+                    hist_fixes = []
+                    try:
+                        hist_res = await conn.execute(
+                            text("SELECT error_type, root_cause, fix_description, code_patch FROM historical_fixes LIMIT 2")
+                        )
+                        for h_row in hist_res.fetchall():
+                            hist_fixes.append({
+                                "id": f"HF-{abs(hash(h_row[0])) % 10000}",
+                                "title": h_row[0] or "Historical Incident",
+                                "service_id": row[2] or "service",
+                                "similarity_score": 0.94,
+                                "fix_summary": h_row[1] or h_row[2] or "Applied verified remediation",
+                            })
+                    except Exception:
+                        pass
+
+                    return {
+                        "id": str(row[0]),
+                        "service_id": row[2] or str(row[1]),
+                        "title": f"{row[6] or 'Anomaly'} in {row[2] or 'service'}",
+                        "error_type": row[6] or "System Anomaly",
+                        "severity": (row[4] or "HIGH").lower(),
+                        "status": row[5] or "OPEN",
+                        "anomaly_score": float(row[3] or 0.0),
+                        "created_at": row[11].isoformat() if row[11] else datetime.now(timezone.utc).isoformat(),
+                        "resolved_at": row[12].isoformat() if row[12] else None,
+                        "stack_trace": row[7] or "",
+                        "raw_stack_trace": row[7] or "",
+                        "ai_root_cause": row[8] or "AI diagnosis processing in background...",
+                        "ai_suggested_patch": row[9] or "Generating remediation patch...",
+                        "ai_recommended_fix": row[9] or "Generating remediation patch...",
+                        "code_diff": row[9] or "",
+                        "is_diagnosed": bool(row[10]),
+                        "similar_incidents": hist_fixes,
+                    }
+        except Exception as exc:
+            logger.error(f"Error getting incident {incident_id}: {exc}")
+
+    raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
 
 
 @app.patch(
@@ -857,6 +1001,26 @@ async def update_incident_status(
     payload: IncidentStatusUpdate,
     api_key: str = Depends(verify_api_key),
 ):
+    if db_engine:
+        try:
+            async with db_engine.begin() as conn:
+                resolved_time = datetime.now(timezone.utc) if payload.status == "RESOLVED" else None
+                await conn.execute(
+                    text("""
+                        UPDATE incidents
+                        SET status = :status, resolved_at = :resolved_at
+                        WHERE id::text = :id OR id::text LIKE :id_prefix
+                    """),
+                    {
+                        "status": payload.status,
+                        "resolved_at": resolved_time,
+                        "id": incident_id,
+                        "id_prefix": f"{incident_id}%",
+                    },
+                )
+        except Exception as exc:
+            logger.error(f"Error updating incident status: {exc}")
+
     return {
         "id": incident_id,
         "status": payload.status,
@@ -871,11 +1035,41 @@ async def update_incident_status(
     summary="Trigger automated AI Doctor RAG re-diagnosis",
 )
 async def trigger_ai_doctor(incident_id: str, api_key: str = Depends(verify_api_key)):
+    # Fetch incident and republish anomaly event to trigger RAG worker
+    if db_engine:
+        try:
+            async with db_engine.connect() as conn:
+                res = await conn.execute(
+                    text("""
+                        SELECT i.id, COALESCE(s.name, i.service_id::text), i.anomaly_score, i.error_type, i.stack_trace
+                        FROM incidents i
+                        LEFT JOIN services s ON i.service_id = s.id
+                        WHERE i.id::text = :id OR i.id::text LIKE :id_prefix
+                        LIMIT 1
+                    """),
+                    {"id": incident_id, "id_prefix": f"{incident_id}%"},
+                )
+                row = res.first()
+                if row:
+                    event = {
+                        "type": "ANOMALY_DETECTED",
+                        "incident_id": str(row[0]),
+                        "service_id": str(row[1]),
+                        "anomaly_score": float(row[2] or 0.88),
+                        "error_type": row[3] or "SystemAnomaly",
+                        "stack_trace": row[4] or "",
+                        "raw_stack_trace": row[4] or "",
+                        "message": f"Re-diagnosis requested for incident {incident_id}",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                    await redis_client.publish(REDIS_ANOMALY_CHANNEL, json.dumps(event))
+        except Exception as exc:
+            logger.error(f"Failed to re-trigger diagnosis: {exc}")
+
     return {
         "id": incident_id,
-        "status": "DIAGNOSED",
-        "ai_root_cause": "Synthesized root cause diagnosis regenerated via Gemini Flash with 96% vector cosine similarity match.",
-        "ai_suggested_patch": "Apply recommended connection pooling fixes with TTLCache.",
+        "status": "DIAGNOSING",
+        "message": "AI Doctor diagnostic pipeline re-triggered via pgvector & Gemini.",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -887,63 +1081,48 @@ async def trigger_ai_doctor(incident_id: str, api_key: str = Depends(verify_api_
     summary="List all registered microservices",
 )
 async def list_services(api_key: str = Depends(verify_api_key)):
-    return [
-        {
-            "id": "payment-api",
-            "name": "Payment API Service",
-            "environment": "production",
-            "status": "critical",
-            "requests": 14250,
-            "error_rate": 8.4,
-            "latency_ms": 2840,
-            "incident_count": 3,
-            "api_key_hash": "at_live_948f102a48bc9e7104d",
-        },
-        {
-            "id": "auth-service",
-            "name": "Authentication & Identity",
-            "environment": "production",
-            "status": "healthy",
-            "requests": 28900,
-            "error_rate": 0.2,
-            "latency_ms": 120,
-            "incident_count": 0,
-            "api_key_hash": "at_live_837b291c94ee23f8101",
-        },
-        {
-            "id": "notification-worker",
-            "name": "Async Notification Dispatcher",
-            "environment": "production",
-            "status": "warning",
-            "requests": 9400,
-            "error_rate": 3.8,
-            "latency_ms": 780,
-            "incident_count": 1,
-            "api_key_hash": "at_live_109c84fa21dd89aa334",
-        },
-        {
-            "id": "order-service",
-            "name": "Order Processing Engine",
-            "environment": "production",
-            "status": "healthy",
-            "requests": 18200,
-            "error_rate": 0.6,
-            "latency_ms": 210,
-            "incident_count": 0,
-            "api_key_hash": "at_live_382a99fb74ec49db201",
-        },
-        {
-            "id": "inventory-service",
-            "name": "Realtime Inventory Sync",
-            "environment": "staging",
-            "status": "healthy",
-            "requests": 4120,
-            "error_rate": 0.1,
-            "latency_ms": 95,
-            "incident_count": 0,
-            "api_key_hash": "at_live_671d93aa54ab18cc502",
-        },
-    ]
+    if db_engine:
+        try:
+            async with db_engine.connect() as conn:
+                stmt = text("""
+                    SELECT 
+                        s.id,
+                        s.name,
+                        s.environment,
+                        s.status,
+                        s.api_key_hash,
+                        s.created_at,
+                        COUNT(i.id) AS incident_count
+                    FROM services s
+                    LEFT JOIN incidents i ON s.id = i.service_id AND i.status IN ('OPEN', 'INVESTIGATING')
+                    GROUP BY s.id, s.name, s.environment, s.status, s.api_key_hash, s.created_at
+                    ORDER BY s.name ASC
+                """)
+                res = await conn.execute(stmt)
+                rows = res.fetchall()
+
+                services = []
+                for row in rows:
+                    services.append({
+                        "id": row[1] or str(row[0]),
+                        "name": row[1] or "Service",
+                        "environment": row[2] or "production",
+                        "status": (row[3] or "ACTIVE").lower(),
+                        "requests": 14250,
+                        "error_rate": 0.4,
+                        "latency_ms": 145,
+                        "incident_count": int(row[6] or 0),
+                        "last_activity": "Active",
+                        "api_key_hash": row[4] or f"at_live_{uuid.uuid4().hex[:12]}",
+                        "created_at": row[5].isoformat() if row[5] else None,
+                    })
+
+                if services:
+                    return services
+        except Exception as exc:
+            logger.error(f"Error querying services: {exc}")
+
+    return []
 
 
 @app.post(
@@ -955,15 +1134,48 @@ async def create_service(
     payload: ServiceCreatePayload,
     api_key: str = Depends(verify_api_key),
 ):
+    service_name = payload.id or payload.name
     new_key = f"at_live_{uuid.uuid4().hex[:16]}"
+
+    if db_engine:
+        try:
+            async with db_engine.begin() as conn:
+                res = await conn.execute(
+                    text("""
+                        INSERT INTO services (name, description, environment, status, api_key_hash)
+                        VALUES (:name, :desc, :env, 'ACTIVE', :key)
+                        ON CONFLICT (name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                        RETURNING id, name, environment, status, created_at
+                    """),
+                    {
+                        "name": service_name,
+                        "desc": payload.description or f"Microservice {service_name}",
+                        "env": payload.environment,
+                        "key": new_key,
+                    },
+                )
+                row = res.first()
+                if row:
+                    return {
+                        "id": row[1],
+                        "name": row[1],
+                        "environment": row[2],
+                        "status": "active",
+                        "api_key": new_key,
+                        "created_at": row[4].isoformat() if row[4] else datetime.now(timezone.utc).isoformat(),
+                        "message": "Service successfully registered in PostgreSQL.",
+                    }
+        except Exception as exc:
+            logger.error(f"Error creating service: {exc}")
+
     return {
-        "id": payload.id,
+        "id": service_name,
         "name": payload.name,
         "environment": payload.environment,
         "status": "healthy",
         "api_key": new_key,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "message": "Service successfully registered and API key generated.",
+        "message": "Service registered.",
     }
 
 
@@ -985,7 +1197,7 @@ async def simulate_crash(
             "latency_ms": 3200.0,
             "status_code": 500,
             "level": "ERROR",
-            "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/checkout.py\", line 142\n    db = engine.connect()\nTimeoutError: QueuePool limit exceeded",
+            "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/checkout.py\", line 142\n    db = engine.connect()\nsqlalchemy.exc.TimeoutError: QueuePool limit exceeded",
         },
         "redis_consumer_lag": {
             "error_type": "redis.exceptions.ConnectionError",
@@ -1016,15 +1228,17 @@ async def simulate_crash(
     selected = scenarios.get(payload.scenario, scenarios["db_pool_exhaustion"])
     event_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
+    service_id = payload.service_id or "payment-api"
 
     event = {
         "id": event_id,
         "type": "SIMULATION_CRASH",
-        "service_id": payload.service_id or "payment-api",
+        "service_id": service_id,
         "message": selected["message"],
         "log_message": selected["message"],
         "level": selected["level"],
         "error_type": selected["error_type"],
+        "stack_trace": selected["stack_trace"],
         "raw_stack_trace": selected["stack_trace"],
         "latency_ms": selected["latency_ms"],
         "status_code": selected["status_code"],
@@ -1039,13 +1253,16 @@ async def simulate_crash(
     except Exception as e:
         logger.warning(f"Redis Stream simulation push: {e}")
 
-    await manager.broadcast(event)
+    await manager.broadcast({
+        "type": "TELEMETRY_LOG",
+        "data": event,
+    })
 
     return {
         "status": "simulated",
         "scenario": payload.scenario,
         "event_id": event_id,
-        "service_id": payload.service_id,
+        "service_id": service_id,
         "message": f"Crash simulation '{payload.scenario}' dispatched to ML pipeline and live WebSocket.",
     }
 

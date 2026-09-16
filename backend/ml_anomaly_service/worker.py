@@ -10,8 +10,18 @@ import redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from backend.ml_anomaly_service.model import AnomalyDetector
-from backend.ml_anomaly_service.window_buffer import LogBuffer
+try:
+    from backend.ml_anomaly_service.model import AnomalyDetector
+    from backend.ml_anomaly_service.window_buffer import (
+        LogBuffer,
+        ServiceLogBufferManager,
+    )
+except ImportError:
+    from model import AnomalyDetector
+    from window_buffer import (
+        LogBuffer,
+        ServiceLogBufferManager,
+    )
 
 
 # ============================================================
@@ -114,12 +124,12 @@ if DATABASE_URL:
 
 
 # ============================================================
-# ML
+# ML & Service Rolling Buffer Manager
 # ============================================================
 
 detector = AnomalyDetector()
 
-log_buffer = LogBuffer(
+buffer_manager = ServiceLogBufferManager(
     window_seconds=int(
         os.getenv(
             "ANOMALY_WINDOW_SIZE_SECONDS",
@@ -212,6 +222,11 @@ def parse_stream_entry(
 
         data["_stream_id"] = stream_id
 
+        # Normalize stack_trace field
+        stack_val = data.get("stack_trace") or data.get("raw_stack_trace") or ""
+        data["stack_trace"] = stack_val
+        data["raw_stack_trace"] = stack_val
+
         return data
 
     except Exception:
@@ -242,47 +257,68 @@ async def create_incident(
 
         return None
 
-    service_id = telemetry.get(
-        "service_id"
-    )
+    service_identifier = str(telemetry.get("service_id", "unknown-service"))
+    stack_trace = telemetry.get("stack_trace") or telemetry.get("raw_stack_trace") or telemetry.get("message", "")
+    error_type = telemetry.get("error_type") or "SystemAnomaly"
+    severity = "CRITICAL" if anomaly_score >= 0.85 else ("HIGH" if anomaly_score >= 0.70 else "MEDIUM")
 
     try:
 
         async with db_engine.begin() as conn:
 
             # ------------------------------------------------
-            # Find service
+            # Find or create service (handles UUID and slug)
             # ------------------------------------------------
+            service_db_id = None
 
+            # 1. Try match by UUID or name
             result = await conn.execute(
                 text(
                     """
                     SELECT id
                     FROM services
-                    WHERE id = :service_id
+                    WHERE id::text = :identifier OR name = :identifier
                     LIMIT 1
                     """
                 ),
                 {
-                    "service_id": service_id,
+                    "identifier": service_identifier,
                 },
             )
 
-            service = result.first()
+            service_row = result.first()
 
-            if service is None:
-
-                logger.warning(
-                    "Service not found for incident: %s",
-                    service_id,
+            if service_row:
+                service_db_id = service_row[0]
+            else:
+                # 2. Auto-create service so incident foreign key constraint always succeeds
+                create_res = await conn.execute(
+                    text(
+                        """
+                        INSERT INTO services (name, description, environment, status)
+                        VALUES (:name, :description, 'production', 'ACTIVE')
+                        ON CONFLICT (name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                        RETURNING id
+                        """
+                    ),
+                    {
+                        "name": service_identifier,
+                        "description": f"Auto-registered service for {service_identifier}",
+                    },
                 )
+                created_row = create_res.first()
+                if created_row:
+                    service_db_id = created_row[0]
 
+            if service_db_id is None:
+                logger.warning(
+                    "Service resolution failed for incident: %s",
+                    service_identifier,
+                )
                 return None
 
-            service_db_id = service[0]
-
             # ------------------------------------------------
-            # Create incident
+            # Create incident in PostgreSQL matching schema
             # ------------------------------------------------
 
             result = await conn.execute(
@@ -290,35 +326,34 @@ async def create_incident(
                     """
                     INSERT INTO incidents (
                         service_id,
+                        anomaly_score,
                         severity,
                         status,
-                        anomaly_score,
-                        summary,
-                        detected_at
+                        error_type,
+                        stack_trace,
+                        is_diagnosed,
+                        created_at
                     )
                     VALUES (
                         :service_id,
-                        :severity,
-                        :status,
                         :anomaly_score,
-                        :summary,
-                        :detected_at
+                        :severity,
+                        'OPEN',
+                        :error_type,
+                        :stack_trace,
+                        FALSE,
+                        :created_at
                     )
                     RETURNING id
                     """
                 ),
                 {
                     "service_id": service_db_id,
-                    "severity": "HIGH",
-                    "status": "OPEN",
                     "anomaly_score": anomaly_score,
-                    "summary": telemetry.get(
-                        "message",
-                        "Anomaly detected",
-                    ),
-                    "detected_at": datetime.now(
-                        timezone.utc
-                    ),
+                    "severity": severity,
+                    "error_type": error_type,
+                    "stack_trace": stack_trace,
+                    "created_at": datetime.now(timezone.utc),
                 },
             )
 
@@ -331,9 +366,10 @@ async def create_incident(
                 )
 
                 logger.info(
-                    "Incident created | id=%s | score=%.4f",
+                    "Incident created in PostgreSQL | id=%s | score=%.4f | severity=%s",
                     incident_id,
                     anomaly_score,
+                    severity,
                 )
 
                 return incident_id
@@ -341,7 +377,7 @@ async def create_incident(
     except Exception:
 
         logger.exception(
-            "Failed to create incident"
+            "Failed to create incident in database"
         )
 
     return None
@@ -357,28 +393,26 @@ def publish_anomaly(
     incident_id: str | None,
 ):
 
+    stack_trace = telemetry.get("stack_trace") or telemetry.get("raw_stack_trace") or ""
+    service_id = str(telemetry.get("service_id", "unknown-service"))
+    error_type = telemetry.get("error_type") or "SystemAnomaly"
+    message = telemetry.get("message") or telemetry.get("log_message") or f"Anomaly detected in {service_id}"
+
     event = {
         "type": "ANOMALY_DETECTED",
-        "service_id": telemetry.get(
-            "service_id"
-        ),
-        "message": telemetry.get(
-            "message"
-        ),
-        "error_type": telemetry.get(
-            "error_type"
-        ),
-        "raw_stack_trace": telemetry.get(
-            "raw_stack_trace"
-        ),
+        "incident_id": incident_id,
+        "service_id": service_id,
+        "message": message,
+        "error_type": error_type,
+        "stack_trace": stack_trace,
+        "raw_stack_trace": stack_trace,
         "latency_ms": telemetry.get(
-            "latency_ms"
+            "latency_ms", 0.0
         ),
         "status_code": telemetry.get(
-            "status_code"
+            "status_code", 500
         ),
         "anomaly_score": anomaly_score,
-        "incident_id": incident_id,
         "timestamp": datetime.now(
             timezone.utc
         ).isoformat(),
@@ -397,10 +431,9 @@ def publish_anomaly(
         )
 
         logger.info(
-            "Published anomaly event | service=%s | score=%.4f",
-            telemetry.get(
-                "service_id"
-            ),
+            "Published anomaly event | service=%s | incident=%s | score=%.4f",
+            service_id,
+            incident_id,
             anomaly_score,
         )
 
@@ -428,9 +461,11 @@ async def process_message(
     if telemetry is None:
         return
 
-    service_id = telemetry.get(
-        "service_id",
-        "unknown",
+    service_id = str(
+        telemetry.get(
+            "service_id",
+            "unknown",
+        )
     )
 
     logger.info(
@@ -441,29 +476,33 @@ async def process_message(
     )
 
     # --------------------------------------------------------
-    # Add telemetry to 5-minute rolling window
+    # Add telemetry to service-specific 5-minute rolling window
     # --------------------------------------------------------
 
-    log_buffer.add_log(
+    buffer_manager.add_log(
         telemetry
     )
 
+    window_len = buffer_manager.get_buffer_size(service_id)
+
     logger.info(
-        "Rolling window size=%d",
-        len(log_buffer),
+        "Service rolling window size | service=%s | size=%d",
+        service_id,
+        window_len,
     )
 
     # --------------------------------------------------------
-    # Generate features
+    # Generate service-specific features
     # --------------------------------------------------------
 
-    features = log_buffer.extract_features()
+    features = buffer_manager.extract_features(service_id)
 
     logger.info(
-        "Feature vector generated | "
+        "Feature vector generated | service=%s | "
         "shape=%s | features=%s",
+        service_id,
         features.shape,
-        log_buffer.get_feature_dict(),
+        buffer_manager.get_feature_dict(service_id),
     )
 
     # --------------------------------------------------------

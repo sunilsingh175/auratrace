@@ -75,14 +75,14 @@ auratrace/
 ├── README.md                           # Setup and architectural documentation
 │
 ├── database/                           # Persistence & Vector Storage Layer
-│   ├── init.sql                        # Schema definition (Tables, pgvector extension, HNSW indices)
-│   └── seed_knowledge_base.sql         # Pre-populated stack traces & verified code patches
+│   ├── 01-init.sql                     # Schema definition (Tables, pgvector extension, HNSW indices)
+│   └── 02-seed.sql                     # Pre-populated stack traces & verified code patches
 │
 ├── backend/                            # Core Microservices Ecosystem
-│   ├── ingestion-service/              # High-Throughput Log Gateway (FastAPI)
-│   ├── ml-anomaly-service/             # Unsupervised Outlier Detector (Python Worker)
-│   ├── rag-diagnostic-service/         # AI Crash Doctor & Root-Cause Generator (LangChain)
-│   └── shared/                         # Common Utilities Across Workers
+│   ├── ingestion_service/              # High-Throughput Log Gateway (FastAPI)
+│   ├── ml_anomaly_service/             # Unsupervised Outlier Detector (Python Worker)
+│   ├── rag-diagnostic-service/         # AI Crash Doctor & Root-Cause Generator (Gemini + pgvector)
+│   └── shared/                         # Common Utilities & Database Models Across Workers
 │
 ├── frontend/                           # Live Observability Dashboard (Next.js 14 App Router)
 ├── sdk/                                # Client Telemetry Capture Packages (Node.js & Python)

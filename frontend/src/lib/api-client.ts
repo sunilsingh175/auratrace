@@ -50,25 +50,28 @@ export async function fetchIncidents(params?: {
     const res = await request(`incidents?${query}`);
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        // Map backend schema to unified Incident format
-        return data.map((item: any) => ({
-          id: item.id || `INC-${Math.floor(Math.random() * 9000 + 1000)}`,
-          service_id: item.service_id || "payment-api",
-          title: item.title || item.error_type || "Anomaly Detected",
-          error_type: item.error_type || "System Anomaly",
-          severity: item.severity || (item.anomaly_score > 0.85 ? "critical" : item.anomaly_score > 0.7 ? "high" : "medium"),
-          status: item.status || "OPEN",
-          anomaly_score: typeof item.anomaly_score === "number" ? item.anomaly_score : 0.85,
-          created_at: item.created_at || new Date().toISOString(),
-          resolved_at: item.resolved_at,
-          stack_trace: item.raw_stack_trace || item.stack_trace,
-          ai_root_cause: item.ai_root_cause,
-          ai_recommended_fix: item.ai_suggested_patch || item.ai_recommended_fix,
-          code_diff: item.code_diff,
-          system_metrics: item.system_metrics,
-          similar_incidents: item.similar_incidents,
-        }));
+      if (Array.isArray(data)) {
+        if (data.length > 0) {
+          // Map backend schema to unified Incident format
+          return data.map((item: any) => ({
+            id: item.id || `INC-${Math.floor(Math.random() * 9000 + 1000)}`,
+            service_id: item.service_id || "payment-api",
+            title: item.title || item.error_type || "Anomaly Detected",
+            error_type: item.error_type || "System Anomaly",
+            severity: item.severity || (item.anomaly_score > 0.85 ? "critical" : item.anomaly_score > 0.7 ? "high" : "medium"),
+            status: item.status || "OPEN",
+            anomaly_score: typeof item.anomaly_score === "number" ? item.anomaly_score : 0.85,
+            created_at: item.created_at || new Date().toISOString(),
+            resolved_at: item.resolved_at,
+            stack_trace: item.stack_trace || item.raw_stack_trace,
+            ai_root_cause: item.ai_root_cause,
+            ai_recommended_fix: item.ai_suggested_patch || item.ai_recommended_fix,
+            code_diff: item.code_diff || item.ai_suggested_patch,
+            system_metrics: item.system_metrics,
+            similar_incidents: item.similar_incidents,
+          }));
+        }
+        return [];
       }
     }
   } catch (error) {
@@ -105,10 +108,10 @@ export async function fetchIncidentById(id: string): Promise<Incident | null> {
           anomaly_score: item.anomaly_score || 0.88,
           created_at: item.created_at || new Date().toISOString(),
           resolved_at: item.resolved_at,
-          stack_trace: item.raw_stack_trace || item.stack_trace,
+          stack_trace: item.stack_trace || item.raw_stack_trace,
           ai_root_cause: item.ai_root_cause,
           ai_recommended_fix: item.ai_suggested_patch || item.ai_recommended_fix,
-          code_diff: item.code_diff,
+          code_diff: item.code_diff || item.ai_suggested_patch,
           system_metrics: item.system_metrics,
           similar_incidents: item.similar_incidents,
         };
@@ -174,20 +177,23 @@ export async function fetchServices(): Promise<Service[]> {
     const res = await request("services");
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data.map((s: any) => ({
-          id: s.id,
-          name: s.name || s.id,
-          environment: s.environment || "production",
-          status: s.status || "healthy",
-          requests: s.requests || 12500,
-          error_rate: s.error_rate ?? 0.4,
-          latency_ms: s.latency_ms ?? 145,
-          incident_count: s.incident_count ?? 0,
-          last_activity: "Just now",
-          api_key_hash: s.api_key || s.api_key_hash,
-          created_at: s.created_at,
-        }));
+      if (Array.isArray(data)) {
+        if (data.length > 0) {
+          return data.map((s: any) => ({
+            id: s.id,
+            name: s.name || s.id,
+            environment: s.environment || "production",
+            status: s.status || "healthy",
+            requests: s.requests || 12500,
+            error_rate: s.error_rate ?? 0.4,
+            latency_ms: s.latency_ms ?? 145,
+            incident_count: s.incident_count ?? 0,
+            last_activity: "Active",
+            api_key_hash: s.api_key || s.api_key_hash,
+            created_at: s.created_at,
+          }));
+        }
+        return [];
       }
     }
   } catch {

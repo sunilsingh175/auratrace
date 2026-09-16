@@ -43,6 +43,55 @@ VALUES
     'OpenStack block storage volume service.',
     'production',
     'ACTIVE'
+),
+(
+    '00000000-0000-0000-0000-000000000010',
+    'payment-api',
+    'High-throughput credit card processing and checkout transactions API.',
+    'production',
+    'ACTIVE'
+),
+(
+    '00000000-0000-0000-0000-000000000020',
+    'auth-service',
+    'User authentication, OAuth2 tokens, and role-based access control.',
+    'production',
+    'ACTIVE'
+),
+(
+    '00000000-0000-0000-0000-000000000030',
+    'notification-worker',
+    'Async worker sending transactional emails and push notifications.',
+    'production',
+    'ACTIVE'
+),
+(
+    '00000000-0000-0000-0000-000000000040',
+    'order-service',
+    'Order management and inventory reservation microservice.',
+    'production',
+    'ACTIVE'
+),
+(
+    '00000000-0000-0000-0000-000000000050',
+    'inventory-service',
+    'Warehouse catalog and stock synchronization service.',
+    'staging',
+    'ACTIVE'
+),
+(
+    '00000000-0000-0000-0000-000000000060',
+    'hdfs-datanode',
+    'Hadoop Distributed File System DataNode worker node.',
+    'production',
+    'ACTIVE'
+),
+(
+    '00000000-0000-0000-0000-000000000070',
+    'hdfs-namenode',
+    'Hadoop Distributed File System Master NameNode coordinator.',
+    'production',
+    'ACTIVE'
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -131,4 +180,61 @@ systemctl restart nova-compute'
     'systemctl enable tgtd
 systemctl restart tgtd
 cinder service-list'
+),
+
+(
+    '00000000-0000-0000-0000-000000000010',
+    'sqlalchemy.exc.TimeoutError',
+
+    'Traceback (most recent call last):
+  File "/app/services/checkout.py", line 142, in process_transaction
+    db = engine.connect()
+sqlalchemy.exc.TimeoutError: QueuePool limit of size 10 overflow 10 reached, connection timed out',
+
+    'High volume of concurrent checkout requests caused unclosed database connections to leak, rapidly exhausting the SQLAlchemy connection QueuePool.',
+
+    'Wrap database connections inside context managers `with engine.connect() as db:` and increase pool overflow size.',
+
+    '--- a/services/checkout.py
++++ b/services/checkout.py
+@@ -140,4 +140,5 @@
+-db = engine.connect()
+-result = db.execute(query)
++with engine.connect() as db:
++    result = db.execute(query)'
+),
+
+(
+    '00000000-0000-0000-0000-000000000030',
+    'redis.exceptions.ConnectionError',
+
+    'redis.exceptions.ConnectionError: Error 111 connecting to redis:6379. Connection refused.',
+
+    'Background stream consumer disconnected during transient network blip without automatic backoff and reconnection handler.',
+
+    'Add exponential backoff reconnection policy on Redis stream subscriber initialization.',
+
+    '--- a/workers/consumer.py
++++ b/workers/consumer.py
+@@ -12,2 +12,4 @@
+-client = redis.Redis(host="redis-broker")
++client = redis.Redis(host="redis-broker", retry_on_timeout=True, socket_keepalive=True)'
+),
+
+(
+    '00000000-0000-0000-0000-000000000010',
+    'httpx.ReadTimeout',
+
+    'httpx.ReadTimeout: The read operation timed out after 30000ms',
+
+    'Downstream payment processor webhook endpoint experienced high upstream latency, causing HTTP client thread to hang indefinitely.',
+
+    'Configure granular connection and read timeouts with a circuit breaker pattern.',
+
+    '--- a/gateway/payment.py
++++ b/gateway/payment.py
+@@ -45,2 +45,3 @@
+-res = httpx.post(WEBHOOK_URL, json=payload)
++timeout = httpx.Timeout(5.0, connect=2.0)
++res = httpx.post(WEBHOOK_URL, json=payload, timeout=timeout)'
 );

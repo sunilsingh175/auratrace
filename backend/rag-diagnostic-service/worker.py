@@ -4,7 +4,7 @@ import json
 import asyncio
 import uuid
 from typing import Any, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
 from sqlalchemy import select
@@ -39,20 +39,28 @@ sys.path.insert(
 
 try:
     from backend.shared.logger import get_logger
-
     from backend.shared.database import (
         AsyncSessionLocal,
-        IncidentReport,
+        Incident,
+        HistoricalFix,
+        get_or_create_service_id,
     )
-
 except ImportError:
-
-    from shared.logger import get_logger
-
-    from shared.database import (
-        AsyncSessionLocal,
-        IncidentReport,
-    )
+    try:
+        from shared.logger import get_logger
+        from shared.database import (
+            AsyncSessionLocal,
+            Incident,
+            HistoricalFix,
+            get_or_create_service_id,
+        )
+    except ImportError:
+        import logging
+        get_logger = lambda name: logging.getLogger(name)
+        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+        DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres_password_123@postgres-db:5432/auratrace_db")
+        _engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
+        AsyncSessionLocal = async_sessionmaker(bind=_engine, class_=AsyncSession, expire_on_commit=False)
 
 
 # ---------------------------------------------------------
@@ -79,7 +87,7 @@ logger = get_logger(
 
 REDIS_HOST = os.getenv(
     "REDIS_HOST",
-    "localhost"
+    "redis-broker"
 )
 
 REDIS_PORT = int(
@@ -103,164 +111,86 @@ def safe_float(
     value: Any,
     default: float = 0.0,
 ) -> float:
-
     try:
-
         result = float(value)
-
-        return max(
-            0.0,
-            min(
-                1.0,
-                result
-            )
-        )
-
-    except (
-        TypeError,
-        ValueError,
-    ):
-
+        return max(0.0, min(1.0, result))
+    except (TypeError, ValueError):
         return default
 
 
 def safe_uuid(
     value: Optional[str],
 ) -> uuid.UUID:
-
     try:
-
         if value:
-            return uuid.UUID(
-                str(value)
-            )
-
-    except (
-        ValueError,
-        TypeError,
-    ):
-
+            return uuid.UUID(str(value))
+    except (ValueError, TypeError):
         pass
-
     return uuid.uuid4()
 
 
 # ---------------------------------------------------------
-# Create/update incident
+# Create or find incident
 # ---------------------------------------------------------
 
-async def create_incident(
+async def get_or_create_incident(
     alert: Dict[str, Any],
-) -> IncidentReport:
+) -> Incident:
 
     incident_id = safe_uuid(
         alert.get("incident_id")
     )
 
     anomaly_score = safe_float(
-        alert.get(
-            "anomaly_score",
-            0.0
-        )
+        alert.get("anomaly_score", 0.0)
     )
 
-    service_id = str(
-        alert.get(
-            "service_id",
-            "unknown-service"
-        )
+    service_identifier = str(
+        alert.get("service_id", "unknown-service")
     )
 
     error_type = str(
-        alert.get(
-            "error_type",
-            "SystemAnomaly"
-        )
+        alert.get("error_type", "SystemAnomaly")
     )
 
     stack_trace = str(
-        alert.get(
-            "stack_trace",
-            ""
-        )
+        alert.get("stack_trace") or alert.get("raw_stack_trace") or ""
     )
 
-    reason = str(
-        alert.get(
-            "reason",
-            ""
-        )
-    )
+    severity = "CRITICAL" if anomaly_score >= 0.85 else ("HIGH" if anomaly_score >= 0.70 else "MEDIUM")
 
     async with AsyncSessionLocal() as session:
-
         result = await session.execute(
-            select(IncidentReport).where(
-                IncidentReport.id == incident_id
+            select(Incident).where(
+                Incident.id == incident_id
             )
         )
-
-        incident = (
-            result.scalar_one_or_none()
-        )
+        incident = result.scalar_one_or_none()
 
         if incident is None:
+            service_db_id = await get_or_create_service_id(session, service_identifier)
 
-            incident = IncidentReport(
+            incident = Incident(
                 id=incident_id,
-                service_id=service_id,
+                service_id=service_db_id,
                 error_type=error_type,
                 stack_trace=stack_trace,
-                reason=reason,
                 anomaly_score=anomaly_score,
+                severity=severity,
                 status="OPEN",
                 is_diagnosed=False,
+                created_at=datetime.now(timezone.utc),
             )
-
-            session.add(
-                incident
-            )
-
-            logger.info(
-                "Created incident %s | score=%.4f",
-                incident_id,
-                anomaly_score,
-            )
-
+            session.add(incident)
+            logger.info("Created incident %s in database | score=%.4f", incident_id, anomaly_score)
         else:
-
-            incident.anomaly_score = (
-                anomaly_score
-            )
-
-            incident.service_id = (
-                service_id
-            )
-
-            incident.error_type = (
-                error_type
-            )
-
-            incident.stack_trace = (
-                stack_trace
-            )
-
-            incident.reason = (
-                reason
-            )
-
-            logger.info(
-                "Updated incident %s | score=%.4f",
-                incident_id,
-                anomaly_score,
-            )
+            incident.anomaly_score = anomaly_score
+            incident.error_type = error_type
+            if stack_trace:
+                incident.stack_trace = stack_trace
 
         await session.commit()
-
-        await session.refresh(
-            incident
-        )
-
+        await session.refresh(incident)
         return incident
 
 
@@ -275,117 +205,32 @@ async def save_diagnosis(
 ) -> None:
 
     async with AsyncSessionLocal() as session:
-
         result = await session.execute(
-            select(IncidentReport).where(
-                IncidentReport.id == incident_id
+            select(Incident).where(
+                Incident.id == incident_id
             )
         )
-
-        incident = (
-            result.scalar_one_or_none()
-        )
+        incident = result.scalar_one_or_none()
 
         if incident is None:
-
-            logger.error(
-                "Incident %s not found.",
-                incident_id
-            )
-
+            logger.error("Incident %s not found for saving diagnosis.", incident_id)
             return
 
-        incident.ai_root_cause = (
-            root_cause
-        )
-
-        incident.ai_suggested_patch = (
-            suggested_patch
-        )
-
+        incident.root_cause = root_cause
+        incident.suggested_patch = suggested_patch
         incident.is_diagnosed = True
 
         await session.commit()
-
-        logger.info(
-            "Incident %s diagnosis saved successfully.",
-            incident_id
-        )
+        logger.info("Incident %s diagnosis saved successfully.", incident_id)
 
 
 # ---------------------------------------------------------
-# Retrieve historical incidents
-# ---------------------------------------------------------
-
-async def retrieve_similar_incidents(
-    stack_trace: str,
-    error_type: str,
-) -> list:
-
-    try:
-
-        results = await (
-            vector_store.search_similar_incidents(
-                stack_trace=stack_trace,
-                error_type=error_type,
-                top_k=5,
-            )
-        )
-
-        return results or []
-
-    except Exception as exc:
-
-        logger.warning(
-            "RAG retrieval failed: %s",
-            exc
-        )
-
-        return []
-
-
-# ---------------------------------------------------------
-# Generate embedding and store it
-# ---------------------------------------------------------
-
-async def store_embedding(
-    incident_id: uuid.UUID,
-    text: str,
-) -> None:
-
-    try:
-
-        # This is the actual API from embeddings.py.
-        embedding = embedder.get_embedding(
-            text
-        )
-
-        await vector_store.add_incident(
-            incident_id=incident_id,
-            text=text,
-            embedding=embedding,
-        )
-
-        logger.info(
-            "Embedding stored for incident %s.",
-            incident_id
-        )
-
-    except Exception as exc:
-
-        logger.warning(
-            "Embedding storage failed for %s: %s",
-            incident_id,
-            exc
-        )
-
-
-# ---------------------------------------------------------
-# Process anomaly
+# Process anomaly event
 # ---------------------------------------------------------
 
 async def process_anomaly(
     alert: Dict[str, Any],
+    redis_client: aioredis.Redis,
 ) -> None:
 
     incident_id = safe_uuid(
@@ -393,154 +238,101 @@ async def process_anomaly(
     )
 
     service_id = str(
-        alert.get(
-            "service_id",
-            "unknown-service"
-        )
+        alert.get("service_id", "unknown-service")
     )
 
     error_type = str(
-        alert.get(
-            "error_type",
-            "SystemAnomaly"
-        )
+        alert.get("error_type", "SystemAnomaly")
     )
 
     stack_trace = str(
-        alert.get(
-            "stack_trace",
-            ""
-        )
+        alert.get("stack_trace") or alert.get("raw_stack_trace") or ""
     )
 
-    reason = str(
-        alert.get(
-            "reason",
-            ""
-        )
+    message = str(
+        alert.get("message") or alert.get("log_message") or ""
     )
 
     anomaly_score = safe_float(
-        alert.get(
-            "anomaly_score",
-            0.0
-        )
+        alert.get("anomaly_score", 0.0)
     )
 
     logger.info(
-        "Received anomaly event | "
-        "incident_id=%s | "
-        "service=%s | "
-        "score=%.4f",
+        "RAG Doctor processing anomaly | incident_id=%s | service=%s | score=%.4f",
         incident_id,
         service_id,
         anomaly_score,
     )
 
-    # -----------------------------------------------------
-    # 1. Create incident with score
-    # -----------------------------------------------------
+    # 1. Ensure incident exists in PostgreSQL
+    await get_or_create_incident(alert)
 
-    await create_incident(
-        alert
+    # 2. Retrieve top similar historical fixes from pgvector
+    similar_records = await vector_store.search_similar_fixes(
+        stack_trace=stack_trace,
+        error_type=error_type,
+        top_k=3,
     )
 
     logger.info(
-        "Diagnosing Incident %s | "
-        "service=%s | score=%.4f",
-        incident_id,
-        service_id,
-        anomaly_score,
-    )
-
-    # -----------------------------------------------------
-    # 2. Build embedding text
-    # -----------------------------------------------------
-
-    embedding_text = (
-        f"Service: {service_id}\n"
-        f"Error Type: {error_type}\n"
-        f"Stack Trace: {stack_trace}\n"
-        f"Reason: {reason}"
-    )
-
-    # -----------------------------------------------------
-    # 3. Store embedding
-    # -----------------------------------------------------
-
-    await store_embedding(
-        incident_id,
-        embedding_text,
-    )
-
-    # -----------------------------------------------------
-    # 4. Retrieve similar historical incidents
-    # -----------------------------------------------------
-
-    similar_records = (
-        await retrieve_similar_incidents(
-            stack_trace=stack_trace,
-            error_type=error_type,
-        )
-    )
-
-    logger.info(
-        "Retrieved %d similar incidents for %s.",
+        "Retrieved %d similar historical fixes from pgvector for incident %s",
         len(similar_records),
         incident_id,
     )
 
-    # -----------------------------------------------------
-    # 5. Gemini diagnosis
-    # -----------------------------------------------------
-
+    # 3. Generate Gemini diagnosis
     try:
-
-        root_cause, suggested_patch = (
-            await llm_doctor.diagnose_incident(
-                service_id=service_id,
-                error_type=error_type,
-                stack_trace=stack_trace,
-                reason=reason,
-                similar_records=similar_records,
-            )
+        root_cause, suggested_patch = await llm_doctor.diagnose_incident(
+            service_id=service_id,
+            error_type=error_type,
+            stack_trace=stack_trace,
+            reason=message,
+            similar_records=similar_records,
         )
-
     except Exception as exc:
+        logger.error("Gemini diagnosis synthesis error for %s: %s", incident_id, exc)
+        root_cause = f"Exception {error_type} in {service_id}"
+        suggested_patch = "Inspect service database connection pool and resource allocation."
 
-        logger.error(
-            "Gemini diagnosis failed for %s: %s",
-            incident_id,
-            exc,
-        )
-
-        root_cause = (
-            "Diagnostic generation failed."
-        )
-
-        suggested_patch = (
-            "Review the incident manually "
-            "and verify the affected service."
-        )
-
-    # -----------------------------------------------------
-    # 6. Save diagnosis
-    # -----------------------------------------------------
-
+    # 4. Save diagnosis to PostgreSQL
     await save_diagnosis(
         incident_id=incident_id,
         root_cause=root_cause,
         suggested_patch=suggested_patch,
     )
 
-    logger.info(
-        "Incident %s processing completed.",
-        incident_id,
-    )
+    # 5. Broadcast diagnosis update via Redis Pub/Sub for live WebSocket UI updates
+    try:
+        diagnosis_event = {
+            "type": "INCIDENT_DIAGNOSED",
+            "incident_id": str(incident_id),
+            "service_id": service_id,
+            "anomaly_score": anomaly_score,
+            "error_type": error_type,
+            "stack_trace": stack_trace,
+            "raw_stack_trace": stack_trace,
+            "ai_root_cause": root_cause,
+            "ai_suggested_patch": suggested_patch,
+            "is_diagnosed": True,
+            "similar_incidents": similar_records,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        await redis_client.publish(
+            REDIS_ANOMALY_CHANNEL,
+            json.dumps(diagnosis_event),
+        )
+
+        logger.info(
+            "Published INCIDENT_DIAGNOSED event for incident %s",
+            incident_id,
+        )
+    except Exception as exc:
+        logger.warning("Failed to publish INCIDENT_DIAGNOSED event: %s", exc)
 
 
 # ---------------------------------------------------------
-# Redis
+# Redis Connection
 # ---------------------------------------------------------
 
 async def initialize_redis():
@@ -552,99 +344,63 @@ async def initialize_redis():
     )
 
     await redis_client.ping()
-
-    logger.info(
-        "Connected to Redis successfully."
-    )
-
+    logger.info("Connected to Redis successfully on %s:%s", REDIS_HOST, REDIS_PORT)
     return redis_client
 
 
 # ---------------------------------------------------------
-# Worker
+# Worker Event Loop
 # ---------------------------------------------------------
 
 async def process_events():
 
-    redis_client = (
-        await initialize_redis()
-    )
+    redis_client = await initialize_redis()
+
+    # Sync pgvector embeddings for seed data on worker startup
+    try:
+        await vector_store.sync_historical_embeddings()
+    except Exception as exc:
+        logger.warning("Initial embedding sync notice: %s", exc)
 
     pubsub = redis_client.pubsub()
+    await pubsub.subscribe(REDIS_ANOMALY_CHANNEL)
 
-    await pubsub.subscribe(
-        REDIS_ANOMALY_CHANNEL
-    )
-
-    logger.info(
-        "RAG AI Diagnostic Worker is active..."
-    )
+    logger.info("RAG AI Diagnostic Worker is active and listening on '%s'...", REDIS_ANOMALY_CHANNEL)
 
     try:
-
         async for message in pubsub.listen():
-
-            if not message:
+            if not message or message.get("type") != "message":
                 continue
 
-            if message.get("type") != "message":
-                continue
-
-            raw_data = message.get(
-                "data"
-            )
-
+            raw_data = message.get("data")
             if not raw_data:
                 continue
 
             try:
-
-                alert = json.loads(
-                    raw_data
-                )
-
-            except json.JSONDecodeError as exc:
-
-                logger.error(
-                    "Invalid anomaly event: %s",
-                    exc
-                )
-
+                alert = json.loads(raw_data)
+            except json.JSONDecodeError:
                 continue
 
-            if not isinstance(
-                alert,
-                dict
-            ):
+            if not isinstance(alert, dict):
+                continue
+
+            # Only process ANOMALY_DETECTED events to avoid feedback loops with INCIDENT_DIAGNOSED
+            event_type = alert.get("type", "ANOMALY_DETECTED")
+            if event_type != "ANOMALY_DETECTED":
                 continue
 
             try:
-
-                await process_anomaly(
-                    alert
-                )
-
+                await process_anomaly(alert, redis_client)
             except Exception as exc:
-
-                logger.error(
-                    "Incident processing failed: %s",
-                    exc,
-                    exc_info=True
-                )
+                logger.error("Incident processing failed: %s", exc, exc_info=True)
 
     except asyncio.CancelledError:
-
-        logger.info(
-            "RAG worker shutdown requested."
-        )
-
+        logger.info("RAG worker shutdown requested.")
     finally:
-
         try:
             await pubsub.close()
         except Exception:
             pass
-
         try:
             await redis_client.close()
         except Exception:
@@ -656,6 +412,4 @@ async def process_events():
 # ---------------------------------------------------------
 
 if __name__ == "__main__":
-    asyncio.run(
-        process_events()
-    )
+    asyncio.run(process_events())

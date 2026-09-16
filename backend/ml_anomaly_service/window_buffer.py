@@ -355,3 +355,46 @@ class LogBuffer:
         return len(
             self.get_logs()
         )
+
+
+class ServiceLogBufferManager:
+    """
+    Manages isolated rolling telemetry buffers per microservice.
+    Ensures that features and anomaly detection for 'payment-api'
+    are never polluted by logs from 'order-service', etc.
+    """
+
+    def __init__(
+        self,
+        window_seconds: int = 300,
+        max_size: int = 10000,
+    ):
+        self.window_seconds = window_seconds
+        self.max_size = max_size
+        self._buffers: dict[str, LogBuffer] = {}
+
+    def get_buffer(self, service_id: str) -> LogBuffer:
+        key = str(service_id or "unknown")
+        if key not in self._buffers:
+            self._buffers[key] = LogBuffer(
+                window_seconds=self.window_seconds,
+                max_size=self.max_size,
+            )
+        return self._buffers[key]
+
+    def add_log(self, log_payload: dict[str, Any]) -> None:
+        service_id = str(log_payload.get("service_id", "unknown"))
+        buffer = self.get_buffer(service_id)
+        buffer.add_log(log_payload)
+
+    def extract_features(self, service_id: str) -> np.ndarray:
+        return self.get_buffer(service_id).extract_features()
+
+    def get_feature_dict(self, service_id: str) -> dict[str, float]:
+        return self.get_buffer(service_id).get_feature_dict()
+
+    def get_buffer_size(self, service_id: str) -> int:
+        return len(self.get_buffer(service_id))
+
+    def active_services(self) -> list[str]:
+        return list(self._buffers.keys())
