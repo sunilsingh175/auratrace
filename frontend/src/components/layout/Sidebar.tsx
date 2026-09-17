@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -20,34 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
-
-const userLinks = [
-  {
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    badge: null,
-  },
-  {
-    name: "Services",
-    href: "/services",
-    icon: Server,
-    badge: "5",
-  },
-  {
-    name: "Live Telemetry",
-    href: "/telemetry",
-    icon: Radio,
-    badge: "Live",
-  },
-  {
-    name: "Incidents",
-    href: "/incidents",
-    icon: ShieldAlert,
-    badge: "2 Open",
-    badgeTone: "rose",
-  },
-];
+import { fetchSystemStats } from "@/lib/api-client";
 
 const adminLinks = [
   {
@@ -73,6 +46,59 @@ const adminLinks = [
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const [serviceCount, setServiceCount] = useState<number | null>(null);
+  const [openIncidentCount, setOpenIncidentCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCounts = async () => {
+      try {
+        const stats = await fetchSystemStats();
+        if (!mounted) return;
+        setServiceCount(stats.active_services_count);
+        setOpenIncidentCount(stats.open_incidents_count);
+      } catch (error) {
+        console.warn("Unable to load live sidebar counts:", error);
+      }
+    };
+
+    loadCounts();
+    const interval = setInterval(loadCounts, 10000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const userLinks = [
+    {
+      name: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      badge: null,
+    },
+    {
+      name: "Services",
+      href: "/services",
+      icon: Server,
+      badge: serviceCount === null ? "—" : String(serviceCount),
+    },
+    {
+      name: "Live Telemetry",
+      href: "/telemetry",
+      icon: Radio,
+      badge: "Live",
+    },
+    {
+      name: "Incidents",
+      href: "/incidents",
+      icon: ShieldAlert,
+      badge: openIncidentCount === null ? "—" : `${openIncidentCount} Open`,
+      badgeTone: "rose",
+    },
+  ];
 
   const isAdmin = user?.role === "Admin";
   const userInitials = user?.name
@@ -86,7 +112,6 @@ export function Sidebar() {
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-800/80 bg-slate-950/95 backdrop-blur-2xl">
-      {/* Brand Header */}
       <div className="flex h-16 items-center gap-3 border-b border-slate-800/80 px-6">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-md shadow-blue-500/20">
           <Sparkles className="h-5 w-5 text-cyan-200" />
@@ -110,9 +135,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation Sections */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-        {/* User / Developer Workspace */}
         <div>
           <div className="px-3 pb-2 flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -165,7 +188,6 @@ export function Sidebar() {
           </nav>
         </div>
 
-        {/* Administration (ONLY visible to Admin role) */}
         {isAdmin && (
           <div>
             <div className="px-3 pb-2 flex items-center justify-between">
@@ -216,7 +238,6 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* User Profile Footer or Sign In Button */}
       <div className="border-t border-slate-800/80 p-3">
         {user ? (
           <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
