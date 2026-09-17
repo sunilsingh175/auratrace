@@ -7,31 +7,42 @@ import { AppShell } from "@/components/layout/AppShell";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { PerformanceChart } from "@/components/dashboard/PerformanceChart";
 import { IncidentOverview } from "@/components/dashboard/IncidentOverview";
-import { fetchSystemStats, fetchIncidents, fetchServices } from "@/lib/api-client";
+import { fetchSystemStats, fetchIncidents, fetchServices, fetchPerformanceTimeseries } from "@/lib/api-client";
 import { SystemStats, Incident, Service, PerformanceDataPoint } from "@/types";
 
 export default function DeveloperDashboardPage() {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [timeSeries, setTimeSeries] = useState<PerformanceDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadDashboardData = async () => {
     try {
-      const [statsData, incidentsData, servicesData] = await Promise.all([
+      const [statsData, incidentsData, servicesData, timeseriesData] = await Promise.all([
         fetchSystemStats(),
         fetchIncidents({ limit: 5 }),
         fetchServices(),
+        fetchPerformanceTimeseries(300, 5),
       ]);
       setStats(statsData);
       setIncidents(incidentsData);
       setServices(servicesData);
+
+      const formattedPoints: PerformanceDataPoint[] = timeseriesData.map((pt) => ({
+        time: new Date(pt.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        latency: pt.p95_latency || pt.latency || 0,
+        errors: pt.errors || 0,
+        requests: pt.requests || 0,
+      }));
+      setTimeSeries(formattedPoints);
     } catch (e) {
       console.warn("Failed loading live AuraTrace dashboard data:", e);
       setStats(null);
       setIncidents([]);
       setServices([]);
+      setTimeSeries([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -55,9 +66,9 @@ export default function DeveloperDashboardPage() {
   const errorRate = stats?.error_rate_percent;
   const openIncidentsCount = stats?.open_incidents_count;
 
-  // The current backend exposes aggregate statistics, not a historical time series.
-  // Do not fabricate a waveform. Show the verified current snapshot instead.
-  const performanceSnapshot: PerformanceDataPoint[] = stats
+  const chartData: PerformanceDataPoint[] = timeSeries.length > 0
+    ? timeSeries
+    : stats
     ? [{
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         latency: p95Latency ?? 0,
@@ -110,7 +121,7 @@ export default function DeveloperDashboardPage() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           <div className="lg:col-span-7">
-            <PerformanceChart data={performanceSnapshot} />
+            <PerformanceChart data={chartData} />
           </div>
           <div className="lg:col-span-5">
             <IncidentOverview incidents={incidents} onRefresh={loadDashboardData} />

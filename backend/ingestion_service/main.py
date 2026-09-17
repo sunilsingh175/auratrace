@@ -918,6 +918,92 @@ async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
         }
 
 
+@app.get(
+    "/api/v1/stats/timeseries",
+    tags=["Cluster Statistics"],
+    summary="Get real-time telemetry time-series buckets",
+)
+async def get_stats_timeseries(
+    window_seconds: int = Query(300, ge=30, le=3600),
+    bucket_seconds: int = Query(5, ge=1, le=60),
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Return real telemetry time-series data for the dashboard.
+    Values are calculated directly from telemetry_logs grouped into buckets.
+    """
+    window_seconds = max(30, min(window_seconds, 3600))
+    bucket_seconds = max(1, min(bucket_seconds, 60))
+
+    if not db_engine:
+        return {
+            "window_seconds": window_seconds,
+            "bucket_seconds": bucket_seconds,
+            "points": [],
+        }
+
+    try:
+        async with db_engine.connect() as conn:
+            stmt = text(f"""
+                SELECT
+                    to_timestamp(floor(extract(epoch FROM timestamp) / {bucket_seconds}) * {bucket_seconds}) AT TIME ZONE 'UTC' AS bucket,
+                    COUNT(id) AS requests,
+                    COALESCE(AVG(latency_ms), 0) AS avg_latency,
+                    COALESCE(
+                        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms),
+                        0
+                    ) AS p95_latency,
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN status_code >= 400
+                                OR level IN ('ERROR', 'CRITICAL')
+                                OR error_type IS NOT NULL
+                                THEN 1 ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS errors
+                FROM telemetry_logs
+                WHERE timestamp >= NOW() - INTERVAL '{window_seconds} seconds'
+                GROUP BY 1
+                ORDER BY 1 ASC
+            """)
+
+            result = await conn.execute(stmt)
+            rows = result.fetchall()
+
+            points = []
+            for row in rows:
+                reqs = int(row[1] or 0)
+                errs = int(row[4] or 0)
+                points.append({
+                    "time": (
+                        row[0].replace(tzinfo=timezone.utc).isoformat()
+                        if hasattr(row[0], "replace")
+                        else str(row[0])
+                    ),
+                    "requests": reqs,
+                    "latency": round(float(row[2] or 0), 2),
+                    "p95_latency": round(float(row[3] or 0), 2),
+                    "errors": errs,
+                    "error_rate": round((errs / reqs * 100.0) if reqs > 0 else 0.0, 2),
+                })
+
+            return {
+                "window_seconds": window_seconds,
+                "bucket_seconds": bucket_seconds,
+                "points": points,
+            }
+    except Exception as exc:
+        logger.error(f"Failed to calculate stats timeseries: {exc}")
+        return {
+            "window_seconds": window_seconds,
+            "bucket_seconds": bucket_seconds,
+            "points": [],
+        }
+
+
 # 3. Incidents & Diagnostics
 @app.get(
     "/api/v1/incidents",

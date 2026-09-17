@@ -254,6 +254,31 @@ export async function fetchSystemStats(): Promise<SystemStats> {
   };
 }
 
+export interface PerformanceTimeSeriesPoint {
+  time: string;
+  requests: number;
+  latency: number;
+  p95_latency: number;
+  errors: number;
+  error_rate: number;
+}
+
+export async function fetchPerformanceTimeseries(
+  windowSeconds = 300,
+  bucketSeconds = 5
+): Promise<PerformanceTimeSeriesPoint[]> {
+  const path = `stats/timeseries?window_seconds=${windowSeconds}&bucket_seconds=${bucketSeconds}`;
+  try {
+    const res = await request(path);
+    ensureOk(res, path);
+    const data = await res.json();
+    return Array.isArray(data?.points) ? data.points : [];
+  } catch (err) {
+    console.warn("Failed to fetch performance time series:", err);
+    return [];
+  }
+}
+
 export async function fetchAdminInfrastructure(): Promise<InfrastructureStatus> {
   return { ...MOCK_INFRASTRUCTURE_STATUS };
 }
