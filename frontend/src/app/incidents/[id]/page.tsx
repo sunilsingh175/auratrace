@@ -1,328 +1,921 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
+  Activity,
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   Clock3,
-  Cpu,
-  Database,
-  FileCode2,
   RefreshCw,
   Server,
-  ShieldAlert,
-  Sparkles,
-  Terminal,
-  Activity,
-  Layers,
-  AlertTriangle,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
-import { SeverityBadge } from "@/components/incidents/SeverityBadge";
-import { AIAnalysis } from "@/components/incidents/AIAnalysis";
-import { CodeDiffViewer } from "@/components/code-diff-viewer";
-import { fetchIncidentById, updateIncidentStatus, regenerateIncidentDiagnosis } from "@/lib/api-client";
-import { Incident } from "@/types";
-import { formatTimeAgo } from "@/lib/utils";
+
+import {
+  fetchIncidentById,
+  regenerateIncidentDiagnosis,
+  updateIncidentStatus,
+} from "@/lib/api-client";
+
+import type { Incident } from "@/types";
+
+function safeNumber(value: unknown, fallback = 0): number {
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function formatPercent(value: unknown): string {
+  const number = safeNumber(value);
+
+  if (number <= 1) {
+    return `${Math.round(number * 100)}%`;
+  }
+
+  return `${Math.round(number)}%`;
+}
+
+function formatTime(value: unknown): string {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const date = new Date(String(value));
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString();
+}
+
+function formatTimeAgo(value: unknown): string {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const timestamp = new Date(String(value)).getTime();
+
+  if (!Number.isFinite(timestamp)) {
+    return "Unknown";
+  }
+
+  const seconds = Math.max(
+    0,
+    Math.floor((Date.now() - timestamp) / 1000)
+  );
+
+  if (seconds < 60) {
+    return `${seconds}s ago`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+
+  return `${days}d ago`;
+}
+
+function severityClass(score: number): string {
+  if (score >= 0.9) {
+    return "border-red-500/30 bg-red-500/10 text-red-400";
+  }
+
+  if (score >= 0.75) {
+    return "border-orange-500/30 bg-orange-500/10 text-orange-400";
+  }
+
+  return "border-yellow-500/30 bg-yellow-500/10 text-yellow-400";
+}
+
+function statusClass(status: string): string {
+  const normalized = status.toUpperCase();
+
+  if (normalized === "RESOLVED" || normalized === "CLOSED") {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-400";
+  }
+
+  if (normalized === "INVESTIGATING") {
+    return "border-blue-500/30 bg-blue-500/10 text-blue-400";
+  }
+
+  return "border-amber-500/30 bg-amber-500/10 text-amber-400";
+}
+
+function statusLabel(status: string): string {
+  const normalized = status.toUpperCase();
+
+  if (normalized === "RESOLVED") {
+    return "Resolved";
+  }
+
+  if (normalized === "INVESTIGATING") {
+    return "Investigating";
+  }
+
+  if (normalized === "CLOSED") {
+    return "Closed";
+  }
+
+  return "Open";
+}
 
 export default function IncidentDetailsPage() {
   const params = useParams();
-  const router = useRouter();
-  const id = typeof params?.id === "string" ? params.id : "INC-1024";
+
+  const incidentId = Array.isArray(params?.id)
+    ? params.id[0]
+    : String(params?.id || "");
 
   const [incident, setIncident] = useState<Incident | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadIncident = useCallback(async () => {
+    if (!incidentId) {
+      return;
+    }
+
+    try {
+      setError(null);
+
+      const result = await fetchIncidentById(incidentId);
+
+      if (!result) {
+        setError("Incident not found.");
+        return;
+      }
+
+      setIncident(result);
+    } catch (err) {
+      console.error("Failed to load incident:", err);
+      setError("Unable to load incident.");
+    } finally {
+      setLoading(false);
+    }
+  }, [incidentId]);
 
   useEffect(() => {
-    fetchIncidentById(id).then((data) => {
-      setIncident(data);
-      setLoading(false);
-    });
-  }, [id]);
+    loadIncident();
+  }, [loadIncident]);
 
-  const handleResolve = async () => {
-    if (!incident) return;
-    const updated = await updateIncidentStatus(incident.id, "RESOLVED");
-    if (updated) {
-      setIncident(updated);
+  /*
+   * Regeneration fix:
+   *
+   * The diagnose endpoint can return before the RAG worker has finished.
+   * We therefore keep the existing incident on screen and poll the
+   * canonical incident endpoint until is_diagnosed becomes true or
+   * ai_root_cause / ai_suggested_patch are populated.
+   */
+  const handleRegenerate = useCallback(async () => {
+    if (!incident?.id || regenerating) {
+      return;
     }
-  };
 
-  const handleRegenerate = async () => {
-    if (!incident) return;
-    setIsRegenerating(true);
-    const updated = await regenerateIncidentDiagnosis(incident.id);
-    if (updated) {
-      setIncident(updated);
+    setRegenerating(true);
+    setError(null);
+
+    try {
+      await regenerateIncidentDiagnosis(incident.id);
+
+      for (let attempt = 0; attempt < 15; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        try {
+          const freshIncident = await fetchIncidentById(
+            incident.id
+          );
+
+          if (!freshIncident) {
+            continue;
+          }
+
+          setIncident(freshIncident);
+
+          const data = freshIncident as any;
+
+          const diagnosed = Boolean(data.is_diagnosed);
+
+          const rootCause = String(
+            data.ai_root_cause || ""
+          ).trim();
+
+          const patch = String(
+            data.ai_suggested_patch ||
+            data.ai_recommended_fix ||
+            data.code_diff ||
+            ""
+          ).trim();
+
+          if (diagnosed || rootCause || patch) {
+            break;
+          }
+        } catch (pollError) {
+          console.error(
+            "Incident polling error:",
+            pollError
+          );
+        }
+      }
+    } catch (err) {
+      console.error(
+        "Failed to regenerate diagnosis:",
+        err
+      );
+
+      setError("Unable to regenerate diagnosis.");
+    } finally {
+      setRegenerating(false);
     }
-    setTimeout(() => setIsRegenerating(false), 800);
-  };
+  }, [incident, regenerating]);
+
+  const handleStatusChange = useCallback(
+    async (status: "OPEN" | "INVESTIGATING" | "RESOLVED") => {
+      if (!incident?.id) {
+        return;
+      }
+
+      try {
+        setError(null);
+
+        await updateIncidentStatus(
+          incident.id,
+          status
+        );
+
+        const freshIncident = await fetchIncidentById(
+          incident.id
+        );
+
+        if (freshIncident) {
+          setIncident(freshIncident);
+        }
+      } catch (err) {
+        console.error(
+          "Failed to update incident status:",
+          err
+        );
+
+        setError(
+          "Unable to update incident status."
+        );
+      }
+    },
+    [incident]
+  );
+
+  const data = incident as any;
+
+  const score = useMemo(() => {
+    return safeNumber(
+      data?.anomaly_score,
+      0
+    );
+  }, [data?.anomaly_score]);
+
+  const title = String(
+    data?.title ||
+    data?.error_type ||
+    "Detected anomaly"
+  );
+
+  const serviceName = String(
+    data?.service_id ||
+    "Unknown service"
+  );
+
+  const stackTrace = String(
+    data?.stack_trace ||
+    data?.raw_stack_trace ||
+    ""
+  ).trim();
+
+  /*
+   * These are the ACTUAL backend fields.
+   */
+  const rootCause = String(
+    data?.ai_root_cause || ""
+  ).trim();
+
+  const recoveryPatch = String(
+    data?.ai_suggested_patch ||
+    data?.ai_recommended_fix ||
+    data?.code_diff ||
+    ""
+  ).trim();
+
+  /*
+   * Backend returns similar_incidents, not similar_fixes.
+   */
+  const historicalMatches = Array.isArray(
+    data?.similar_incidents
+  )
+    ? data.similar_incidents
+    : [];
+
+  const diagnosed = Boolean(
+    data?.is_diagnosed
+  );
+
+  const status = String(
+    data?.status || "OPEN"
+  );
+
+  /*
+   * The current incident API does not return these
+   * metrics, so they are intentionally displayed as
+   * unavailable rather than incorrectly showing 0.
+   */
+  const systemMetrics = data?.system_metrics;
+
+  const cpu =
+    systemMetrics?.cpu ??
+    systemMetrics?.cpu_percent ??
+    null;
+
+  const memory =
+    systemMetrics?.memory ??
+    systemMetrics?.memory_percent ??
+    null;
+
+  const p95 =
+    systemMetrics?.p95_latency_ms ??
+    null;
+
+  const errorsPerMinute =
+    systemMetrics?.errors_per_minute ??
+    null;
 
   if (loading) {
     return (
-      <AppShell title="Incident AI Diagnosis">
-        <div className="panel flex h-96 flex-col items-center justify-center p-12 text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-cyan-400" />
-          <p className="mt-4 font-mono text-xs text-slate-400">Loading incident telemetry & RAG vector context...</p>
+      <main className="min-h-screen bg-slate-950 text-slate-100">
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="flex items-center gap-3 text-slate-400">
+            <RefreshCw className="h-5 w-5 animate-spin" />
+            Loading incident...
+          </div>
         </div>
-      </AppShell>
+      </main>
     );
   }
 
   if (!incident) {
     return (
-      <AppShell title="Incident Not Found">
-        <div className="panel p-12 text-center">
-          <ShieldAlert className="mx-auto h-12 w-12 text-rose-500" />
-          <h2 className="mt-3 text-lg font-bold text-white">Incident Not Found</h2>
-          <p className="mt-1 text-xs text-slate-500">The incident ID '{id}' could not be located in the database.</p>
-          <Link href="/incidents" className="button-primary mt-6">
-            <ArrowLeft className="h-4 w-4" /> Return to Incidents
+      <main className="min-h-screen bg-slate-950 text-slate-100">
+        <div className="mx-auto max-w-4xl px-6 py-10">
+          <Link
+            href="/incidents"
+            className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to incidents
           </Link>
+
+          <div className="mt-8 rounded-xl border border-red-500/20 bg-red-500/5 p-8">
+            <h1 className="text-xl font-semibold">
+              Incident unavailable
+            </h1>
+
+            <p className="mt-2 text-sm text-slate-400">
+              {error ||
+                "The requested incident could not be found."}
+            </p>
+          </div>
         </div>
-      </AppShell>
+      </main>
     );
   }
 
-  const scorePct = Math.round(incident.anomaly_score * 100);
-  const metrics = incident.system_metrics || {
-    cpu_percent: 74,
-    memory_percent: 88,
-    latency_ms: 2840,
-    error_rate_per_min: 34,
-  };
-
   return (
-    <AppShell
-      title={`Incident Diagnosis: ${incident.id}`}
-      subtitle="Flagship Telemetry → ML Anomaly → pgvector RAG → Gemini AI Code Remediation"
-    >
-      <div className="space-y-6">
-        {/* Back Link & Action Bar */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="mx-auto max-w-7xl px-6 py-8">
+
+        <div className="mb-6 flex items-center justify-between">
           <Link
             href="/incidents"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 transition hover:text-white"
+            className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Back to Incident Intelligence Hub</span>
+            Back to incidents
           </Link>
 
-          <div className="flex items-center gap-2.5">
-            <span className="font-mono text-xs text-slate-400">
-              Detected: {formatTimeAgo(incident.created_at)}
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw
+              className={
+                regenerating
+                  ? "h-4 w-4 animate-spin"
+                  : "h-4 w-4"
+              }
+            />
+
+            {regenerating
+              ? "Regenerating..."
+              : "Regenerate Diagnosis"}
+          </button>
         </div>
 
-        {/* Incident Summary Hero Card */}
-        <div className="panel relative overflow-hidden p-6 border-slate-800">
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
+        {/* INCIDENT HEADER */}
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-2 max-w-3xl">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <span className="font-mono text-sm font-extrabold text-blue-400">
-                  #{incident.id}
+            <div>
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${severityClass(
+                    score
+                  )}`}
+                >
+                  {formatPercent(score)} Outlier
                 </span>
-                <SeverityBadge severity={incident.severity} />
-                <SeverityBadge status={incident.status} />
-                <span className="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-cyan-300">
-                  {incident.service_id}
+
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClass(
+                    status
+                  )}`}
+                >
+                  {statusLabel(status)}
                 </span>
+
+                {regenerating && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs text-blue-400">
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                    Diagnosing
+                  </span>
+                )}
+
+                {!regenerating && diagnosed && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400">
+                    <CheckCircle2 className="h-3 w-3" />
+                    AI Diagnosed
+                  </span>
+                )}
               </div>
 
-              <h1 className="text-xl font-extrabold tracking-tight text-white md:text-2xl">
-                {incident.title || incident.error_type}
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {title}
               </h1>
 
-              <p className="font-mono text-xs text-rose-300">
-                Exception Class: {incident.error_type}
+              <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-400">
+
+                <span className="inline-flex items-center gap-2">
+                  <Server className="h-4 w-4" />
+                  {serviceName}
+                </span>
+
+                <span className="inline-flex items-center gap-2">
+                  <Clock3 className="h-4 w-4" />
+                  {formatTimeAgo(data?.created_at)}
+                </span>
+
+                <span className="font-mono text-xs text-slate-500">
+                  {data?.id}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  handleStatusChange(
+                    "INVESTIGATING"
+                  )
+                }
+                className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
+              >
+                Investigating
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleStatusChange("RESOLVED")
+                }
+                className="rounded-lg border border-emerald-500/30 px-3 py-2 text-xs text-emerald-400 hover:bg-emerald-500/10"
+              >
+                Resolve
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* METRICS */}
+
+        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+          <MetricCard
+            label="Anomaly Score"
+            value={formatPercent(score)}
+            icon={
+              <AlertTriangle className="h-5 w-5" />
+            }
+          />
+
+          <MetricCard
+            label="CPU"
+            value={
+              cpu === null
+                ? "Unavailable"
+                : `${Math.round(
+                  Number(cpu)
+                )}%`
+            }
+            icon={
+              <Activity className="h-5 w-5" />
+            }
+          />
+
+          <MetricCard
+            label="Memory"
+            value={
+              memory === null
+                ? "Unavailable"
+                : `${Math.round(
+                  Number(memory)
+                )}%`
+            }
+            icon={
+              <Activity className="h-5 w-5" />
+            }
+          />
+
+          <MetricCard
+            label="P95 Latency"
+            value={
+              p95 === null
+                ? "Unavailable"
+                : `${Math.round(
+                  Number(p95)
+                )} ms`
+            }
+            icon={
+              <Clock3 className="h-5 w-5" />
+            }
+          />
+        </section>
+
+        {/* STACK TRACE + HISTORICAL FIXES */}
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
+
+            <div className="border-b border-slate-800 px-5 py-4">
+              <h2 className="font-semibold">
+                Stack Trace
+              </h2>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Captured from the anomalous telemetry event
               </p>
             </div>
 
-            {/* Anomaly Outlier Score Gauge */}
-            <div className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-950/80 p-4 shrink-0">
-              <div className="text-right">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Isolation Forest Score
-                </span>
-                <span className="font-mono text-2xl font-extrabold text-rose-400">
-                  {scorePct}% Outlier
-                </span>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/30">
-                <ShieldAlert className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 2-Column Main Diagnosis Layout */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Left Column: Stack Trace & System Telemetry Metrics (col-span-6) */}
-          <div className="space-y-6 lg:col-span-6">
-            {/* Live Stack Trace Viewer */}
-            <div className="panel overflow-hidden">
-              <div className="panel-header bg-slate-950/60">
-                <div className="flex items-center gap-2">
-                  <Terminal className="h-4 w-4 text-cyan-400" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                    Live Stack Trace & Exception Dump
-                  </h3>
-                </div>
-                <span className="font-mono text-[10px] text-slate-500">Captured in Ingestion Service</span>
-              </div>
-
-              <div className="bg-slate-950 p-4 font-mono text-[11px] leading-relaxed text-rose-200/90 overflow-x-auto max-h-[300px] select-text">
-                <pre className="whitespace-pre">
-                  {incident.stack_trace || "No stack trace attached to this anomaly."}
+            <div className="p-5">
+              {stackTrace ? (
+                <pre className="max-h-[420px] overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-300">
+                  {stackTrace}
                 </pre>
-              </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">
+                  No stack trace attached.
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
+
+            <div className="border-b border-slate-800 px-5 py-4">
+              <h2 className="font-semibold">
+                Historical Fixes
+              </h2>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Retrieved using pgvector similarity search
+              </p>
             </div>
 
-            {/* System Metrics Telemetry Gauges */}
-            <div className="panel p-5">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-purple-400" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                    System Telemetry at Incident Window
-                  </h3>
-                </div>
-                <span className="font-mono text-[10px] text-slate-500">Node: worker-node-04</span>
-              </div>
+            <div className="p-5">
 
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 text-center font-mono">
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <span className="text-[10px] text-slate-500 uppercase">CPU Usage</span>
-                  <p className="mt-1 text-lg font-extrabold text-white">{metrics.cpu_percent}%</p>
-                  <div className="mt-1.5 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-blue-500" style={{ width: `${metrics.cpu_percent}%` }} />
-                  </div>
-                </div>
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-sm text-slate-400">
+                  {historicalMatches.length} Matches
+                </span>
 
-                <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
-                  <span className="text-[10px] text-rose-300 uppercase">Memory</span>
-                  <p className="mt-1 text-lg font-extrabold text-rose-400">{metrics.memory_percent}%</p>
-                  <div className="mt-1.5 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-rose-500" style={{ width: `${metrics.memory_percent}%` }} />
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <span className="text-[10px] text-slate-500 uppercase">P95 Latency</span>
-                  <p className="mt-1 text-lg font-extrabold text-amber-300">{metrics.latency_ms}ms</p>
-                  <div className="mt-1.5 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-amber-500" style={{ width: "85%" }} />
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <span className="text-[10px] text-slate-500 uppercase">Errors / Min</span>
-                  <p className="mt-1 text-lg font-extrabold text-rose-400">{metrics.error_rate_per_min}</p>
-                  <div className="mt-1.5 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-rose-500" style={{ width: "95%" }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Similar Historical Incidents from PostgreSQL + pgvector RAG */}
-            <div className="panel p-5">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-cyan-400" />
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                      RAG Vector Matches (PostgreSQL + pgvector)
-                    </h3>
-                    <p className="text-[10px] text-slate-500">
-                      Embedding: all-MiniLM-L6-v2 (Cosine Similarity &gt; 0.80)
-                    </p>
-                  </div>
-                </div>
-                <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-cyan-400">
-                  {incident.similar_incidents?.length || 0} Matches
+                <span className="text-xs text-slate-500">
+                  Top 3 retrieval
                 </span>
               </div>
 
-              <div className="mt-4 space-y-3">
-                {incident.similar_incidents && incident.similar_incidents.length > 0 ? (
-                  incident.similar_incidents.map((sim, index) => {
-                    const matchPct = Math.round(sim.similarity_score * 100);
-                    return (
-                      <div
-                        key={sim.id || index}
-                        className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3.5 transition hover:border-slate-700"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-cyan-400">
-                                {sim.id}
-                              </span>
-                              <span className="text-xs font-bold text-slate-200">
-                                {sim.title}
-                              </span>
+              {historicalMatches.length > 0 ? (
+                <div className="space-y-3">
+
+                  {historicalMatches
+                    .slice(0, 3)
+                    .map(
+                      (
+                        match: any,
+                        index: number
+                      ) => {
+
+                        const matchTitle =
+                          match.title ||
+                          match.error_type ||
+                          `Historical Fix ${index + 1
+                          }`;
+
+                        const similarity =
+                          safeNumber(
+                            match.similarity_score ??
+                            match.similarity ??
+                            match.score,
+                            0
+                          );
+
+                        const fixSummary =
+                          match.fix_summary ||
+                          match.fix_description ||
+                          "";
+
+                        return (
+                          <div
+                            key={
+                              match.id ||
+                              `${matchTitle}-${index}`
+                            }
+                            className="rounded-xl border border-slate-800 bg-slate-950/60 p-4"
+                          >
+
+                            <div className="flex items-start justify-between gap-3">
+
+                              <div>
+                                <div className="text-sm font-medium text-slate-200">
+                                  {matchTitle}
+                                </div>
+
+                                {match.id && (
+                                  <div className="mt-1 font-mono text-[11px] text-slate-600">
+                                    {match.id}
+                                  </div>
+                                )}
+                              </div>
+
+                              {similarity > 0 && (
+                                <span className="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-400">
+                                  {formatPercent(
+                                    similarity
+                                  )}
+                                </span>
+                              )}
                             </div>
-                            <p className="mt-1 font-mono text-[10px] text-slate-500">
-                              Service: {sim.service_id} · Resolved: {sim.resolved_time || "Earlier"}
-                            </p>
-                          </div>
 
-                          <div className="text-right shrink-0">
-                            <span className="font-mono text-xs font-extrabold text-emerald-400">
-                              {matchPct}% Match
-                            </span>
-                            <span className="block text-[9px] uppercase tracking-wider text-slate-500">
-                              Cosine Sim
-                            </span>
-                          </div>
-                        </div>
+                            {fixSummary && (
+                              <p className="mt-3 text-xs leading-5 text-slate-400">
+                                {fixSummary}
+                              </p>
+                            )}
 
-                        <p className="mt-2 text-[11px] text-slate-400 bg-slate-900/60 rounded-lg p-2 font-mono">
-                          Fix applied: {sim.fix_summary}
-                        </p>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="p-4 text-center text-xs text-slate-500">
-                    No historical matches in knowledge base.
-                  </div>
-                )}
-              </div>
+                          </div>
+                        );
+                      }
+                    )}
+
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">
+                  No historical matches returned by the API.
+                </div>
+              )}
+
             </div>
-          </div>
-
-          {/* Right Column: AI Doctor Synthesis & Code Remediation Diff (col-span-6) */}
-          <div className="space-y-6 lg:col-span-6">
-            {/* AI Diagnosis Card */}
-            <AIAnalysis
-              incident={incident}
-              onRegenerate={handleRegenerate}
-              onResolve={handleResolve}
-              isRegenerating={isRegenerating}
-            />
-
-            {/* Code Remediation Diff Viewer */}
-            <CodeDiffViewer
-              diffText={incident.code_diff || `--- a/services/checkout.py
-+++ b/services/checkout.py
-@@ -140,8 +140,8 @@ def process_transaction(user_id: str, amount: float):
--    db_session = engine.connect()
--    record = db_session.execute(insert(Transaction).values(user=user_id, amount=amount))
-+    with engine.begin() as conn:
-+        record = conn.execute(insert(Transaction).values(user=user_id, amount=amount))
--    payment_gateway.charge(user_id, amount)
-+        payment_gateway.charge(user_id, amount, timeout=5.0)
--    db_session.close()`}
-            />
-          </div>
+          </section>
         </div>
+
+        {/* AI DIAGNOSIS */}
+
+        <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60">
+
+          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+
+            <div>
+              <h2 className="font-semibold">
+                AI Diagnostic Analysis
+              </h2>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Gemini 3.6 Flash RAG
+              </p>
+            </div>
+
+            {diagnosed && !regenerating && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
+                <CheckCircle2 className="h-4 w-4" />
+                Diagnosis available
+              </span>
+            )}
+
+            {regenerating && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-blue-400">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Processing
+              </span>
+            )}
+          </div>
+
+          <div className="grid gap-6 p-5 lg:grid-cols-2">
+
+            {/* ROOT CAUSE */}
+
+            <div>
+              <h3 className="mb-3 text-sm font-medium text-slate-300">
+                Root Cause
+              </h3>
+
+              {rootCause ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-5 text-sm leading-7 text-slate-300">
+                  {rootCause}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-800 p-5 text-sm text-slate-500">
+                  {regenerating
+                    ? "AI diagnosis is being generated..."
+                    : "No root cause generated yet."}
+                </div>
+              )}
+            </div>
+
+            {/* RECOVERY PATCH */}
+
+            <div>
+              <h3 className="mb-3 text-sm font-medium text-slate-300">
+                Recovery Patch
+              </h3>
+
+              {recoveryPatch ? (
+                <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-800 bg-slate-950 p-5 font-mono text-xs leading-6 text-slate-300">
+                  {recoveryPatch}
+                </pre>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-800 p-5 text-sm text-slate-500">
+                  {regenerating
+                    ? "Waiting for the generated recovery patch..."
+                    : "No recovery patch generated yet."}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </section>
+
+        {/* INCIDENT METRICS */}
+
+        <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60">
+
+          <div className="border-b border-slate-800 px-5 py-4">
+            <h2 className="font-semibold">
+              Incident Metrics
+            </h2>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Metrics returned by the incident API
+            </p>
+          </div>
+
+          <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+
+            <MetricRow
+              label="CPU"
+              value={
+                cpu === null
+                  ? "Unavailable"
+                  : `${Math.round(
+                    Number(cpu)
+                  )}%`
+              }
+            />
+
+            <MetricRow
+              label="Memory"
+              value={
+                memory === null
+                  ? "Unavailable"
+                  : `${Math.round(
+                    Number(memory)
+                  )}%`
+              }
+            />
+
+            <MetricRow
+              label="P95 latency"
+              value={
+                p95 === null
+                  ? "Unavailable"
+                  : `${Math.round(
+                    Number(p95)
+                  )} ms`
+              }
+            />
+
+            <MetricRow
+              label="Errors / minute"
+              value={
+                errorsPerMinute === null
+                  ? "Unavailable"
+                  : String(
+                    Math.round(
+                      Number(
+                        errorsPerMinute
+                      )
+                    )
+                  )
+              }
+            />
+
+          </div>
+        </section>
+
+        <div className="mt-6 text-xs text-slate-600">
+          Created: {formatTime(data?.created_at)}
+        </div>
+
       </div>
-    </AppShell>
+    </main>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-slate-500">
+          {label}
+        </span>
+
+        <span className="text-slate-500">
+          {icon}
+        </span>
+      </div>
+
+      <div className="mt-3 text-2xl font-semibold text-slate-100">
+        {value}
+      </div>
+
+    </div>
+  );
+}
+
+function MetricRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-4">
+
+      <div className="text-xs text-slate-500">
+        {label}
+      </div>
+
+      <div className="mt-2 text-lg font-medium text-slate-200">
+        {value}
+      </div>
+
+    </div>
   );
 }

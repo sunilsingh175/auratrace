@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import socket
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import redis
@@ -240,6 +240,210 @@ def parse_stream_entry(
 
 
 # ============================================================
+# Persist PostgreSQL Telemetry Log
+# ============================================================
+
+async def persist_telemetry(
+    telemetry: dict[str, Any],
+) -> str | None:
+
+    if db_engine is None:
+        logger.warning(
+            "DATABASE_URL not configured; telemetry not stored"
+        )
+        return None
+
+    service_identifier = str(
+        telemetry.get("service_id", "unknown-service")
+    )
+
+    try:
+        async with db_engine.begin() as conn:
+
+            # ------------------------------------------------
+            # Resolve service UUID from UUID or service name
+            # ------------------------------------------------
+
+            result = await conn.execute(
+                text(
+                    """
+                    SELECT id
+                    FROM services
+                    WHERE id::text = :identifier
+                       OR name = :identifier
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "identifier": service_identifier,
+                },
+            )
+
+            service_row = result.first()
+
+            if service_row:
+                service_db_id = service_row[0]
+
+            else:
+                # Auto-register unknown services.
+                create_res = await conn.execute(
+                    text(
+                        """
+                        INSERT INTO services (
+                            name,
+                            description,
+                            environment,
+                            status
+                        )
+                        VALUES (
+                            :name,
+                            :description,
+                            'production',
+                            'ACTIVE'
+                        )
+                        ON CONFLICT (name)
+                        DO UPDATE SET
+                            updated_at = CURRENT_TIMESTAMP
+                        RETURNING id
+                        """
+                    ),
+                    {
+                        "name": service_identifier,
+                        "description": (
+                            f"Auto-registered service "
+                            f"for {service_identifier}"
+                        ),
+                    },
+                )
+
+                created_row = create_res.first()
+
+                if not created_row:
+                    logger.warning(
+                        "Failed to create service for telemetry: %s",
+                        service_identifier,
+                    )
+                    return None
+
+                service_db_id = created_row[0]
+
+            # ------------------------------------------------
+            # Normalize timestamp
+            # ------------------------------------------------
+
+            timestamp_value = telemetry.get("timestamp")
+
+            if isinstance(timestamp_value, str):
+                try:
+                    timestamp_value = datetime.fromisoformat(
+                        timestamp_value.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    timestamp_value = datetime.now(timezone.utc)
+
+            elif not isinstance(timestamp_value, datetime):
+                timestamp_value = datetime.now(timezone.utc)
+
+            if timestamp_value.tzinfo is None:
+                timestamp_value = timestamp_value.replace(
+                    tzinfo=timezone.utc
+                )
+
+            # ------------------------------------------------
+            # Insert telemetry record
+            # ------------------------------------------------
+
+            result = await conn.execute(
+                text(
+                    """
+                    INSERT INTO telemetry_logs (
+                        service_id,
+                        timestamp,
+                        level,
+                        message,
+                        error_type,
+                        stack_trace,
+                        latency_ms,
+                        status_code,
+                        metadata
+                    )
+                    VALUES (
+                        :service_id,
+                        :timestamp,
+                        :level,
+                        :message,
+                        :error_type,
+                        :stack_trace,
+                        :latency_ms,
+                        :status_code,
+                        CAST(:metadata AS JSONB)
+                    )
+                    RETURNING id
+                    """
+                ),
+                {
+                    "service_id": service_db_id,
+                    "timestamp": timestamp_value,
+                    "level": (
+                        telemetry.get("level")
+                        or (
+                            "ERROR"
+                            if telemetry.get("error_type")
+                            else "INFO"
+                        )
+                    ),
+                    "message": (
+                        telemetry.get("message")
+                        or telemetry.get("log_message")
+                        or ""
+                    ),
+                    "error_type": (
+                        telemetry.get("error_type")
+                        or None
+                    ),
+                    "stack_trace": (
+                        telemetry.get("stack_trace")
+                        or telemetry.get("raw_stack_trace")
+                        or ""
+                    ),
+                    "latency_ms": float(
+                        telemetry.get("latency_ms") or 0.0
+                    ),
+                    "status_code": int(
+                        telemetry.get("status_code") or 200
+                    ),
+                    "metadata": json.dumps(
+                        telemetry.get("metadata")
+                        or {}
+                    ),
+                },
+            )
+
+            row = result.first()
+
+            if row:
+                telemetry_id = str(row[0])
+
+                logger.info(
+                    "Telemetry persisted to PostgreSQL | "
+                    "id=%s | service=%s",
+                    telemetry_id,
+                    service_identifier,
+                )
+
+                return telemetry_id
+
+    except Exception:
+        logger.exception(
+            "Failed to persist telemetry in PostgreSQL | "
+            "service=%s",
+            service_identifier,
+        )
+
+    return None
+
+
+# ============================================================
 # Create PostgreSQL Incident
 # ============================================================
 
@@ -318,6 +522,46 @@ async def create_incident(
                 return None
 
             # ------------------------------------------------
+            # Deduplicate repeated anomalies
+            # ------------------------------------------------
+
+            cooldown_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+            existing_result = await conn.execute(
+                text(
+                    """
+                    SELECT id
+                    FROM incidents
+                    WHERE service_id = :service_id
+                      AND error_type = :error_type
+                      AND created_at >= :cooldown_cutoff
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "service_id": service_db_id,
+                    "error_type": error_type,
+                    "cooldown_cutoff": cooldown_cutoff,
+                },
+            )
+
+            existing_row = existing_result.first()
+
+            if existing_row:
+                incident_id = str(existing_row[0])
+
+                logger.info(
+                    "Duplicate anomaly suppressed | "
+                    "incident_id=%s | service=%s | error_type=%s",
+                    incident_id,
+                    service_identifier,
+                    error_type,
+                )
+
+                return incident_id
+
+            # ------------------------------------------------
             # Create incident in PostgreSQL matching schema
             # ------------------------------------------------
 
@@ -326,6 +570,7 @@ async def create_incident(
                     """
                     INSERT INTO incidents (
                         service_id,
+                        telemetry_id,
                         anomaly_score,
                         severity,
                         status,
@@ -336,6 +581,7 @@ async def create_incident(
                     )
                     VALUES (
                         :service_id,
+                        :telemetry_id,
                         :anomaly_score,
                         :severity,
                         'OPEN',
@@ -349,6 +595,7 @@ async def create_incident(
                 ),
                 {
                     "service_id": service_db_id,
+                    "telemetry_id": telemetry.get("_telemetry_id"),
                     "anomaly_score": anomaly_score,
                     "severity": severity,
                     "error_type": error_type,
@@ -474,6 +721,17 @@ async def process_message(
         stream_id,
         service_id,
     )
+
+    # --------------------------------------------------------
+    # Persist telemetry before ML processing
+    # --------------------------------------------------------
+
+    telemetry_id = await persist_telemetry(
+        telemetry
+    )
+
+    # Keep the database ID available for incident creation.
+    telemetry["_telemetry_id"] = telemetry_id
 
     # --------------------------------------------------------
     # Add telemetry to service-specific 5-minute rolling window

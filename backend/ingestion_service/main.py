@@ -8,7 +8,7 @@ import json
 import uuid
 import logging
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 
 from fastapi import (
@@ -710,59 +710,6 @@ async def scalar_docs():
     """)
 
 
-REDIS_ANOMALY_CHANNEL = os.getenv("REDIS_ANOMALY_CHANNEL", "anomaly_events")
-
-
-# ============================================================
-# Redis Pub/Sub -> WebSocket Bridge
-# ============================================================
-
-async def redis_pubsub_bridge():
-    """
-    Subscribes to Redis anomaly_events channel and forwards incoming
-    ML anomalies and RAG AI diagnoses live to all connected WebSocket clients.
-    """
-    while True:
-        try:
-            pubsub_client = aioredis.Redis(
-                host=REDIS_HOST,
-                port=REDIS_PORT,
-                decode_responses=True,
-            )
-            pubsub = pubsub_client.pubsub()
-            await pubsub.subscribe(REDIS_ANOMALY_CHANNEL)
-            logger.info(f"FastAPI Redis Pub/Sub Bridge subscribed to channel '{REDIS_ANOMALY_CHANNEL}'")
-
-            async for message in pubsub.listen():
-                if not message or message.get("type") != "message":
-                    continue
-                raw_data = message.get("data")
-                if not raw_data:
-                    continue
-                try:
-                    event_data = json.loads(raw_data)
-                    logger.info(
-                        f"Bridge broadcasting PubSub event: {event_data.get('type')} | "
-                        f"service={event_data.get('service_id')} | incident={event_data.get('incident_id')}"
-                    )
-                    await manager.broadcast({
-                        "type": "ANOMALY_ALERT",
-                        "data": event_data,
-                    })
-                except Exception as e:
-                    logger.warning(f"Error parsing/broadcasting PubSub event: {e}")
-        except asyncio.CancelledError:
-            break
-        except Exception as exc:
-            logger.warning(f"Redis Pub/Sub bridge connection dropped ({exc}), reconnecting in 2s...")
-            await asyncio.sleep(2)
-
-
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(redis_pubsub_bridge())
-
-
 # ============================================================
 # API Endpoints
 # ============================================================
@@ -989,74 +936,571 @@ async def list_incidents(
     tags=["Incidents & Diagnostics"],
     summary="Get single incident diagnostic dossier",
 )
-async def get_incident(incident_id: str, api_key: str = Depends(verify_api_key)):
-    if db_engine:
-        try:
-            async with db_engine.connect() as conn:
-                stmt = text("""
-                    SELECT 
-                        i.id,
-                        i.service_id,
-                        COALESCE(s.name, i.service_id::text) AS service_name,
-                        i.anomaly_score,
-                        i.severity,
-                        i.status,
-                        i.error_type,
-                        i.stack_trace,
-                        i.root_cause,
-                        i.suggested_patch,
-                        i.is_diagnosed,
-                        i.created_at,
-                        i.resolved_at
-                    FROM incidents i
-                    LEFT JOIN services s ON i.service_id = s.id
-                    WHERE i.id::text = :id OR i.id::text LIKE :id_prefix
-                    LIMIT 1
-                """)
-                res = await conn.execute(stmt, {"id": incident_id, "id_prefix": f"{incident_id}%"})
-                row = res.first()
+async def get_incident(
+    incident_id: str,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Return the complete incident dossier.
 
-                if row:
-                    # Retrieve top historical fixes for similar context
-                    hist_fixes = []
-                    try:
-                        hist_res = await conn.execute(
-                            text("SELECT error_type, root_cause, fix_description, code_patch FROM historical_fixes LIMIT 2")
+    Includes:
+      - ML anomaly information
+      - stack trace
+      - AI diagnosis
+      - up to 3 historical fixes
+      - calculated telemetry metrics for the affected service
+    """
+
+    if not db_engine:
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable.",
+        )
+
+    try:
+        async with db_engine.connect() as conn:
+
+            # ========================================================
+            # 1. Load incident + linked telemetry
+            # ========================================================
+
+            incident_stmt = text(
+                """
+                SELECT
+                    i.id,
+                    i.service_id,
+                    COALESCE(s.name, i.service_id::text) AS service_name,
+                    i.telemetry_id,
+                    i.anomaly_score,
+                    i.severity,
+                    i.status,
+                    i.error_type,
+                    i.stack_trace,
+                    i.root_cause,
+                    i.suggested_patch,
+                    i.is_diagnosed,
+                    i.created_at,
+                    i.resolved_at
+                FROM incidents i
+                LEFT JOIN services s
+                    ON i.service_id = s.id
+                WHERE
+                    i.id::text = :id
+                    OR i.id::text LIKE :id_prefix
+                LIMIT 1
+                """
+            )
+
+            result = await conn.execute(
+                incident_stmt,
+                {
+                    "id": incident_id,
+                    "id_prefix": f"{incident_id}%",
+                },
+            )
+
+            row = result.first()
+
+            if not row:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Incident {incident_id} not found",
+                )
+
+            (
+                db_incident_id,
+                db_service_id,
+                service_name,
+                telemetry_id,
+                anomaly_score,
+                severity,
+                incident_status,
+                error_type,
+                stack_trace,
+                root_cause,
+                suggested_patch,
+                is_diagnosed,
+                created_at,
+                resolved_at,
+            ) = row
+
+            service_identifier = service_name or str(db_service_id)
+
+            # ========================================================
+            # 2. Retrieve up to 3 historical fixes
+            # ========================================================
+            #
+            # IMPORTANT:
+            # The old implementation had LIMIT 2 and assigned a fake
+            # 0.94 similarity to every record.
+            #
+            # We now return 3 records when available and calculate a
+            # simple relevance value based on error-type matching.
+            #
+            # This is deliberately not presented as a pgvector cosine
+            # score. The actual semantic retrieval is performed by the
+            # RAG worker.
+            # ========================================================
+
+            hist_fixes = []
+
+            try:
+                historical_stmt = text(
+                    """
+                    SELECT
+                        id,
+                        error_type,
+                        root_cause,
+                        fix_description,
+                        code_patch,
+                        service_id
+                    FROM historical_fixes
+                    ORDER BY
+                        CASE
+                            WHEN error_type = :error_type THEN 0
+                            WHEN service_id = :service_id THEN 1
+                            ELSE 2
+                        END,
+                        created_at DESC
+                    LIMIT 3
+                    """
+                )
+
+                historical_result = await conn.execute(
+                    historical_stmt,
+                    {
+                        "error_type": error_type,
+                        "service_id": db_service_id,
+                    },
+                )
+
+                historical_rows = historical_result.fetchall()
+
+                for h_row in historical_rows:
+                    (
+                        historical_id,
+                        historical_error_type,
+                        historical_root_cause,
+                        fix_description,
+                        code_patch,
+                        historical_service_id,
+                    ) = h_row
+
+                    # Relevance indicator for the API/UI.
+                    #
+                    # This is NOT a pgvector similarity score.
+                    if (
+                        error_type
+                        and historical_error_type
+                        and historical_error_type == error_type
+                    ):
+                        relevance = 1.0
+                    elif (
+                        historical_service_id
+                        and historical_service_id == db_service_id
+                    ):
+                        relevance = 0.75
+                    else:
+                        relevance = 0.50
+
+                    hist_fixes.append(
+                        {
+                            "id": str(historical_id),
+                            "title": historical_error_type
+                            or "Historical Incident",
+                            "service_id": service_identifier,
+                            "similarity_score": relevance,
+                            "fix_summary": (
+                                historical_root_cause
+                                or fix_description
+                                or "Applied verified remediation"
+                            ),
+                            "code_patch": code_patch or "",
+                        }
+                    )
+
+            except Exception:
+                logger.exception(
+                    "Failed to retrieve historical fixes for incident %s",
+                    db_incident_id,
+                )
+
+            # ========================================================
+            # 3. Calculate incident telemetry metrics
+            # ========================================================
+            #
+            # Use a 5-minute window around the incident creation time.
+            # This matches the ML worker's rolling-window concept.
+            # ========================================================
+
+            system_metrics = {
+                "cpu_percent": None,
+                "memory_percent": None,
+                "p95_latency_ms": None,
+                "error_count": 0,
+                "request_count": 0,
+                "error_rate_percent": None,
+                "five_xx_rate_percent": None,
+                "errors_per_minute": None,
+            }
+
+            try:
+                metrics_stmt = text(
+                    """
+                    SELECT
+                        t.timestamp,
+                        t.level,
+                        t.error_type,
+                        t.latency_ms,
+                        t.status_code,
+                        t.metadata
+                    FROM telemetry_logs t
+                    WHERE
+                        t.service_id = :service_id
+                        AND t.timestamp >= :window_start
+                        AND t.timestamp <= :window_end
+                    ORDER BY t.timestamp ASC
+                    """
+                )
+
+                # Incident creation is the end of the five-minute
+                # observation window.
+                if created_at:
+                    window_end = created_at
+                else:
+                    window_end = datetime.now(timezone.utc)
+
+                window_start = (
+                    window_end - timedelta(minutes=5)
+                )
+
+                telemetry_result = await conn.execute(
+                    metrics_stmt,
+                    {
+                        "service_id": db_service_id,
+                        "window_start": window_start,
+                        "window_end": window_end,
+                    },
+                )
+
+                telemetry_rows = telemetry_result.fetchall()
+
+                if telemetry_rows:
+
+                    latencies = []
+                    error_count = 0
+                    five_xx_count = 0
+
+                    cpu_values = []
+                    memory_values = []
+
+                    for telemetry_row in telemetry_rows:
+
+                        (
+                            telemetry_timestamp,
+                            level,
+                            telemetry_error_type,
+                            latency_ms,
+                            status_code,
+                            metadata,
+                        ) = telemetry_row
+
+                        # --------------------------------------------
+                        # Request count
+                        # --------------------------------------------
+
+                        system_metrics["request_count"] += 1
+
+                        # --------------------------------------------
+                        # Error count
+                        # --------------------------------------------
+
+                        is_error = (
+                            str(level or "").upper() == "ERROR"
+                            or bool(telemetry_error_type)
+                            or (
+                                status_code is not None
+                                and int(status_code) >= 400
+                            )
                         )
-                        for h_row in hist_res.fetchall():
-                            hist_fixes.append({
-                                "id": f"HF-{abs(hash(h_row[0])) % 10000}",
-                                "title": h_row[0] or "Historical Incident",
-                                "service_id": row[2] or "service",
-                                "similarity_score": 0.94,
-                                "fix_summary": h_row[1] or h_row[2] or "Applied verified remediation",
-                            })
-                    except Exception:
-                        pass
 
-                    return {
-                        "id": str(row[0]),
-                        "service_id": row[2] or str(row[1]),
-                        "title": f"{row[6] or 'Anomaly'} in {row[2] or 'service'}",
-                        "error_type": row[6] or "System Anomaly",
-                        "severity": (row[4] or "HIGH").lower(),
-                        "status": row[5] or "OPEN",
-                        "anomaly_score": float(row[3] or 0.0),
-                        "created_at": row[11].isoformat() if row[11] else datetime.now(timezone.utc).isoformat(),
-                        "resolved_at": row[12].isoformat() if row[12] else None,
-                        "stack_trace": row[7] or "",
-                        "raw_stack_trace": row[7] or "",
-                        "ai_root_cause": row[8] or "AI diagnosis processing in background...",
-                        "ai_suggested_patch": row[9] or "Generating remediation patch...",
-                        "ai_recommended_fix": row[9] or "Generating remediation patch...",
-                        "code_diff": row[9] or "",
-                        "is_diagnosed": bool(row[10]),
-                        "similar_incidents": hist_fixes,
-                    }
-        except Exception as exc:
-            logger.error(f"Error getting incident {incident_id}: {exc}")
+                        if is_error:
+                            error_count += 1
 
-    raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
+                        # --------------------------------------------
+                        # 5xx count
+                        # --------------------------------------------
+
+                        if (
+                            status_code is not None
+                            and int(status_code) >= 500
+                        ):
+                            five_xx_count += 1
+
+                        # --------------------------------------------
+                        # Latency
+                        # --------------------------------------------
+
+                        if latency_ms is not None:
+                            try:
+                                latency_value = float(latency_ms)
+
+                                if latency_value >= 0:
+                                    latencies.append(
+                                        latency_value
+                                    )
+                            except (
+                                TypeError,
+                                ValueError,
+                            ):
+                                pass
+
+                        # --------------------------------------------
+                        # CPU / memory metadata
+                        # --------------------------------------------
+
+                        if isinstance(metadata, dict):
+
+                            cpu_keys = (
+                                "cpu_percent",
+                                "cpu_usage",
+                                "cpu",
+                                "cpu_usage_percent",
+                            )
+
+                            memory_keys = (
+                                "memory_percent",
+                                "memory_usage",
+                                "memory",
+                                "memory_usage_percent",
+                            )
+
+                            for key in cpu_keys:
+                                value = metadata.get(key)
+
+                                if value is not None:
+                                    try:
+                                        cpu_values.append(
+                                            float(value)
+                                        )
+                                        break
+                                    except (
+                                        TypeError,
+                                        ValueError,
+                                    ):
+                                        pass
+
+                            for key in memory_keys:
+                                value = metadata.get(key)
+
+                                if value is not None:
+                                    try:
+                                        memory_values.append(
+                                            float(value)
+                                        )
+                                        break
+                                    except (
+                                        TypeError,
+                                        ValueError,
+                                    ):
+                                        pass
+
+                    # --------------------------------------------
+                    # Error rate
+                    # --------------------------------------------
+
+                    request_count = len(telemetry_rows)
+
+                    system_metrics["error_count"] = error_count
+
+                    # Errors per minute based on the 5-minute telemetry window
+                    system_metrics["errors_per_minute"] = round(
+                        error_count / 5.0,
+                        2,
+                    )
+
+                    if request_count > 0:
+                        system_metrics[
+                            "error_rate_percent"
+                        ] = round(
+                            (
+                                error_count
+                                / request_count
+                            )
+                            * 100.0,
+                            2,
+                        )
+
+                        system_metrics[
+                            "five_xx_rate_percent"
+                        ] = round(
+                            (
+                                five_xx_count
+                                / request_count
+                            )
+                            * 100.0,
+                            2,
+                        )
+
+                    # --------------------------------------------
+                    # P95 latency
+                    # --------------------------------------------
+
+                    if latencies:
+
+                        sorted_latencies = sorted(
+                            latencies
+                        )
+
+                        # Nearest-rank P95.
+                        index = max(
+                            0,
+                            int(
+                                0.95
+                                * len(sorted_latencies)
+                            )
+                            - 1,
+                        )
+
+                        system_metrics[
+                            "p95_latency_ms"
+                        ] = round(
+                            sorted_latencies[index],
+                            2,
+                        )
+
+                    # --------------------------------------------
+                    # CPU
+                    # --------------------------------------------
+
+                    if cpu_values:
+                        system_metrics[
+                            "cpu_percent"
+                        ] = round(
+                            sum(cpu_values)
+                            / len(cpu_values),
+                            2,
+                        )
+
+                    # --------------------------------------------
+                    # Memory
+                    # --------------------------------------------
+
+                    if memory_values:
+                        system_metrics[
+                            "memory_percent"
+                        ] = round(
+                            sum(memory_values)
+                            / len(memory_values),
+                            2,
+                        )
+
+            except Exception:
+                logger.exception(
+                    "Failed to calculate telemetry metrics "
+                    "for incident %s",
+                    db_incident_id,
+                )
+
+            # ========================================================
+            # 4. Return complete incident dossier
+            # ========================================================
+
+            return {
+                "id": str(db_incident_id),
+
+                "service_id": (
+                    service_name
+                    or str(db_service_id)
+                ),
+
+                "title": (
+                    f"{error_type or 'Anomaly'} "
+                    f"in {service_name or 'service'}"
+                ),
+
+                "error_type": (
+                    error_type
+                    or "System Anomaly"
+                ),
+
+                "severity": (
+                    severity or "HIGH"
+                ).lower(),
+
+                "status": (
+                    incident_status
+                    or "OPEN"
+                ),
+
+                "anomaly_score": float(
+                    anomaly_score or 0.0
+                ),
+
+                "created_at": (
+                    created_at.isoformat()
+                    if created_at
+                    else datetime.now(
+                        timezone.utc
+                    ).isoformat()
+                ),
+
+                "resolved_at": (
+                    resolved_at.isoformat()
+                    if resolved_at
+                    else None
+                ),
+
+                "stack_trace": (
+                    stack_trace or ""
+                ),
+
+                "raw_stack_trace": (
+                    stack_trace or ""
+                ),
+
+                "ai_root_cause": (
+                    root_cause
+                    or "AI diagnosis processing in background..."
+                ),
+
+                "ai_suggested_patch": (
+                    suggested_patch
+                    or "Generating remediation patch..."
+                ),
+
+                "ai_recommended_fix": (
+                    suggested_patch
+                    or "Generating remediation patch..."
+                ),
+
+                "code_diff": (
+                    suggested_patch
+                    or ""
+                ),
+
+                "is_diagnosed": bool(
+                    is_diagnosed
+                ),
+
+                "similar_incidents": hist_fixes,
+
+                "system_metrics": system_metrics,
+            }
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        logger.exception(
+            "Error getting incident %s",
+            incident_id,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve incident.",
+        )
 
 
 @app.patch(
