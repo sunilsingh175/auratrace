@@ -62,10 +62,10 @@ export default function DeveloperDashboardPage() {
   };
 
   const activeServicesCount = stats?.active_services_count ?? services.length;
-  const ingestionRate = stats?.ingestion_rate_per_sec ?? 1420;
-  const p95Latency = stats?.p95_latency_ms ?? 18;
-  const errorRate = stats?.error_rate_percent ?? 0.8;
-  const openIncidentsCount = stats?.open_incidents_count ?? incidents.filter((i) => i.status === "OPEN").length;
+  const ingestionRate = stats?.ingestion_rate_per_sec;
+  const p95Latency = stats?.p95_latency_ms;
+  const errorRate = stats?.error_rate_percent;
+  const openIncidentsCount = stats?.open_incidents_count;
 
   return (
     <AppShell
@@ -73,7 +73,6 @@ export default function DeveloperDashboardPage() {
       subtitle="Real-time telemetry streams, ML anomaly detection, and automated AI diagnosis."
     >
       <div className="space-y-6">
-        {/* Action / Banner Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -104,14 +103,13 @@ export default function DeveloperDashboardPage() {
           </div>
         </div>
 
-        {/* Top KPI Cards Grid */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
             title="Ingestion Velocity"
-            value={ingestionRate.toLocaleString()}
-            unit="events/s"
-            delta="+8.4%"
-            deltaType="increase"
+            value={typeof ingestionRate === "number" ? ingestionRate.toLocaleString() : "—"}
+            unit={typeof ingestionRate === "number" ? "events/s" : ""}
+            delta={typeof ingestionRate === "number" ? "Live API" : "Unavailable"}
+            deltaType="neutral"
             subtitle="Redis Stream buffer active"
             icon={Activity}
             tone="cyan"
@@ -119,10 +117,10 @@ export default function DeveloperDashboardPage() {
 
           <MetricCard
             title="P95 Cluster Latency"
-            value={p95Latency}
-            unit="ms"
-            delta="-3ms"
-            deltaType="decrease"
+            value={typeof p95Latency === "number" ? p95Latency : "—"}
+            unit={typeof p95Latency === "number" ? "ms" : ""}
+            delta={typeof p95Latency === "number" ? "Live API" : "Unavailable"}
+            deltaType="neutral"
             subtitle="Target latency threshold < 50ms"
             icon={Cpu}
             tone="indigo"
@@ -130,28 +128,27 @@ export default function DeveloperDashboardPage() {
 
           <MetricCard
             title="Global Error Rate"
-            value={`${errorRate.toFixed(1)}%`}
+            value={typeof errorRate === "number" ? `${errorRate.toFixed(1)}%` : "—"}
             unit=""
-            delta={errorRate > 2 ? "Elevated" : "Nominal"}
-            deltaType={errorRate > 2 ? "increase" : "neutral"}
+            delta={typeof errorRate === "number" ? (errorRate > 2 ? "Elevated" : "Nominal") : "Unavailable"}
+            deltaType={typeof errorRate === "number" && errorRate > 2 ? "increase" : "neutral"}
             subtitle="Calculated over 5m sliding window"
             icon={Zap}
-            tone={errorRate > 2 ? "rose" : "emerald"}
+            tone={typeof errorRate === "number" && errorRate > 2 ? "rose" : "emerald"}
           />
 
           <MetricCard
             title="Active Incidents"
-            value={openIncidentsCount}
-            unit="open"
-            delta="AI Triaged"
+            value={typeof openIncidentsCount === "number" ? openIncidentsCount : "—"}
+            unit={typeof openIncidentsCount === "number" ? "open" : ""}
+            delta={typeof openIncidentsCount === "number" ? "AI Triaged" : "Unavailable"}
             deltaType="neutral"
             subtitle="pgvector RAG diagnosis connected"
             icon={AlertTriangle}
-            tone={openIncidentsCount > 0 ? "rose" : "emerald"}
+            tone={typeof openIncidentsCount === "number" && openIncidentsCount > 0 ? "rose" : "emerald"}
           />
         </div>
 
-        {/* Waveform Chart + Incident Overview (2 columns) */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           <div className="lg:col-span-7">
             <PerformanceChart data={MOCK_PERFORMANCE_METRICS} />
@@ -162,14 +159,13 @@ export default function DeveloperDashboardPage() {
           </div>
         </div>
 
-        {/* Monitored Microservices Fleet Summary */}
         <div className="panel p-0 overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-800/80 bg-slate-950/40 p-5">
             <div>
               <div className="flex items-center gap-2">
                 <Server className="h-4 w-4 text-cyan-400" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                  Monitored Microservices Fleet ({services.length})
+                  Monitored Microservices Fleet ({activeServicesCount})
                 </h3>
               </div>
               <p className="mt-0.5 text-xs text-slate-400">
@@ -246,7 +242,6 @@ export default function DeveloperDashboardPage() {
           </div>
         </div>
 
-        {/* Developer Integration Quickstart */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="panel p-5 space-y-3">
             <div className="flex items-center gap-2">
