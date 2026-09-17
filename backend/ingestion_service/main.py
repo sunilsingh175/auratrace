@@ -811,45 +811,111 @@ async def ingest_batch_telemetry(
     "/api/v1/stats",
     tags=["Cluster Statistics"],
     summary="Fetch pipeline & cluster telemetry statistics",
-    description="Returns rolling ingestion throughput, p95 latency, global error ratio, and open incident counters.",
 )
 async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
     stream_length = 0
+
     try:
         stream_info = await redis_client.xinfo_stream(STREAM_KEY)
-        stream_length = stream_info.get("length", 0)
+        stream_length = int(stream_info.get("length", 0))
     except Exception:
         pass
 
-    open_incidents = 0
-    active_services = 5
-    if db_engine:
-        try:
-            async with db_engine.connect() as conn:
-                inc_res = await conn.execute(
-                    text("SELECT COUNT(*) FROM incidents WHERE status IN ('OPEN', 'INVESTIGATING')")
-                )
-                open_incidents = inc_res.scalar() or 0
+    if not db_engine:
+        return {
+            "events_per_sec": 0,
+            "ingestion_rate_per_sec": 0,
+            "total_logs_ingested": stream_length,
+            "p95_latency_ms": 0,
+            "error_ratio": 0,
+            "error_rate_percent": 0,
+            "open_incidents_count": 0,
+            "active_services_count": 0,
+            "redis_stream_length": stream_length,
+            "status": "database_unavailable",
+        }
 
-                srv_res = await conn.execute(
-                    text("SELECT COUNT(*) FROM services WHERE status = 'ACTIVE'")
-                )
-                active_services = srv_res.scalar() or 5
-        except Exception as e:
-            logger.warning(f"Failed to query stats from database: {e}")
+    try:
+        async with db_engine.connect() as conn:
+            metrics = await conn.execute(text("""
+                SELECT
+                    COUNT(*) AS total_events,
+                    COALESCE(
+                        PERCENTILE_CONT(0.95)
+                        WITHIN GROUP (ORDER BY latency_ms),
+                        0
+                    ) AS p95_latency_ms,
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN status_code >= 400
+                                OR level IN ('ERROR', 'CRITICAL')
+                                THEN 1 ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS error_count
+                FROM telemetry_logs
+                WHERE created_at >= NOW() - INTERVAL '5 minutes'
+            """))
 
-    return {
-        "events_per_sec": 142,
-        "ingestion_rate_per_sec": 1420,
-        "total_logs_ingested": stream_length or 482910,
-        "p95_latency_ms": 18,
-        "error_ratio": 0.024,
-        "error_rate_percent": 2.4,
-        "open_incidents_count": open_incidents,
-        "active_services_count": active_services,
-        "redis_stream_length": stream_length,
-        "status": "operational",
-    }
+            row = metrics.first()
+
+            total_events = int(row[0] or 0)
+            p95_latency = float(row[1] or 0)
+            error_count = int(row[2] or 0)
+
+            error_rate = (
+                (error_count / total_events) * 100
+                if total_events
+                else 0
+            )
+
+            incidents = await conn.execute(text("""
+                SELECT COUNT(*)
+                FROM incidents
+                WHERE status IN ('OPEN', 'INVESTIGATING')
+            """))
+
+            active_services = await conn.execute(text("""
+                SELECT COUNT(*)
+                FROM services
+                WHERE status = 'ACTIVE'
+            """))
+
+            open_incidents = int(incidents.scalar() or 0)
+            service_count = int(active_services.scalar() or 0)
+
+            ingestion_rate = total_events / 300
+
+            return {
+                "events_per_sec": round(ingestion_rate, 2),
+                "ingestion_rate_per_sec": round(ingestion_rate, 2),
+                "total_logs_ingested": stream_length,
+                "p95_latency_ms": round(p95_latency, 2),
+                "error_ratio": round(error_rate / 100, 4),
+                "error_rate_percent": round(error_rate, 2),
+                "open_incidents_count": open_incidents,
+                "active_services_count": service_count,
+                "redis_stream_length": stream_length,
+                "status": "operational",
+            }
+
+    except Exception as exc:
+        logger.error(f"Failed to calculate cluster statistics: {exc}")
+
+        return {
+            "events_per_sec": 0,
+            "ingestion_rate_per_sec": 0,
+            "total_logs_ingested": stream_length,
+            "p95_latency_ms": 0,
+            "error_ratio": 0,
+            "error_rate_percent": 0,
+            "open_incidents_count": 0,
+            "active_services_count": 0,
+            "redis_stream_length": stream_length,
+            "status": "metrics_unavailable",
+        }
 
 
 # 3. Incidents & Diagnostics
@@ -1615,17 +1681,57 @@ async def list_services(api_key: str = Depends(verify_api_key)):
 
                 services = []
                 for row in rows:
+                    service_metrics = await conn.execute(text("""
+                        SELECT
+                            COUNT(*) AS request_count,
+                            COALESCE(
+                                PERCENTILE_CONT(0.95)
+                                WITHIN GROUP (ORDER BY latency_ms),
+                                0
+                            ) AS p95_latency_ms,
+                            COALESCE(
+                                SUM(
+                                    CASE
+                                        WHEN status_code >= 400
+                                        OR level IN ('ERROR', 'CRITICAL')
+                                        THEN 1 ELSE 0
+                                    END
+                                ),
+                                0
+                            ) AS error_count,
+                            MAX(created_at) AS last_activity
+                        FROM telemetry_logs
+                        WHERE service_id = :service_id
+                          AND created_at >= NOW() - INTERVAL '5 minutes'
+                    """), {"service_id": row[0]})
+
+                    metric = service_metrics.first()
+
+                    requests = int(metric[0] or 0)
+                    latency = float(metric[1] or 0)
+                    errors = int(metric[2] or 0)
+
+                    error_rate = (
+                        (errors / requests) * 100
+                        if requests
+                        else 0
+                    )
+
                     services.append({
                         "id": row[1] or str(row[0]),
                         "name": row[1] or "Service",
                         "environment": row[2] or "production",
                         "status": (row[3] or "ACTIVE").lower(),
-                        "requests": 14250,
-                        "error_rate": 0.4,
-                        "latency_ms": 145,
+                        "requests": requests,
+                        "error_rate": round(error_rate, 2),
+                        "latency_ms": round(latency, 2),
                         "incident_count": int(row[6] or 0),
-                        "last_activity": "Active",
-                        "api_key_hash": row[4] or f"at_live_{uuid.uuid4().hex[:12]}",
+                        "last_activity": (
+                            metric[3].isoformat()
+                            if metric[3]
+                            else None
+                        ),
+                        "api_key_hash": row[4],
                         "created_at": row[5].isoformat() if row[5] else None,
                     })
 
