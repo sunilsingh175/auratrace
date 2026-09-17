@@ -6,8 +6,6 @@ import {
   UserAccount,
 } from "@/types";
 import {
-  MOCK_SERVICES,
-  MOCK_INCIDENTS,
   MOCK_INFRASTRUCTURE_STATUS,
   MOCK_USERS,
 } from "./mockData";
@@ -27,7 +25,6 @@ async function request(path: string, options: RequestInit = {}) {
   });
 }
 
-let localIncidents: Incident[] = [...MOCK_INCIDENTS];
 let localUsers: UserAccount[] = [...MOCK_USERS];
 
 function ensureOk(response: Response, path: string) {
@@ -68,57 +65,43 @@ export async function fetchIncidents(params?: {
 }
 
 export async function fetchIncidentById(id: string): Promise<Incident | null> {
-  try {
-    const path = `incidents/${encodeURIComponent(id)}`;
-    const res = await request(path);
-    ensureOk(res, path);
-    const item = await res.json();
-    if (!item?.id) return null;
-    return {
-      id: item.id,
-      service_id: item.service_id || "unknown",
-      title: item.title || item.error_type || "Anomaly Detected",
-      error_type: item.error_type || "System Anomaly",
-      severity: item.severity || (item.anomaly_score > 0.85 ? "critical" : "high"),
-      status: item.status || "OPEN",
-      anomaly_score: typeof item.anomaly_score === "number" ? item.anomaly_score : 0,
-      created_at: item.created_at || new Date().toISOString(),
-      resolved_at: item.resolved_at,
-      stack_trace: item.stack_trace || item.raw_stack_trace,
-      ai_root_cause: item.ai_root_cause,
-      ai_recommended_fix: item.ai_suggested_patch || item.ai_recommended_fix,
-      code_diff: item.code_diff || item.ai_suggested_patch,
-      system_metrics: item.system_metrics,
-      similar_incidents: item.similar_incidents,
-    };
-  } catch {
-    return localIncidents.find((i) => i.id === id) || null;
-  }
+  const path = `incidents/${encodeURIComponent(id)}`;
+  const res = await request(path);
+  if (res.status === 404) return null;
+  ensureOk(res, path);
+  const item = await res.json();
+  if (!item?.id) return null;
+  return {
+    id: item.id,
+    service_id: item.service_id || "unknown",
+    title: item.title || item.error_type || "Anomaly Detected",
+    error_type: item.error_type || "System Anomaly",
+    severity: item.severity || (item.anomaly_score > 0.85 ? "critical" : "high"),
+    status: item.status || "OPEN",
+    anomaly_score: typeof item.anomaly_score === "number" ? item.anomaly_score : 0,
+    created_at: item.created_at || new Date().toISOString(),
+    resolved_at: item.resolved_at,
+    stack_trace: item.stack_trace || item.raw_stack_trace,
+    ai_root_cause: item.ai_root_cause,
+    ai_recommended_fix: item.ai_suggested_patch || item.ai_recommended_fix,
+    code_diff: item.code_diff || item.ai_suggested_patch,
+    system_metrics: item.system_metrics,
+    similar_incidents: item.similar_incidents,
+  };
 }
 
 export async function updateIncidentStatus(id: string, status: "OPEN" | "INVESTIGATING" | "RESOLVED"): Promise<Incident | null> {
-  try {
-    const path = `incidents/${encodeURIComponent(id)}/status`;
-    const res = await request(path, { method: "PATCH", body: JSON.stringify({ status }) });
-    ensureOk(res, path);
-    return await res.json();
-  } catch {
-    const idx = localIncidents.findIndex((i) => i.id === id);
-    if (idx === -1) return null;
-    localIncidents[idx] = { ...localIncidents[idx], status, resolved_at: status === "RESOLVED" ? new Date().toISOString() : undefined };
-    return localIncidents[idx];
-  }
+  const path = `incidents/${encodeURIComponent(id)}/status`;
+  const res = await request(path, { method: "PATCH", body: JSON.stringify({ status }) });
+  ensureOk(res, path);
+  return await res.json();
 }
 
 export async function regenerateIncidentDiagnosis(id: string): Promise<Incident | null> {
-  try {
-    const path = `incidents/${encodeURIComponent(id)}/diagnose`;
-    const res = await request(path, { method: "POST" });
-    ensureOk(res, path);
-    return await res.json();
-  } catch {
-    return localIncidents.find((i) => i.id === id) || null;
-  }
+  const path = `incidents/${encodeURIComponent(id)}/diagnose`;
+  const res = await request(path, { method: "POST" });
+  ensureOk(res, path);
+  return await res.json();
 }
 
 export async function fetchServices(): Promise<Service[]> {

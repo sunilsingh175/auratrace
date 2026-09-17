@@ -22,10 +22,10 @@ GEMINI_API_KEY = os.getenv(
     ""
 ).strip()
 
-_raw_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+_raw_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
 # Normalize valid Gemini models
 if "3.8" in _raw_model or "3.5" in _raw_model or not _raw_model:
-    GEMINI_MODEL = "gemini-2.5-flash"
+    GEMINI_MODEL = "gemini-3.6-flash"
 else:
     GEMINI_MODEL = _raw_model
 

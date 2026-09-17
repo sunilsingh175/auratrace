@@ -792,11 +792,16 @@ async def ingest_batch_telemetry(
         event_dict = event.model_dump()
         event_dict["id"] = str(uuid.uuid4())
         event_dict["received_at"] = timestamp
+        event_dict["timestamp"] = event_dict.get("timestamp") or timestamp
         stack_val = event_dict.get("stack_trace") or event_dict.get("raw_stack_trace") or ""
         event_dict["stack_trace"] = stack_val
         event_dict["raw_stack_trace"] = stack_val
         pipe.xadd(STREAM_KEY, {"payload": json.dumps(event_dict)}, maxlen=10000)
         count += 1
+        await manager.broadcast({
+            "type": "TELEMETRY_LOG",
+            "data": event_dict,
+        })
 
     await pipe.execute()
     return {
@@ -926,6 +931,7 @@ async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
 async def get_stats_timeseries(
     window_seconds: int = Query(300, ge=30, le=3600),
     bucket_seconds: int = Query(5, ge=1, le=60),
+    service_id: Optional[str] = Query(None, description="Filter by service identifier (name or UUID)"),
     api_key: str = Depends(verify_api_key),
 ):
     """
@@ -944,6 +950,16 @@ async def get_stats_timeseries(
 
     try:
         async with db_engine.connect() as conn:
+            service_filter_sql = ""
+            params: Dict[str, Any] = {}
+            if service_id:
+                service_filter_sql = """
+                    AND service_id IN (
+                        SELECT id FROM services WHERE id::text = :service_id OR name = :service_id
+                    )
+                """
+                params["service_id"] = service_id
+
             stmt = text(f"""
                 SELECT
                     to_timestamp(floor(extract(epoch FROM timestamp) / {bucket_seconds}) * {bucket_seconds}) AT TIME ZONE 'UTC' AS bucket,
@@ -966,11 +982,12 @@ async def get_stats_timeseries(
                     ) AS errors
                 FROM telemetry_logs
                 WHERE timestamp >= NOW() - INTERVAL '{window_seconds} seconds'
+                {service_filter_sql}
                 GROUP BY 1
                 ORDER BY 1 ASC
             """)
 
-            result = await conn.execute(stmt)
+            result = await conn.execute(stmt, params)
             rows = result.fetchall()
 
             points = []

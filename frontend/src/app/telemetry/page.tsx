@@ -10,7 +10,7 @@ import { AnomalyAlertBanner } from "@/components/anomaly-alert-banner";
 import { useWebSocket, AnomalyAlertEvent, LogEvent } from "@/hooks/use-websocket";
 import type { PerformanceDataPoint, TelemetryLog } from "@/types";
 
-export default function TelemetryPage() {
+function TelemetryContent() {
   const searchParams = useSearchParams();
   const requestedService = searchParams.get("service") || "";
   const [currentAlert, setCurrentAlert] = useState<AnomalyAlertEvent | null>(null);
@@ -153,5 +153,13 @@ export default function TelemetryPage() {
         />
       </div>
     </AppShell>
+  );
+}
+
+export default function TelemetryPage() {
+  return (
+    <React.Suspense fallback={<div className="panel p-6 text-slate-400">Loading telemetry inspector...</div>}>
+      <TelemetryContent />
+    </React.Suspense>
   );
 }

@@ -34,7 +34,7 @@ def stream_logs(max_lines=500):
             if not line.strip():
                 continue
 
-            # Normal traffic
+            # Normal traffic vs crash spike
             is_error = any(
                 term in line.lower()
                 for term in [
@@ -44,7 +44,7 @@ def stream_logs(max_lines=500):
                     "warn",
                     "timed out",
                 ]
-            )
+            ) or (50 <= idx <= 75) or (180 <= idx <= 205)
 
             # Simulate realistic latency.
             if is_error:

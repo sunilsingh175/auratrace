@@ -6,4 +6,4 @@ COPY backend/rag-diagnostic-service/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY backend/shared/ /app/backend/shared/
 COPY backend/rag-diagnostic-service/ /app/backend/rag-diagnostic-service/
-CMD ["python", "/app/backend/rag-diagnostic-service/worker.py"]
+CMD ["python", "-u", "/app/backend/rag-diagnostic-service/worker.py"]
