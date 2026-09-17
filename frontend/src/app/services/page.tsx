@@ -5,27 +5,26 @@ import Link from "next/link";
 import {
   Server,
   Plus,
-  Activity,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
   Key,
   Copy,
   Check,
   Search,
-  ExternalLink,
-  ShieldCheck,
   Radio,
-  Trash2,
   X,
+  Activity,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { fetchServices, registerService } from "@/lib/api-client";
 import { Service } from "@/types";
 
+function formatMetric(value: number, suffix = "") {
+  return Number.isFinite(value) && value > 0 ? `${value}${suffix}` : "—";
+}
+
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [newServiceId, setNewServiceId] = useState("");
@@ -35,38 +34,61 @@ export default function ServicesPage() {
   const [copiedKey, setCopiedKey] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchServices().then((data) => {
-      setServices(data);
+  const loadServices = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setServices(await fetchServices());
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load services from the AuraTrace API.");
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    void loadServices();
   }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newServiceId || !newServiceName) return;
+    if (!newServiceId.trim() || !newServiceName.trim()) return;
+
     setSubmitting(true);
+    setError(null);
 
-    const res = await registerService({
-      id: newServiceId.toLowerCase().replace(/[^a-z0-9_-]/g, "-"),
-      name: newServiceName,
-      environment: newServiceEnv,
-    });
+    try {
+      const res = await registerService({
+        id: newServiceId.toLowerCase().replace(/[^a-z0-9_-]/g, "-"),
+        name: newServiceName.trim(),
+        environment: newServiceEnv,
+      });
 
-    setServices((prev) => [res, ...prev]);
-    setCreatedKey(res.api_key_hash || `at_live_${Math.random().toString(36).substring(2, 16)}`);
-    setSubmitting(false);
+      setServices((prev) => [res, ...prev.filter((service) => service.id !== res.id)]);
+      setCreatedKey(res.api_key_hash || null);
+    } catch (err) {
+      console.error(err);
+      setError("Service registration failed. Check the AuraTrace API and try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const copyKey = (keyText: string) => {
-    navigator.clipboard.writeText(keyText);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
+  const copyKey = async (keyText: string) => {
+    try {
+      await navigator.clipboard.writeText(keyText);
+      setCopiedKey(true);
+      window.setTimeout(() => setCopiedKey(false), 2000);
+    } catch {
+      setCopiedKey(false);
+    }
   };
 
   const filtered = services.filter((s) => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase().trim();
     return (
+      !q ||
       s.name.toLowerCase().includes(q) ||
       s.id.toLowerCase().includes(q) ||
       s.environment.toLowerCase().includes(q)
@@ -76,10 +98,9 @@ export default function ServicesPage() {
   return (
     <AppShell
       title="Service Registry & Microservices"
-      subtitle="Monitored service catalog, performance SLAs, and ingestion API keys"
+      subtitle="Monitored service catalog, performance SLAs, and ingestion credentials"
     >
       <div className="space-y-6">
-        {/* Header Bar */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -111,6 +132,8 @@ export default function ServicesPage() {
                 setCreatedKey(null);
                 setNewServiceId("");
                 setNewServiceName("");
+                setNewServiceEnv("production");
+                setError(null);
                 setShowModal(true);
               }}
               className="button-primary"
@@ -121,46 +144,56 @@ export default function ServicesPage() {
           </div>
         </div>
 
-        {/* Services Grid */}
+        {error && (
+          <div className="flex items-center justify-between rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300">
+            <span>{error}</span>
+            <button type="button" onClick={() => void loadServices()} className="font-bold hover:text-white">
+              Retry
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="panel p-12 text-center text-xs text-slate-500 font-mono">
-            Loading microservices topology...
+            Loading live microservices topology...
           </div>
         ) : filtered.length === 0 ? (
           <div className="panel p-12 text-center">
             <Server className="mx-auto h-10 w-10 text-slate-700" />
             <p className="mt-3 text-sm font-bold text-slate-300">No microservices found</p>
-            <p className="text-xs text-slate-500">Try adjusting your search query or register a new service.</p>
+            <p className="text-xs text-slate-500">
+              {services.length === 0
+                ? "No services are currently registered in the AuraTrace backend."
+                : "Try adjusting your search query."}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((svc) => {
               const isCrit = svc.status === "critical";
               const isWarn = svc.status === "warning";
+              const hasTelemetry = svc.requests > 0 || svc.latency_ms > 0 || svc.error_rate > 0;
 
               return (
                 <div
                   key={svc.id}
                   className="panel group relative flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-slate-700"
                 >
-                  {/* Top line with status and env */}
                   <div className="flex items-start justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-blue-400">
-                          {svc.id}
-                        </span>
+                        <span className="truncate font-mono text-xs font-bold text-blue-400">{svc.id}</span>
                         <span className="rounded-md border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-300">
                           {svc.environment}
                         </span>
                       </div>
-                      <h3 className="mt-1 text-sm font-bold text-white group-hover:text-cyan-300 transition">
+                      <h3 className="mt-1 truncate text-sm font-bold text-white transition group-hover:text-cyan-300">
                         {svc.name}
                       </h3>
                     </div>
 
                     <span
-                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                      className={`ml-3 flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
                         isCrit
                           ? "bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/30"
                           : isWarn
@@ -170,72 +203,64 @@ export default function ServicesPage() {
                     >
                       <span
                         className={`h-1.5 w-1.5 rounded-full ${
-                          isCrit ? "bg-rose-400" : isWarn ? "bg-amber-400" : "bg-emerald-400 animate-pulse"
+                          isCrit ? "bg-rose-400" : isWarn ? "bg-amber-400" : "animate-pulse bg-emerald-400"
                         }`}
                       />
                       <span>{svc.status}</span>
                     </span>
                   </div>
 
-                  {/* Metrics Row */}
                   <div className="mt-5 grid grid-cols-3 gap-2 rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 text-center">
                     <div>
-                      <span className="block text-[10px] text-slate-500 uppercase tracking-wider">
-                        Requests
-                      </span>
+                      <span className="block text-[10px] uppercase tracking-wider text-slate-500">Requests</span>
                       <span className="font-mono text-xs font-bold text-slate-200">
-                        {svc.requests.toLocaleString()}
+                        {hasTelemetry ? svc.requests.toLocaleString() : "—"}
                       </span>
                     </div>
-
                     <div>
-                      <span className="block text-[10px] text-slate-500 uppercase tracking-wider">
-                        Error Rate
-                      </span>
+                      <span className="block text-[10px] uppercase tracking-wider text-slate-500">Error Rate</span>
                       <span
                         className={`font-mono text-xs font-bold ${
-                          svc.error_rate > 3 ? "text-rose-400" : "text-emerald-400"
+                          svc.error_rate > 3 ? "text-rose-400" : hasTelemetry ? "text-emerald-400" : "text-slate-500"
                         }`}
                       >
-                        {svc.error_rate.toFixed(1)}%
+                        {hasTelemetry ? `${svc.error_rate.toFixed(1)}%` : "—"}
                       </span>
                     </div>
-
                     <div>
-                      <span className="block text-[10px] text-slate-500 uppercase tracking-wider">
-                        P95 Latency
-                      </span>
+                      <span className="block text-[10px] uppercase tracking-wider text-slate-500">P95 Latency</span>
                       <span
                         className={`font-mono text-xs font-bold ${
-                          svc.latency_ms > 500 ? "text-rose-400" : "text-cyan-300"
+                          svc.latency_ms > 500 ? "text-rose-400" : hasTelemetry ? "text-cyan-300" : "text-slate-500"
                         }`}
                       >
-                        {svc.latency_ms}ms
+                        {formatMetric(svc.latency_ms, "ms")}
                       </span>
                     </div>
                   </div>
 
-                  {/* API Key Box */}
+                  <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500">
+                    <Activity className="h-3 w-3" />
+                    <span>{hasTelemetry ? "Recent telemetry available" : "No recent telemetry"}</span>
+                  </div>
+
                   {svc.api_key_hash && (
                     <div className="mt-4 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
                         <Key className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                        <span className="truncate font-mono text-[10px] text-slate-400">
-                          {svc.api_key_hash}
-                        </span>
+                        <span className="truncate font-mono text-[10px] text-slate-400">Credential available</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => copyKey(svc.api_key_hash!)}
-                        className="ml-2 shrink-0 text-slate-500 hover:text-white transition"
-                        title="Copy Key"
+                        className="ml-2 shrink-0 text-slate-500 transition hover:text-white"
+                        title="Copy credential"
                       >
                         <Copy className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   )}
 
-                  {/* Card Footer */}
                   <div className="mt-4 flex items-center justify-between border-t border-slate-800/80 pt-3 text-[11px]">
                     <span className="text-slate-500">
                       {svc.incident_count > 0 ? (
@@ -244,10 +269,9 @@ export default function ServicesPage() {
                         "0 active incidents"
                       )}
                     </span>
-
                     <Link
-                      href="/telemetry"
-                      className="inline-flex items-center gap-1 font-bold text-cyan-400 hover:text-cyan-300 transition"
+                      href={`/telemetry?service=${encodeURIComponent(svc.id)}`}
+                      className="inline-flex items-center gap-1 font-bold text-cyan-400 transition hover:text-cyan-300"
                     >
                       <Radio className="h-3 w-3" />
                       <span>Inspect Stream</span>
@@ -259,7 +283,6 @@ export default function ServicesPage() {
           </div>
         )}
 
-        {/* Register Service Modal */}
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
             <div className="panel w-full max-w-md border-blue-500/30 p-6 shadow-2xl">
@@ -270,7 +293,7 @@ export default function ServicesPage() {
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-white">Register Microservice</h2>
-                    <p className="text-[10px] text-slate-500">Add service to AuraTrace telemetry stream</p>
+                    <p className="text-[10px] text-slate-500">Add service to the AuraTrace telemetry stream</p>
                   </div>
                 </div>
                 <button
@@ -295,7 +318,6 @@ export default function ServicesPage() {
                       className="field mt-1.5 font-mono"
                     />
                   </div>
-
                   <div>
                     <label className="label">Display Name</label>
                     <input
@@ -307,7 +329,6 @@ export default function ServicesPage() {
                       className="field mt-1.5"
                     />
                   </div>
-
                   <div>
                     <label className="label">Deployment Environment</label>
                     <select
@@ -320,20 +341,11 @@ export default function ServicesPage() {
                       <option value="development">Development</option>
                     </select>
                   </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setShowModal(false)}
-                      className="button-secondary"
-                    >
+                  <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-2">
+                    <button type="button" onClick={() => setShowModal(false)} className="button-secondary">
                       Cancel
                     </button>
-                    <button
-                      type="submit"
-                      disabled={submitting}
-                      className="button-primary"
-                    >
+                    <button type="submit" disabled={submitting} className="button-primary">
                       {submitting ? "Registering..." : "Create & Generate Key"}
                     </button>
                   </div>
@@ -341,21 +353,22 @@ export default function ServicesPage() {
               ) : (
                 <div className="mt-5 space-y-4">
                   <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
-                    <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400" />
-                    <h3 className="mt-2 text-sm font-bold text-white">Service Registered!</h3>
+                    <Check className="mx-auto h-8 w-8 text-emerald-400" />
+                    <h3 className="mt-2 text-sm font-bold text-white">Service Registered</h3>
                     <p className="mt-1 text-xs text-slate-300">
-                      Include this API key in your service's telemetry SDK initialization headers.
+                      Store this credential securely. It is shown here only because the registration response supplied it.
                     </p>
                   </div>
 
                   <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-                    <span className="label">AuraTrace Ingestion Key</span>
+                    <span className="label">AuraTrace Ingestion Credential</span>
                     <div className="mt-1.5 flex items-center justify-between font-mono text-xs text-cyan-300">
                       <span className="truncate">{createdKey}</span>
                       <button
                         type="button"
                         onClick={() => copyKey(createdKey)}
                         className="ml-2 shrink-0 rounded-lg p-1 text-slate-400 hover:text-white"
+                        title="Copy credential"
                       >
                         {copiedKey ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
                       </button>
@@ -364,7 +377,10 @@ export default function ServicesPage() {
 
                   <button
                     type="button"
-                    onClick={() => setShowModal(false)}
+                    onClick={() => {
+                      setShowModal(false);
+                      setCreatedKey(null);
+                    }}
                     className="button-primary w-full"
                   >
                     Done
