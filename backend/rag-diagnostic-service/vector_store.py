@@ -89,18 +89,31 @@ class VectorStore:
                     logger.info("All historical fixes already have embeddings.")
                     return 0
 
-                logger.info(f"Computing embeddings for {len(unembedded_fixes)} historical fixes...")
+                logger.info(
+                    "Computing embeddings for %d historical fixes...",
+                    len(unembedded_fixes),
+                )
                 for fix in unembedded_fixes:
-                    text_content = f"{fix.error_type or ''} {fix.stack_trace or ''} {fix.root_cause or ''}".strip()
+                    text_content = (
+                        f"{fix.error_type or ''} "
+                        f"{fix.stack_trace or ''} "
+                        f"{fix.root_cause or ''}"
+                    ).strip()
                     if text_content:
                         vector = embedder.get_embedding(text_content)
                         fix.embedding = vector
                         updated_count += 1
 
                 await session.commit()
-                logger.info(f"Successfully generated and saved embeddings for {updated_count} historical fixes.")
+                logger.info(
+                    "Successfully generated and saved embeddings for %d historical fixes.",
+                    updated_count,
+                )
         except Exception as exc:
-            logger.warning(f"Historical embedding synchronization encountered an issue: {exc}")
+            logger.warning(
+                "Historical embedding synchronization encountered an issue: %s",
+                exc,
+            )
 
         return updated_count
 
@@ -111,17 +124,26 @@ class VectorStore:
         top_k: int = 3,
     ) -> List[Dict[str, Any]]:
         """
-        Perform pgvector HNSW cosine similarity search against HistoricalFix table.
+        Perform pgvector HNSW cosine similarity search against HistoricalFix.
+
+        The knowledge base is backfilled before searching so seeded records
+        cannot silently disappear from the vector-search candidate set.
+        If the vector query still returns fewer than top_k records, the
+        remaining slots are filled from the newest HistoricalFix records.
         """
         try:
             search_query = f"{error_type} {stack_trace}".strip()
             if not search_query:
                 return []
 
+            # Ensure all seeded/new historical fixes have vectors before
+            # executing the similarity query. This also repairs databases
+            # where the worker started before seed embeddings were generated.
+            await self.sync_historical_embeddings()
+
             query_embedding = embedder.get_embedding(search_query)
 
             async with AsyncSessionLocal() as session:
-                # 1. Cosine similarity query on HistoricalFix
                 stmt = (
                     select(HistoricalFix)
                     .where(HistoricalFix.embedding.isnot(None))
@@ -130,17 +152,33 @@ class VectorStore:
                 )
 
                 result = await session.execute(stmt)
-                fixes = result.scalars().all()
+                fixes = list(result.scalars().all())
 
-                # 2. Fallback if no embeddings are populated
-                if not fixes:
+                # Defensive fallback: if an embedding could not be generated
+                # for one or more records, still return exactly top_k historical
+                # fixes whenever the knowledge base contains enough records.
+                if len(fixes) < top_k:
+                    existing_ids = {fix.id for fix in fixes}
                     fallback_stmt = (
                         select(HistoricalFix)
                         .order_by(HistoricalFix.created_at.desc())
                         .limit(top_k)
                     )
                     fallback_res = await session.execute(fallback_stmt)
-                    fixes = fallback_res.scalars().all()
+                    fallback_fixes = fallback_res.scalars().all()
+
+                    for fix in fallback_fixes:
+                        if fix.id not in existing_ids:
+                            fixes.append(fix)
+                            existing_ids.add(fix.id)
+                        if len(fixes) >= top_k:
+                            break
+
+                logger.info(
+                    "Returning %d/%d historical fixes for similarity search.",
+                    len(fixes),
+                    top_k,
+                )
 
                 return [
                     {
@@ -150,7 +188,7 @@ class VectorStore:
                         "fix_description": fix.fix_description or "",
                         "code_patch": fix.code_patch or "",
                     }
-                    for fix in fixes
+                    for fix in fixes[:top_k]
                 ]
 
         except Exception as exc:
