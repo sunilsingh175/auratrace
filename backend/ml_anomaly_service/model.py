@@ -1,6 +1,4 @@
 import os
-import pickle
-
 import numpy as np
 
 try:
@@ -23,11 +21,6 @@ class AnomalyDetector:
     """
 
     def __init__(self):
-        self.model_path_pkl = os.path.join(
-            os.path.dirname(__file__),
-            "isolation_forest.pkl",
-        )
-
         self.model_path_joblib = os.path.join(
             os.path.dirname(__file__),
             "isolation_forest.joblib",
@@ -58,32 +51,6 @@ class AnomalyDetector:
             except Exception as exc:
                 print(
                     "Failed to load joblib model: "
-                    f"{exc}"
-                )
-
-        if os.path.exists(
-            self.model_path_pkl
-        ):
-            try:
-                with open(
-                    self.model_path_pkl,
-                    "rb",
-                ) as file:
-
-                    self.model = pickle.load(
-                        file
-                    )
-
-                print(
-                    "Loaded Isolation Forest model from "
-                    f"{self.model_path_pkl}"
-                )
-
-                return
-
-            except Exception as exc:
-                print(
-                    "Failed to load pickle model: "
                     f"{exc}"
                 )
 
