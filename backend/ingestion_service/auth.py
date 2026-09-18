@@ -144,7 +144,7 @@ async def register(payload: RegisterPayload):
             VALUES (:id, :name, :email, :password_hash, :password_salt, :role)
         """), {"id": user_id, "name": payload.name.strip(), "email": email,
                "password_hash": password_hash, "password_salt": password_salt, "role": payload.role})
-    await _issue_otp(email, "registration")
+    await _issue_otp(email, "register")
     return {"otp_required": True, "message": "Verification code sent to your email.", "email": email, "purpose": "register"}
 
 
