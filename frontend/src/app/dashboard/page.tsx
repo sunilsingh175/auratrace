@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowRight, Cpu, Layers, Radio, RefreshCw, Server, Sparkles, Zap } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { PerformanceChart } from "@/components/dashboard/PerformanceChart";
 import { IncidentOverview } from "@/components/dashboard/IncidentOverview";
@@ -41,7 +42,7 @@ export default function DeveloperDashboardPage() {
   useEffect(() => {
     loadDashboardData();
     const interval = setInterval(loadDashboardData, 10000);
-    return () => clearInterval(interval);
+    return <ProtectedRoute>() => clearInterval(interval);
   }, []);
 
   const handleRefresh = () => {
@@ -170,4 +171,5 @@ export default function DeveloperDashboardPage() {
       </div>
     </AppShell>
   );
+  </ProtectedRoute>
 }
