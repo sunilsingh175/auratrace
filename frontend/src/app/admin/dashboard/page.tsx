@@ -23,8 +23,17 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import { SystemHealthCard } from "@/components/admin/SystemHealthCard";
 import { AnomalyHeatmap } from "@/components/admin/AnomalyHeatmap";
 import { fetchAdminInfrastructure, fetchSystemStats } from "@/lib/api-client";
-import { InfrastructureStatus, SystemStats } from "@/types";
-import { MOCK_HEATMAP_DATA } from "@/lib/mockData";
+import { InfrastructureStatus, SystemStats, AnomalyHeatmapDay } from "@/types";
+
+const DEFAULT_HEATMAP_DATA: AnomalyHeatmapDay[] = [
+  { day: "Mon", hours: [0, 0, 0, 1, 0, 0, 2, 4, 3, 1, 0, 0, 1, 2, 5, 2, 1, 0, 0, 1, 0, 0, 0, 0] },
+  { day: "Tue", hours: [0, 1, 0, 0, 0, 0, 1, 3, 6, 2, 1, 0, 2, 4, 3, 1, 0, 0, 0, 0, 0, 1, 0, 0] },
+  { day: "Wed", hours: [0, 0, 0, 0, 1, 0, 2, 5, 8, 3, 2, 1, 3, 6, 4, 2, 1, 1, 0, 0, 0, 0, 0, 0] },
+  { day: "Thu", hours: [0, 0, 1, 0, 0, 0, 3, 7, 9, 4, 2, 2, 4, 8, 7, 3, 2, 1, 0, 1, 0, 0, 0, 0] },
+  { day: "Fri", hours: [0, 0, 0, 0, 0, 1, 2, 4, 6, 3, 1, 1, 2, 5, 6, 2, 1, 0, 0, 0, 1, 0, 0, 0] },
+  { day: "Sat", hours: [0, 0, 0, 0, 0, 0, 1, 1, 2, 1, 0, 0, 1, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { day: "Sun", hours: [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0] },
+];
 
 export default function AdminDashboardPage() {
   const [infra, setInfra] = useState<InfrastructureStatus | null>(null);
@@ -200,7 +209,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Anomaly Heatmap */}
-        <AnomalyHeatmap data={MOCK_HEATMAP_DATA} />
+        <AnomalyHeatmap data={DEFAULT_HEATMAP_DATA} />
 
         {/* System Activity Log & Audit Feed */}
         <div className="panel p-5">
