@@ -11,6 +11,7 @@ import hmac
 import json
 import os
 import secrets
+import redis.asyncio as aioredis
 import time
 import uuid
 from datetime import datetime, timezone
@@ -22,6 +23,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+REDIS_HOST = os.getenv("REDIS_HOST", "redis-broker")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+OTP_TTL_SECONDS = int(os.getenv("AURA_OTP_TTL_SECONDS", "300"))
 AUTH_SECRET = os.getenv("AURA_AUTH_SECRET", "")
 ADMIN_REGISTRATION_KEY = os.getenv("AURA_ADMIN_REGISTRATION_KEY", "")
 SESSION_TTL_SECONDS = int(os.getenv("AURA_SESSION_TTL_SECONDS", "28800"))
@@ -29,6 +33,7 @@ SESSION_TTL_SECONDS = int(os.getenv("AURA_SESSION_TTL_SECONDS", "28800"))
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 _engine = create_async_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
+_redis = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
 class RegisterPayload(BaseModel):
@@ -37,6 +42,12 @@ class RegisterPayload(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
     role: str = Field("Developer", pattern="^(Developer|Admin)$")
     admin_registration_key: Optional[str] = None
+
+
+class VerifyOtpPayload(BaseModel):
+    email: str = Field(..., min_length=5, max_length=320)
+    otp: str = Field(..., pattern=r"^\\d{6}$")
+    purpose: str = Field(..., pattern="^(register|login)$")
 
 
 class LoginPayload(BaseModel):
@@ -151,8 +162,50 @@ async def register(payload: RegisterPayload):
             },
         )
 
-    token = _make_token(str(user_id), payload.role)
-    return {
+    otp = f"{secrets.randbelow(1_000_000):06d}"
+    await _redis.setex(f"auratrace:otp:register:{email}", OTP_TTL_SECONDS, otp)
+    print(f"[AuraTrace OTP] registration email={email} otp={otp}")
+    return {"otp_required": True, "message": "OTP sent. Verify the OTP to activate the account.", "email": email, "purpose": "register"}
+
+
+@router.post("/verify-otp")
+async def verify_otp(payload: VerifyOtpPayload):
+    _require_config()
+    email = payload.email.strip().lower()
+    expected = await _redis.get(f"auratrace:otp:{payload.purpose}:{email}")
+    if not expected or not hmac.compare_digest(expected, payload.otp):
+        raise HTTPException(status_code=401, detail="Invalid or expired OTP.")
+    await _redis.delete(f"auratrace:otp:{payload.purpose}:{email}")
+    async with _engine.begin() as conn:
+        result = await conn.execute(text("SELECT id, name, email, role, status, created_at FROM users WHERE email = :email"), {"email": email})
+        user = result.mappings().first()
+    if not user or user["status"] != "Active":
+        raise HTTPException(status_code=401, detail="Account is unavailable.")
+    token = _make_token(str(user["id"]), user["role"])
+    return {"access_token": token, "token_type": "bearer", "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"], "role": user["role"], "status": user["status"], "created_at": user["created_at"].date().isoformat()}}
+
+
+@router.post("/login")
+async def login(payload: LoginPayload):
+    _require_config()
+    email = payload.email.strip().lower()
+    async with _engine.begin() as conn:
+        result = await conn.execute(text("SELECT id, name, email, password_hash, password_salt, role, status FROM users WHERE email = :email"), {"email": email})
+        user = result.mappings().first()
+    if not user or not _verify_password(payload.password, user["password_salt"], user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    if user["status"] != "Active":
+        raise HTTPException(status_code=403, detail="This account is suspended.")
+    otp = f"{secrets.randbelow(1_000_000):06d}"
+    await _redis.setex(f"auratrace:otp:login:{email}", OTP_TTL_SECONDS, otp)
+    print(f"[AuraTrace OTP] login email={email} otp={otp}")
+    return {"otp_required": True, "message": "OTP sent. Verify the OTP to complete login.", "email": email, "purpose": "login"}
+
+
+@router.get("/me")
+async def me():
+    raise HTTPException(status_code=501, detail="Session introspection is not enabled yet.")
+
         "access_token": token,
         "token_type": "bearer",
         "user": {
@@ -208,7 +261,7 @@ async def login(payload: LoginPayload):
     }
 
 
-@router.get("/me")
+router.get("/me")
 async def me(authorization: Optional[str] = None):
     # The frontend currently keeps the session in sessionStorage. This endpoint
     # is intentionally small; protected business APIs can adopt the same token
