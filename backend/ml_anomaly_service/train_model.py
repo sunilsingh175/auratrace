@@ -30,8 +30,6 @@ logger = logging.getLogger("auratrace-model-training")
 BASE_DIR = Path(__file__).resolve().parent
 
 MODEL_JOBLIB = BASE_DIR / "isolation_forest.joblib"
-MODEL_PKL = BASE_DIR / "isolation_forest.pkl"
-
 RANDOM_STATE = 42
 N_SAMPLES = 10000
 
@@ -220,19 +218,9 @@ def train_model() -> IsolationForest:
         MODEL_JOBLIB,
     )
 
-    joblib.dump(
-        model,
-        MODEL_PKL,
-    )
-
     logger.info(
         "Saved model: %s",
         MODEL_JOBLIB,
-    )
-
-    logger.info(
-        "Saved model: %s",
-        MODEL_PKL,
     )
 
     return model
