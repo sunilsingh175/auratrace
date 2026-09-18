@@ -13,7 +13,7 @@ from email.message import EmailMessage
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Header, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -53,7 +53,7 @@ class LoginPayload(BaseModel):
 
 class VerifyOtpPayload(BaseModel):
     email: str = Field(..., min_length=5, max_length=320)
-    otp: str = Field(..., pattern=r"^d{6}$")
+    otp: str = Field(..., pattern=r"^\d{6}$")
     purpose: str = Field(..., pattern="^(register|login)$")
 
 
@@ -71,6 +71,42 @@ def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
 def _verify_password(password: str, salt: str, expected_hash: str) -> bool:
     actual, _ = _hash_password(password, base64.b64decode(salt))
     return hmac.compare_digest(actual, expected_hash)
+
+
+def _decode_token(token: str) -> dict:
+    try:
+        body, signature = token.split(".", 1)
+        expected = hmac.new(AUTH_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError("invalid signature")
+        padded = body + "=" * (-len(body) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode()))
+        if int(payload.get("exp", 0)) < int(time.time()):
+            raise ValueError("expired")
+        if not payload.get("sub") or payload.get("role") not in {"Developer", "Admin"}:
+            raise ValueError("invalid claims")
+        return payload
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired access token.") from exc
+
+
+async def get_current_user(authorization: str | None = Header(default=None)) -> dict:
+    _require_config()
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Bearer access token required.")
+    payload = _decode_token(authorization.split(" ", 1)[1].strip())
+    async with _engine.connect() as conn:
+        result = await conn.execute(text("SELECT id, name, email, role, status FROM users WHERE id = :id"), {"id": payload["sub"]})
+        user = result.mappings().first()
+    if not user or user["status"] != "Active" or user["role"] != payload["role"]:
+        raise HTTPException(status_code=401, detail="Account is unavailable.")
+    return dict(user)
+
+
+async def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    if user["role"] != "Admin":
+        raise HTTPException(status_code=403, detail="Admin role required.")
+    return user
 
 
 def _make_token(user_id: str, role: str) -> str:
