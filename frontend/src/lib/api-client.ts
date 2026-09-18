@@ -15,6 +15,11 @@ const API_BASE_URL = "/api/aura";
 async function request(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
+
+  if (typeof window !== "undefined") {
+    const token = sessionStorage.getItem("auratrace_access_token_v1");
+    if (token) headers.set("Authorization", "Bearer " + token);
+  }
   return fetch(`${API_BASE_URL}?path=${encodeURIComponent(path.replace(/^\//, ""))}`, {
     ...options,
     headers,
