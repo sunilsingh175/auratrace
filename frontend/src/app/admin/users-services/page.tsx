@@ -70,7 +70,8 @@ export default function AdminUsersServicesPage() {
     return s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.environment.toLowerCase().includes(q);
   });
 
-  return <ProtectedRoute>(
+  return (
+    <ProtectedRoute role="Admin">
     <AppShell title="Users & Monitored Services Management" subtitle="View the authenticated account and manage the live monitored service catalog">
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -154,6 +155,6 @@ export default function AdminUsersServicesPage() {
         {showServiceModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"><div className="panel w-full max-w-md border-cyan-500/30 p-6 shadow-2xl"><div className="flex items-center justify-between border-b border-slate-800 pb-3"><div className="flex items-center gap-2"><Server className="h-5 w-5 text-cyan-400" /><h2 className="text-sm font-bold text-white">Register Monitored Service</h2></div><button type="button" onClick={() => setShowServiceModal(false)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-white"><X className="h-4 w-4" /></button></div><form onSubmit={handleRegisterService} className="mt-4 space-y-4"><div><label className="label">Service ID</label><input required value={serviceId} onChange={(e) => setServiceId(e.target.value)} placeholder="e.g. auth-service" className="field mt-1.5 font-mono" /></div><div><label className="label">Service Name</label><input required value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="e.g. Authentication Service" className="field mt-1.5" /></div><div><label className="label">Environment</label><select value={serviceEnv} onChange={(e) => setServiceEnv(e.target.value)} className="field mt-1.5"><option value="production">Production</option><option value="staging">Staging</option><option value="development">Development</option></select></div><div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-2"><button type="button" onClick={() => setShowServiceModal(false)} className="button-secondary">Cancel</button><button type="submit" className="button-primary">Register Service</button></div></form></div></div>}
       </div>
     </AppShell>
+    </ProtectedRoute>
   );
-  </ProtectedRoute>
 }
