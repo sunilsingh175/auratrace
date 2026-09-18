@@ -27,9 +27,7 @@ async function authRequest(path: string, body: unknown) {
     cache: "no-store",
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data?.detail || "Authentication request failed.");
-  }
+  if (!response.ok) throw new Error(data?.detail || "Authentication request failed.");
   return data;
 }
 
@@ -55,9 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const account = data.user as UserAccount;
     setUser(account);
     sessionStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(account));
-    if (data.access_token) {
-      sessionStorage.setItem(STORAGE_KEY_ACCESS_TOKEN, data.access_token);
-    }
+    if (data.access_token) sessionStorage.setItem(STORAGE_KEY_ACCESS_TOKEN, data.access_token);
   };
 
   const login = async ({ email, password }: { email: string; password: string }) => {
@@ -80,8 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
         admin_registration_key: adminRegistrationKey || undefined,
       });
-      persistAuth(data);
-      return { success: true, role: data.user.role as Role };
+      return { success: true, otpRequired: Boolean(data.otp_required) };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : "Registration failed." };
     }
