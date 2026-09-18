@@ -36,7 +36,8 @@ export default function AdminMonitoringPage() {
     loadData();
   }, []);
 
-  return <ProtectedRoute>(
+  return (
+    <ProtectedRoute role="Admin">
     <AppShell
       title="AuraTrace Core Infrastructure Telemetry"
       subtitle="Deep hardware & engine performance for Redis, PostgreSQL pgvector, and ML Isolation Forest"
@@ -254,6 +255,6 @@ export default function AdminMonitoringPage() {
         </div>
       </div>
     </AppShell>
+    </ProtectedRoute>
   );
-  </ProtectedRoute>
 }
