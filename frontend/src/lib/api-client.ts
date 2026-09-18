@@ -5,12 +5,7 @@ import {
   InfrastructureStatus,
   UserAccount,
 } from "@/types";
-import {
-  MOCK_SERVICES,
-  MOCK_INCIDENTS,
-  MOCK_INFRASTRUCTURE_STATUS,
-  MOCK_USERS,
-} from "./mockData";
+
 
 export * from "@/types";
 export type ServiceItem = Service;
@@ -27,8 +22,6 @@ async function request(path: string, options: RequestInit = {}) {
   });
 }
 
-let localIncidents: Incident[] = [...MOCK_INCIDENTS];
-let localUsers: UserAccount[] = [...MOCK_USERS];
 
 function ensureOk(response: Response, path: string) {
   if (!response.ok) throw new Error(`AuraTrace API ${response.status} for ${path}`);
@@ -91,8 +84,6 @@ export async function fetchIncidentById(id: string): Promise<Incident | null> {
       system_metrics: item.system_metrics,
       similar_incidents: item.similar_incidents,
     };
-  } catch {
-    return localIncidents.find((i) => i.id === id) || null;
   }
 }
 
@@ -102,11 +93,6 @@ export async function updateIncidentStatus(id: string, status: "OPEN" | "INVESTI
     const res = await request(path, { method: "PATCH", body: JSON.stringify({ status }) });
     ensureOk(res, path);
     return await res.json();
-  } catch {
-    const idx = localIncidents.findIndex((i) => i.id === id);
-    if (idx === -1) return null;
-    localIncidents[idx] = { ...localIncidents[idx], status, resolved_at: status === "RESOLVED" ? new Date().toISOString() : undefined };
-    return localIncidents[idx];
   }
 }
 
@@ -116,8 +102,6 @@ export async function regenerateIncidentDiagnosis(id: string): Promise<Incident 
     const res = await request(path, { method: "POST" });
     ensureOk(res, path);
     return await res.json();
-  } catch {
-    return localIncidents.find((i) => i.id === id) || null;
   }
 }
 
@@ -178,21 +162,4 @@ export async function fetchSystemStats(): Promise<SystemStats> {
   };
 }
 
-export async function fetchAdminInfrastructure(): Promise<InfrastructureStatus> {
-  return { ...MOCK_INFRASTRUCTURE_STATUS };
-}
-
-export async function fetchAdminUsers(): Promise<UserAccount[]> {
-  return [...localUsers];
-}
-
-export async function createUser(user: Omit<UserAccount, "id" | "created_at">): Promise<UserAccount> {
-  const created = { id: `usr-${Math.random().toString(36).substring(2, 7)}`, ...user, created_at: new Date().toISOString().split("T")[0] };
-  localUsers = [created, ...localUsers];
-  return created;
-}
-
-export async function deleteUser(id: string): Promise<boolean> {
-  localUsers = localUsers.filter((u) => u.id !== id);
-  return true;
-}
+export async function fetchAdminInfrastructure(): Promise<InfrastructureStatus> {\n  const path = "health";\n  const res = await request(path);\n  ensureOk(res, path);\n  const data = await res.json();\n  return {\n    database: data.database || "unknown",\n    redis: data.redis || "unknown",\n    ml_engine: data.ml_engine || "unknown",\n    rag_engine: data.rag_engine || "unknown",\n  } as InfrastructureStatus;\n}\n\nexport async function fetchAdminUsers(): Promise<UserAccount[]> {\n  const path = "auth/users";\n  const res = await request(path);\n  ensureOk(res, path);\n  return await res.json();\n}\n\nexport async function updateUserStatus(id: string, status: "Active" | "Suspended"): Promise<UserAccount> {\n  const path = `auth/users/${encodeURIComponent(id)}/status`;\n  const res = await request(path, { method: "PATCH", body: JSON.stringify({ status }) });\n  ensureOk(res, path);\n  return await res.json();\n}\n
