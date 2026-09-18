@@ -5,9 +5,16 @@ Evaluates req/sec throughput and latency percentiles under concurrent load.
 
 import time
 import asyncio
+import sys
 import numpy as np
 import httpx
 from datetime import datetime, timezone
+
+# Ensure UTF-8 output on Windows consoles
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 
 GATEWAY_URL = "http://localhost:8000/api/v1/telemetry"
 API_KEY = "aura_secret_key_123"

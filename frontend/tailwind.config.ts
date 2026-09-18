@@ -37,6 +37,9 @@ const config: Config = {
         "pulse-fast": "pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "glow-cyan": "glowCyan 2s ease-in-out infinite alternate",
       },
+      gridTemplateColumns: {
+        '24': 'repeat(24, minmax(0, 1fr))',
+      },
       keyframes: {
         glowCyan: {
           "0%": { boxShadow: "0 0 10px rgba(6, 182, 212, 0.2)" },

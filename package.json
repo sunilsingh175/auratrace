@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@auratrace/node": "file:sdk/nodejs"
+  }
+}

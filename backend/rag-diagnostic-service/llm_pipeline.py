@@ -1,109 +1,166 @@
+import asyncio
 import os
-import httpx
-import google.generativeai as genai
-from backend.shared.logger import get_logger
+
+try:
+    from backend.shared.logger import get_logger
+except ImportError:
+    try:
+        from shared.logger import get_logger
+    except ImportError:
+        import logging
+        get_logger = lambda name: logging.getLogger(name)
 
 logger = get_logger("llm-pipeline")
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
-# Configure native Google Gemini API if key is available
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip() or "gemini-3.6-flash"
+
 
 class LLMDoctor:
+
+    def __init__(self):
+        self.client = None
+
+        if GEMINI_API_KEY and genai:
+            try:
+                self.client = genai.Client(api_key=GEMINI_API_KEY)
+                logger.info("Gemini client initialized with model %s", GEMINI_MODEL)
+            except Exception as e:
+                logger.warning("Failed to initialize Gemini client: %s", e)
+        else:
+            logger.warning(
+                "GEMINI_API_KEY is not configured or google-genai not installed."
+            )
+
     async def generate_diagnosis(self, prompt: str) -> str:
-        """
-        Attempts to generate an AI root-cause diagnosis via OpenRouter first.
-        If OpenRouter fails or is unavailable, falls back to the native Google Gemini SDK.
-        """
-        # 1. Try OpenRouter API with a stable model identifier
-        if OPENROUTER_API_KEY:
-            try:
-                logger.info("Generating diagnosis via OpenRouter...")
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        "https://openrouter.ai/api/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                            "Content-Type": "application/json",
-                            "HTTP-Referer": "http://localhost:3000",
-                            "X-Title": "AuraTrace"
-                        },
-                        json={
-                            "model": "openai/gpt-4o-mini",
-                            "messages": [
-                                {
-                                    "role": "system",
-                                    "content": "You are an expert OpenStack SRE and RAG Diagnostic Doctor. Analyze logs and provide concise root-cause analysis and a recovery patch."
-                                },
-                                {
-                                    "role": "user",
-                                    "content": prompt
-                                }
-                            ]
-                        },
-                        timeout=30.0
-                    )
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        return data["choices"][0]["message"]["content"]
-                    else:
-                        logger.warning(f"OpenRouter returned status {response.status_code}: {response.text}")
-            except Exception as e:
-                logger.warning(f"OpenRouter generation failed: {e}. Attempting native fallback...")
+        if not self.client:
+            return ""
 
-        # 2. Fallback to Native Google Gemini SDK using a stable model name
-        if GEMINI_API_KEY:
+        # Use the configured Gemini model. Keeping the model configurable makes
+        # the deployment reproducible and avoids silently switching models.
+        for attempt in range(1, 3):
             try:
-                logger.info("Generating diagnosis via Google Gemini SDK...")
-                model = genai.GenerativeModel('gemini-pro')
-                response = model.generate_content(prompt)
-                if response and response.text:
-                    return response.text
-            except Exception as e:
-                logger.error(f"Gemini fallback generation failed: {e}")
+                logger.info(
+                    "Generating diagnosis via Gemini %s (attempt %s/2)...",
+                    GEMINI_MODEL,
+                    attempt,
+                )
 
-        return "⚠️ Diagnostic generation failed: All LLM providers returned errors or are unconfigured."
+                response = await asyncio.to_thread(
+                    self.client.models.generate_content,
+                    model=GEMINI_MODEL,
+                    contents=prompt,
+                )
+
+                text = (getattr(response, "text", "") or "").strip()
+                if text:
+                    return text
+
+            except Exception as exc:
+                error_text = str(exc)
+                logger.warning(
+                    "Gemini %s attempt %s failed: %s",
+                    GEMINI_MODEL,
+                    attempt,
+                    error_text,
+                )
+
+                if (
+                    "429" in error_text
+                    or "too_many_requests" in error_text.lower()
+                    or "quota exceeded" in error_text.lower()
+                ):
+                    logger.error("Gemini quota reached for %s", GEMINI_MODEL)
+                    break
+
+                await asyncio.sleep(1)
+
+        return ""
 
     async def diagnose_incident(
-        self, service_id: str, error_type: str, stack_trace: str, reason: str, similar_records: list
+        self,
+        service_id: str,
+        error_type: str,
+        stack_trace: str,
+        reason: str,
+        similar_records: list,
     ) -> tuple:
-        """
-        Method called by worker.py to construct the prompt, query the LLM provider,
-        and parse the response into a tuple of (root_cause, patch).
-        """
-        prompt = f"""
-        Analyze the following OpenStack production incident:
-        - Service ID: {service_id}
-        - Error Type: {error_type}
-        - Stack Trace / Log Message: {stack_trace}
-        - Reason / Detection Context: {reason}
-        
-        Similar Historical Incidents Found via RAG Vector Search:
-        {similar_records}
-        
-        Please provide a structured response containing:
-        1. Root Cause Analysis
-        2. Recommended Recovery Patch / Fix Steps
-        """
-        
-        raw_response = await self.generate_diagnosis(prompt)
-        
-        root_cause = raw_response
-        patch = "Review component permission configuration and verify storage daemon status."
-        
-        if "Patch" in raw_response or "patch" in raw_response.lower():
-            for keyword in ["Patch:", "Recovery Patch", "Fix Steps"]:
-                if keyword in raw_response:
-                    parts = raw_response.split(keyword, 1)
-                    root_cause = parts[0].replace("Root Cause", "").strip()
-                    patch = parts[1].strip()
-                    break
-                    
-        return root_cause, patch
 
-# Instantiate the object expected by worker.py imports
+        historical_context = (
+            similar_records
+            if similar_records
+            else "No similar historical incidents were found."
+        )
+
+        prompt = f"""
+You are AuraTrace AI Doctor, an expert software observability and incident-response assistant.
+
+Your task is to diagnose the incident using ONLY the information provided below.
+
+Service ID:
+{service_id}
+
+Error Type:
+{error_type}
+
+Stack Trace / Log Message:
+{stack_trace}
+
+Detection Reason:
+{reason}
+
+Historical incidents retrieved by RAG:
+{historical_context}
+
+Return exactly this format:
+
+ROOT CAUSE:
+<concise technical explanation grounded in the supplied evidence>
+
+RECOVERY PATCH:
+<numbered, safe and actionable recovery steps>
+"""
+
+        raw_response = await self.generate_diagnosis(prompt)
+
+        if not raw_response:
+            if similar_records and isinstance(similar_records, list) and len(similar_records) > 0:
+                top_match = similar_records[0]
+                root_cause = top_match.get("root_cause") or f"Anomaly pattern matched historical {error_type} profile."
+                code_patch = top_match.get("code_patch") or top_match.get("fix_description") or "Apply verified context management and connection recovery patch."
+                return (
+                    f"Synthesized RAG Analysis: {root_cause}",
+                    f"Recommended Remediation Patch:\n{code_patch}",
+                )
+
+            return (
+                f"Automated Anomaly Analysis: Detected anomalous performance spike or exception in {service_id} ({error_type}).",
+                "Review recent deployments, check service database/network connections, and inspect service logs.",
+            )
+
+        lower = raw_response.lower()
+        marker = "recovery patch:"
+
+        if marker in lower:
+            index = lower.index(marker)
+            root_cause = (
+                raw_response[:index]
+                .replace("ROOT CAUSE:", "")
+                .replace("Root Cause:", "")
+                .strip()
+            )
+            patch = raw_response[index + len(marker):].strip()
+            return (root_cause, patch)
+
+        return (
+            raw_response.strip(),
+            "Review the incident manually and verify the affected service.",
+        )
+
+
 llm_doctor = LLMDoctor()
