@@ -21,7 +21,7 @@ import { useAuth } from "@/context/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, loginWithGoogle } = useAuth();
+  const { login, register } = useAuth();
 
   // Tab State: "login" vs "register"
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
@@ -49,12 +49,16 @@ export default function LoginPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const result = await login({
-      email: authMode === "credentials" ? email : undefined,
-      password: authMode === "credentials" ? password : undefined,
-      role: selectedRole,
-      apiKey: authMode === "apikey" ? apiKey : undefined,
-    });
+    const result =
+      activeTab === "register"
+        ? await register({
+            name,
+            email,
+            password,
+            role: selectedRole,
+            adminRegistrationKey: selectedRole === "Admin" ? apiKey : undefined,
+          })
+        : await login({ email, password });
 
     if (result.success) {
       if (activeTab === "register") {
@@ -73,30 +77,9 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    const result = await loginWithGoogle({
-      role: selectedRole,
-      email: googleEmailInput,
-      name: googleNameInput,
-    });
+  const handleGoogleSignIn = () => {
+    setErrorMessage("Google authentication is not configured. Use email and password.");
     setShowGoogleModal(false);
-    if (result.role === "Admin") {
-      router.push("/admin/dashboard");
-    } else {
-      router.push("/dashboard");
-    }
-  };
-
-  const handleDemoBypass = async (role: "Developer" | "Admin") => {
-    setLoading(true);
-    if (role === "Admin") {
-      await login({ email: "admin@auratrace.io", role: "Admin" });
-      router.push("/admin/dashboard");
-    } else {
-      await login({ email: "sunil@auratrace.io", role: "Developer" });
-      router.push("/dashboard");
-    }
   };
 
   return (
@@ -192,11 +175,10 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Google Quick Sign-in */}
-          <div className="mt-4">
-            <button
+          {/* Google authentication placeholder is intentionally disabled until a real OAuth provider is configured. */}
+          <div className="mt-4">\n            <button
               type="button"
-              onClick={() => setShowGoogleModal(true)}
+              onClick={() => setErrorMessage("Google authentication is not configured. Use email and password.")}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-700/80 bg-slate-950/80 py-2.5 px-4 text-xs font-bold text-slate-200 shadow-md transition hover:border-slate-500 hover:bg-slate-900"
             >
               <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
@@ -232,7 +214,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Mode Switch (Only for Sign In tab) */}
+          {/* Authentication mode (master API key is retained only for service/API administration; it is not a user login bypass). */}
           {activeTab === "login" && (
             <div className="flex rounded-xl border border-slate-800/80 bg-slate-950/60 p-1 mb-4">
               <button
@@ -246,17 +228,9 @@ export default function LoginPage() {
               >
                 <Lock className="h-3 w-3" /> Credentials
               </button>
-              <button
-                type="button"
-                onClick={() => setAuthMode("apikey")}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-semibold transition ${
-                  authMode === "apikey"
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                <Key className="h-3 w-3" /> Master API Key
-              </button>
+              <span className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] text-slate-500">
+                Password authentication
+              </span>
             </div>
           )}
 
@@ -314,7 +288,7 @@ export default function LoginPage() {
               </>
             ) : (
               <div>
-                <label className="label">AuraTrace Master API Key</label>
+                <label className="label">AuraTrace Admin Registration Key</label>
                 <div className="relative mt-1">
                   <Key className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
                   <input
@@ -369,47 +343,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Quick Demo Access & Guest Exploration Link */}
+          {/* No authentication bypass: accounts must be registered and authenticated server-side. */}
           <div className="mt-6 border-t border-slate-800/80 pt-4 space-y-3">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-slate-500">Just exploring?</span>
-              <Link
-                href="/dashboard"
-                className="font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition"
-              >
-                <span>Return to Live Dashboard</span>
-                <ArrowRight className="h-3 w-3" />
-              </Link>
-            </div>
-
-            <div className="pt-2 border-t border-slate-800/50 text-center">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
-                Quick Demo Shortcuts
-              </span>
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleDemoBypass("Developer")}
-                  className="text-xs font-bold text-cyan-400 hover:text-cyan-300 transition"
-                >
-                  Developer Demo →
-                </button>
-                <span className="text-slate-700">•</span>
-                <button
-                  type="button"
-                  onClick={() => handleDemoBypass("Admin")}
-                  className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition"
-                >
-                  Admin Demo →
-                </button>
-              </div>
+            <div className="text-center text-[10px] text-slate-500">
+              Authentication is required. Admin registration additionally requires the configured admin registration key.
             </div>
           </div>
         </div>
       </div>
 
       {/* Google Account Selector Modal */}
-      {showGoogleModal && (
+      {false && showGoogleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
           <div className="panel w-full max-w-sm border-slate-700 p-6 shadow-2xl bg-slate-900">
             <div className="text-center">
