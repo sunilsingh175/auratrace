@@ -21,7 +21,7 @@ import { useAuth } from "@/context/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, register } = useAuth();
+  const { login, register, verifyOtp } = useAuth();
 
   // Tab State: "login" vs "register"
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
@@ -37,6 +37,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [otp, setOtp] = useState("");
+  const [otpRequired, setOtpRequired] = useState(false);
 
   // Google Modal State
   const [showGoogleModal, setShowGoogleModal] = useState(false);
@@ -49,6 +51,22 @@ export default function LoginPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    if (otpRequired) {
+      const result = await verifyOtp({
+        email,
+        otp,
+        purpose: activeTab === "register" ? "register" : "login",
+      });
+      if (result.success) {
+        setSuccessMessage("Verification successful. Redirecting...");
+        setTimeout(() => router.push(result.role === "Admin" ? "/admin/dashboard" : "/dashboard"), 400);
+      } else {
+        setErrorMessage(result.error || "Invalid or expired OTP.");
+        setLoading(false);
+      }
+      return;
+    }
+
     const result =
       activeTab === "register"
         ? await register({
@@ -60,17 +78,13 @@ export default function LoginPage() {
           })
         : await login({ email, password });
 
-    if (result.success) {
-      if (activeTab === "register") {
-        setSuccessMessage("Account created successfully! Redirecting...");
-      }
-      setTimeout(() => {
-        if (result.role === "Admin" || selectedRole === "Admin") {
-          router.push("/admin/dashboard");
-        } else {
-          router.push("/dashboard");
-        }
-      }, 400);
+    if (result.success && result.otpRequired) {
+      setOtpRequired(true);
+      setSuccessMessage("A 6-digit verification code has been sent to your email.");
+      setLoading(false);
+    } else if (result.success) {
+      setSuccessMessage("Authentication successful. Redirecting...");
+      setTimeout(() => router.push(result.role === "Admin" ? "/admin/dashboard" : "/dashboard"), 400);
     } else {
       setErrorMessage(result.error || "Authentication failed. Please check your credentials.");
       setLoading(false);
@@ -236,6 +250,39 @@ export default function LoginPage() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-3.5">
+            {otpRequired ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                  <p className="text-xs font-semibold text-cyan-300">Email verification required</p>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-400">
+                    Enter the 6-digit code sent to <span className="text-slate-200">{email}</span>. The code expires in 5 minutes.
+                  </p>
+                </div>
+                <div>
+                  <label className="label">One-Time Password</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    pattern="\\d{6}"
+                    required
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    className="field mt-1 text-center text-lg tracking-[0.5em] font-mono"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setOtpRequired(false); setOtp(""); setErrorMessage(null); setSuccessMessage(null); }}
+                  className="w-full text-[11px] text-slate-500 hover:text-slate-300"
+                >
+                  Back to email and password
+                </button>
+              </div>
+            ) : (
+
             {activeTab === "register" && (
               <div>
                 <label className="label">Full Name</label>
@@ -357,6 +404,7 @@ export default function LoginPage() {
                 </>
               )}
             </button>
+            )}
           </form>
 
           {/* No authentication bypass: accounts must be registered and authenticated server-side. */}
