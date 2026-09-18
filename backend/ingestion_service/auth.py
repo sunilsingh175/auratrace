@@ -256,6 +256,17 @@ async def verify_otp(payload: VerifyOtpPayload):
                      "role": user["role"], "status": user["status"], "created_at": created_date}}
 
 
+@router.get("/me")
+async def me(user: dict = Depends(get_current_user)):
+    async with _engine.connect() as conn:
+        result = await conn.execute(text("SELECT id, name, email, role, status, created_at FROM users WHERE id = :id"), {"id": user["id"]})
+        row = result.mappings().first()
+    if not row or row["status"] != "Active":
+        raise HTTPException(status_code=401, detail="Account is unavailable.")
+    created_at = row["created_at"]
+    return {"user": {"id": str(row["id"]), "name": row["name"], "email": row["email"], "role": row["role"], "status": row["status"], "created_at": created_at.date().isoformat() if isinstance(created_at, datetime) else str(created_at)[:10]}}
+
+
 @router.post("/resend-otp")
 async def resend_otp(payload: VerifyOtpPayload):
     _require_config()
