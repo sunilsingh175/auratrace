@@ -190,7 +190,8 @@ export default function LoginPage() {
           </div>
 
           {/* Google authentication placeholder is intentionally disabled until a real OAuth provider is configured. */}
-          <div className="mt-4">\n            <button
+          <div className="mt-4">
+            <button
               type="button"
               onClick={() => setErrorMessage("Google authentication is not configured. Use email and password.")}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-700/80 bg-slate-950/80 py-2.5 px-4 text-xs font-bold text-slate-200 shadow-md transition hover:border-slate-500 hover:bg-slate-900"
