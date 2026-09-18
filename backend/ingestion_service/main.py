@@ -31,9 +31,9 @@ import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 try:
-    from .auth import router as auth_router, init_auth_table
+    from .auth import router as auth_router, init_auth_table, require_admin, get_current_user
 except ImportError:
-    from auth import router as auth_router, init_auth_table
+    from auth import router as auth_router, init_auth_table, require_admin, get_current_user
 
 # ============================================================
 # Logging Setup
