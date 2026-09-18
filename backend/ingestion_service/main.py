@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+from .auth import router as auth_router, init_auth_table
 
 # ============================================================
 # Logging Setup
@@ -760,7 +761,14 @@ async def redis_pubsub_bridge():
 
 @app.on_event("startup")
 async def startup_event():
+    try:
+        await init_auth_table()
+    except Exception as exc:
+        logger.warning(f"Auth table initialization skipped: {exc}")
     asyncio.create_task(redis_pubsub_bridge())
+
+
+app.include_router(auth_router, prefix="/api/v1")
 
 
 # ============================================================
