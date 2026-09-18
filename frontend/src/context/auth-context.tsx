@@ -37,17 +37,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      const token = sessionStorage.getItem(STORAGE_KEY_ACCESS_TOKEN);
       const sessionUser = sessionStorage.getItem(STORAGE_KEY_USER_SESSION);
-      if (sessionUser) setUser(JSON.parse(sessionUser));
-    } catch {
-      sessionStorage.removeItem(STORAGE_KEY_USER_SESSION);
-      sessionStorage.removeItem(STORAGE_KEY_ACCESS_TOKEN);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+
+      if (!token || !sessionUser) {
+        if (!cancelled) setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/aura?path=auth/me", {
+          method: "GET",
+          headers: { Authorization: "Bearer " + token },
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data?.user) {
+          throw new Error(data?.detail || "Session expired.");
+        }
+
+        if (!cancelled) {
+          setUser(data.user as UserAccount);
+          sessionStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(data.user));
+        }
+      } catch {
+        sessionStorage.removeItem(STORAGE_KEY_USER_SESSION);
+        sessionStorage.removeItem(STORAGE_KEY_ACCESS_TOKEN);
+        if (!cancelled) {
+          setUser(null);
+          router.replace("/login");
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    restoreSession();
+    return () => { cancelled = true; };
+  }, [router]);
 
   const persistAuth = (data: any) => {
     const account = data.user as UserAccount;
