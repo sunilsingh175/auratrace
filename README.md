@@ -1,16 +1,16 @@
 # AuraTrace: AI-Powered Application Observability & Crash Diagnostics Platform
 
-AuraTrace is a decoupled, event-driven observability and automated root-cause analysis platform. It ingests continuous telemetry streams, detects system anomalies using unsupervised machine learning (Isolation Forest), and generates step-by-step code repair reports via Retrieval-Augmented Generation (RAG) and LLMs.
+AuraTrace is a decoupled, event-driven observability and automated root-cause analysis platform. It ingests continuous telemetry streams, detects system anomalies using unsupervised machine learning (Isolation Forest), and generates step-by-step diagnostic and recovery reports using Retrieval-Augmented Generation (RAG) and an LLM.
 
 ---
 
 ## Key Capabilities
 
-* **Non-Blocking Telemetry Ingestion:** FastAPI gateway buffering logs directly into Redis Streams (`XADD`) with `<20ms` latency.
-* **Unsupervised Anomaly Detection:** Rolling-window statistical analysis via `scikit-learn` Isolation Forest to catch memory leaks, latency degradation, and error spikes.
-* **Contextual RAG Diagnosis:** Vector similarity matching in PostgreSQL (`pgvector`) against historical crash logs with LangChain-driven LLM synthesis for actionable code diffs.
-* **Live WebSocket Telemetry:** Real-time event streaming to a Next.js 14 dashboard.
-* **SDG Goal 9 Alignment:** Enhances enterprise software resilience and infrastructure reliability.
+* **Non-Blocking Telemetry Ingestion:** FastAPI accepts telemetry and writes it to Redis Streams (XADD) before returning HTTP 202. Client latency depends on the runtime environment and load; see the measured stress-test results below.
+* **Unsupervised Anomaly Detection:** Rolling-window analysis via scikit-learn Isolation Forest to detect latency degradation, error-rate spikes, and other anomalous telemetry patterns.
+* **Contextual RAG Diagnosis:** Stack traces are embedded and matched against historical fixes stored in PostgreSQL with pgvector; the retrieved context is supplied to the configured Gemini model for diagnosis and recovery steps.
+* **Live WebSocket Telemetry:** Real-time telemetry and anomaly events are streamed to the Next.js dashboard.
+* **SDG Goal 9 Alignment:** Supports software infrastructure resilience and reliability.
 
 ---
 
@@ -18,24 +18,58 @@ AuraTrace is a decoupled, event-driven observability and automated root-cause an
 
 ```text
 [ External Service / SDK ]
-          │  1. Async POST (/api/v1/telemetry)
+          │  1. POST /api/v1/telemetry
           ▼
  [ FastAPI Gateway ] ──► 2. XADD ──► [ Redis Stream Queue ]
                                             │
-                     ┌──────────────────────┴──────────────────────┐
-                     ▼ 3. XREADGROUP                               ▼ 3. XREADGROUP
-          [ ML Anomaly Worker ]                         [ Long-Term Archival ]
-          (Isolation Forest)                               (PostgreSQL)
-                     │ 4. Flag Anomaly (Score > Threshold)
-                     ▼
-          [ RAG AI Doctor ]
-          ├──► 5. Vectorize Stack Trace (all-MiniLM-L6-v2)
-          ├──► 6. Similarity Search in pgvector
-          └──► 7. Synthesize Root Cause & Patch via LLM
-                     │
-                     ▼ 8. PUBLISH Alert
-          [ Redis Pub/Sub ] ──► 9. WebSockets ──► [ Next.js Live Dashboard ]
+                                            ▼
+                                  [ ML Anomaly Worker ]
+                                  (5-minute window)
+                                            │
+                              3. Flag anomaly
+                                            ▼
+                                  [ PostgreSQL Incident ]
+                                            │
+                                            ▼
+                                      [ RAG AI Doctor ]
+                                      ├──► 4. Embed stack trace
+                                      ├──► 5. pgvector similarity search
+                                      └──► 6. Gemini diagnosis
+                                            │
+                                            ▼
+                                  [ Redis Pub/Sub ]
+                                            │
+                                            ▼
+                                  [ WebSocket Gateway ]
+                                            │
+                                            ▼
+                                  [ Next.js Dashboard ]
 ```
+
+Telemetry persistence is performed by the backend worker pipeline into PostgreSQL; Redis is the asynchronous stream buffer and event broker rather than a separate long-term archival store.
+
+---
+
+## Machine Learning Architecture & Benchmark Validation
+
+AuraTrace implements two complementary Isolation Forest workflows:
+
+1. **Online Production Anomaly Detection:**
+   * Operates on **8 operational telemetry features** (error_count, request_count, error_rate, avg_latency_ms, max_latency_ms, p95_latency_ms, status_5xx_rate, unique_error_types) aggregated over 5-minute per-service sliding windows.
+   * Processes live telemetry from the Redis Stream.
+   * An anomaly triggers incident creation and the RAG diagnostic pipeline.
+
+2. **Offline Research Benchmark (LogHub HDFS_v1):**
+   * Evaluates unsupervised Isolation Forest on **29 log event template counts (E1–E29)** across **575,061 block sessions** from the LogHub HDFS dataset (Xu et al., SOSP 2009).
+   * Evaluated using a **stratified 70% Train / 30% Held-Out Test split** with zero label leakage.
+   * **Full Dataset (575,061 sessions / 172,519 held-out test sessions) Empirical Results:**
+     * **Held-out ROC-AUC:** 0.9597 (95.97%)
+     * **PR-AUC (Average Precision):** 0.7147 (71.47%)
+     * **Precision:** 0.6922 (69.22%)
+     * **Recall:** 0.6076 (60.76%)
+     * **F1-Score:** 0.6471 (64.71%)
+     * **Inference Throughput:** 72,687 sessions/sec
+   * *To reproduce:* python backend/ml_anomaly_service/evaluate_hdfs.py --samples 0
 
 ---
 
@@ -51,7 +85,7 @@ cd auratrace
 ```bash
 cp .env.example .env
 ```
-*(Review and update `.env` with your API keys and configuration)*
+*(Review and update .env with your credentials and configuration.)*
 
 ### 3. Launch Services with Docker Compose
 ```bash
@@ -59,34 +93,52 @@ docker compose up -d --build
 ```
 
 ### 4. Access Platform Interfaces
-* **Live Monitoring Dashboard:** [http://localhost:3000](http://localhost:3000)
-* **Ingestion Gateway OpenAPI Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-* **PostgreSQL pgvector Database:** `localhost:5432` (`auratrace_db`)
-* **Redis Stream Broker:** `localhost:6379`
+* **Live Monitoring Dashboard:** http://localhost:3000
+* **Ingestion Gateway OpenAPI Docs:** http://localhost:8000/docs
+* **Canonical WebSocket Stream:** ws://localhost:8000/ws/telemetry (aliases: /ws, /api/v1/ws)
+* **PostgreSQL pgvector Database:** localhost:5432 (auratrace_db)
+* **Redis Stream Broker:** localhost:6379 (telemetry_stream)
+
+---
+
+## Gateway Stress-Test Validation
+
+The repository contains scripts/stress_test.py for the current Redis-buffered ingestion test.
+
+A recorded run dispatched **1,000 requests with concurrency 50**:
+* **HTTP 202:** 1,000 / 1,000
+* **HTTP errors:** 0
+* **Duration:** 10.562 s
+* **Throughput:** 94.68 requests/sec
+* **Mean latency:** 521.96 ms
+* **P50 latency:** 318.95 ms
+* **P95 latency:** 1,692.39 ms
+* **P99 latency:** 2,856.42 ms
+* **Redis Stream:** 7,016 → 8,016 entries (+1,000)
+* **Persisted PostgreSQL records:** +1,000
+
+These measurements demonstrate asynchronous Redis buffering and eventual persistence under the tested burst. They should not be interpreted as a guaranteed sub-20 ms client-latency SLA.
 
 ---
 
 ## Repository Structure
 
-```
+```text
 auratrace/
-├── docker-compose.yml                  # Root orchestration (Postgres, Redis, Ingestion, Workers, UI)
-├── .env.example                        # Global environment variable templates
-├── README.md                           # Setup and architectural documentation
-│
-├── database/                           # Persistence & Vector Storage Layer
-│   ├── init.sql                        # Schema definition (Tables, pgvector extension, HNSW indices)
-│   └── seed_knowledge_base.sql         # Pre-populated stack traces & verified code patches
-│
-├── backend/                            # Core Microservices Ecosystem
-│   ├── ingestion-service/              # High-Throughput Log Gateway (FastAPI)
-│   ├── ml-anomaly-service/             # Unsupervised Outlier Detector (Python Worker)
-│   ├── rag-diagnostic-service/         # AI Crash Doctor & Root-Cause Generator (LangChain)
-│   └── shared/                         # Common Utilities Across Workers
-│
-├── frontend/                           # Live Observability Dashboard (Next.js 14 App Router)
-├── sdk/                                # Client Telemetry Capture Packages (Node.js & Python)
-└── scripts/                            # Chaos Engineering & Load Testing Utilities
+├── docker-compose.yml
+├── .env.example
+├── README.md
+├── database/
+│   ├── 01-init.sql
+│   └── 02-seed.sql
+├── backend/
+│   ├── ingestion_service/
+│   ├── ml_anomaly_service/
+│   ├── rag-diagnostic-service/
+│   └── shared/
+├── frontend/
+├── sdk/
+└── scripts/
 ```
 
 ---

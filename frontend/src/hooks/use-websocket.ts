@@ -3,13 +3,17 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 export interface LogEvent {
+  id?: string;
   service_id: string;
   timestamp: string;
   level: "DEBUG" | "INFO" | "WARN" | "ERROR" | "CRITICAL";
-  latency_ms: number;
+  latency_ms?: number;
   error_type?: string;
   message?: string;
+  log_message?: string;
   stack_trace?: string;
+  raw_stack_trace?: string;
+  anomaly_score?: number;
   metadata?: Record<string, any>;
 }
 
@@ -50,12 +54,21 @@ export function useWebSocket(onAnomalyAlert?: (alert: AnomalyAlertEvent) => void
       socket.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
+          const alertData = payload.data || payload;
+
           if (payload.type === "TELEMETRY_LOG" && payload.data) {
             setLogs((prev) => [payload.data, ...prev].slice(0, 300));
-          } else if (payload.type === "ANOMALY_ALERT" && payload.data) {
+          } else if (
+            payload.type === "ANOMALY_ALERT" ||
+            payload.type === "ANOMALY_DETECTED" ||
+            payload.type === "INCIDENT_DIAGNOSED"
+          ) {
             if (alertCallbackRef.current) {
-              alertCallbackRef.current(payload.data);
+              alertCallbackRef.current(alertData);
             }
+          } else if (payload.service_id && payload.timestamp) {
+            // Direct telemetry event
+            setLogs((prev) => [payload, ...prev].slice(0, 300));
           }
         } catch (err) {
           console.error("Failed to parse WebSocket message:", err);

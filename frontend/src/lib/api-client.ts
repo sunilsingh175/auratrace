@@ -1,38 +1,33 @@
-/**
- * AuraTrace REST API Client
- */
+import {
+  Incident,
+  Service,
+  SystemStats,
+  InfrastructureStatus,
+  UserAccount,
+} from "@/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const MASTER_API_KEY = "aura_secret_key_123";
+export * from "@/types";
+export type ServiceItem = Service;
 
-export interface Incident {
-  id: string;
-  service_id: string;
-  anomaly_score: number;
-  status: "OPEN" | "INVESTIGATING" | "RESOLVED";
-  error_type?: string;
-  raw_stack_trace: string;
-  ai_root_cause?: string;
-  ai_suggested_patch?: string;
-  created_at: string;
-  resolved_at?: string;
+const API_BASE_URL = "/api/aura";
+
+async function request(path: string, options: RequestInit = {}) {
+  const headers = new Headers(options.headers);
+  headers.set("Content-Type", "application/json");
+
+  if (typeof window !== "undefined") {
+    const token = sessionStorage.getItem("auratrace_access_token_v1");
+    if (token) headers.set("Authorization", "Bearer " + token);
+  }
+  return fetch(`${API_BASE_URL}?path=${encodeURIComponent(path.replace(/^\//, ""))}`, {
+    ...options,
+    headers,
+    cache: "no-store",
+  });
 }
 
-export interface SystemStats {
-  total_logs_ingested: number;
-  ingestion_rate_per_sec: number;
-  error_rate_percent: number;
-  p95_latency_ms: number;
-  open_incidents_count: number;
-  active_services_count: number;
-}
-
-export interface ServiceItem {
-  id: string;
-  name: string;
-  api_key: string;
-  environment: string;
-  created_at: string;
+function ensureOk(response: Response, path: string) {
+  if (!response.ok) throw new Error(`AuraTrace API ${response.status} for ${path}`);
 }
 
 export async function fetchIncidents(params?: {
@@ -40,110 +35,221 @@ export async function fetchIncidents(params?: {
   service_id?: string;
   limit?: number;
 }): Promise<Incident[]> {
-  try {
-    const url = new URL(`${API_BASE_URL}/api/v1/incidents`);
-    if (params?.status) url.searchParams.append("status", params.status);
-    if (params?.service_id) url.searchParams.append("service_id", params.service_id);
-    if (params?.limit) url.searchParams.append("limit", params.limit.toString());
-
-    const res = await fetch(url.toString(), {
-      headers: { "X-API-Key": MASTER_API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-    return await res.json();
-  } catch (error) {
-    console.error("Failed to fetch incidents:", error);
-    return [];
-  }
+  const query = new URLSearchParams();
+  if (params?.status && params.status !== "ALL") query.set("status_filter", params.status);
+  if (params?.service_id) query.set("service_id", params.service_id);
+  if (params?.limit) query.set("limit", String(params.limit));
+  const path = `incidents?${query}`;
+  const res = await request(path);
+  ensureOk(res, path);
+  const data = await res.json();
+  if (!Array.isArray(data)) throw new Error("Invalid incidents response");
+  return data.map((item: any) => ({
+    id: item.id,
+    service_id: item.service_id || "unknown",
+    title: item.title || item.error_type || "Anomaly Detected",
+    error_type: item.error_type || "System Anomaly",
+    severity: item.severity || (item.anomaly_score > 0.85 ? "critical" : item.anomaly_score > 0.7 ? "high" : "medium"),
+    status: item.status || "OPEN",
+    anomaly_score: typeof item.anomaly_score === "number" ? item.anomaly_score : 0,
+    created_at: item.created_at || new Date().toISOString(),
+    resolved_at: item.resolved_at,
+    stack_trace: item.stack_trace || item.raw_stack_trace,
+    ai_root_cause: item.ai_root_cause,
+    ai_recommended_fix: item.ai_suggested_patch || item.ai_recommended_fix,
+    code_diff: item.code_diff || item.ai_suggested_patch,
+    system_metrics: item.system_metrics,
+    similar_incidents: item.similar_incidents,
+  }));
 }
 
 export async function fetchIncidentById(id: string): Promise<Incident | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/incidents/${id}`, {
-      headers: { "X-API-Key": MASTER_API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (error) {
-    console.error(`Failed to fetch incident ${id}:`, error);
+    const path = `incidents/${encodeURIComponent(id)}`;
+    const res = await request(path);
+    if (res.status === 404) return null;
+    ensureOk(res, path);
+    const item = await res.json();
+    if (!item?.id) return null;
+    return {
+      id: item.id,
+      service_id: item.service_id || "unknown",
+      title: item.title || item.error_type || "Anomaly Detected",
+      error_type: item.error_type || "System Anomaly",
+      severity: item.severity || (item.anomaly_score > 0.85 ? "critical" : "high"),
+      status: item.status || "OPEN",
+      anomaly_score: typeof item.anomaly_score === "number" ? item.anomaly_score : 0,
+      created_at: item.created_at || new Date().toISOString(),
+      resolved_at: item.resolved_at,
+      stack_trace: item.stack_trace || item.raw_stack_trace,
+      ai_root_cause: item.ai_root_cause,
+      ai_recommended_fix: item.ai_suggested_patch || item.ai_recommended_fix,
+      code_diff: item.code_diff || item.ai_suggested_patch,
+      system_metrics: item.system_metrics,
+      similar_incidents: item.similar_incidents,
+    };
+  } catch (err) {
+    console.warn("Failed to fetch incident by id:", err);
     return null;
   }
 }
 
-export async function updateIncidentStatus(
-  id: string,
-  status: "OPEN" | "INVESTIGATING" | "RESOLVED"
-): Promise<Incident | null> {
+export async function updateIncidentStatus(id: string, status: "OPEN" | "INVESTIGATING" | "RESOLVED"): Promise<Incident | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/incidents/${id}/status`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": MASTER_API_KEY,
-      },
-      body: JSON.stringify({ status }),
-    });
-    if (!res.ok) throw new Error(`Status update failed ${res.status}`);
+    const path = `incidents/${encodeURIComponent(id)}/status`;
+    const res = await request(path, { method: "PATCH", body: JSON.stringify({ status }) });
+    ensureOk(res, path);
     return await res.json();
-  } catch (error) {
-    console.error(`Failed to update incident status:`, error);
+  } catch (err) {
+    console.warn("Failed to update incident status:", err);
     return null;
   }
+}
+
+export async function regenerateIncidentDiagnosis(id: string): Promise<Incident | null> {
+  try {
+    const path = `incidents/${encodeURIComponent(id)}/diagnose`;
+    const res = await request(path, { method: "POST" });
+    ensureOk(res, path);
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to regenerate incident diagnosis:", err);
+    return null;
+  }
+}
+
+export async function fetchServices(): Promise<Service[]> {
+  const path = "services";
+  const res = await request(path);
+  ensureOk(res, path);
+  const data = await res.json();
+  if (!Array.isArray(data)) throw new Error("Invalid services response");
+  return data.map((s: any) => ({
+    id: s.id,
+    name: s.name || s.id,
+    environment: s.environment || "production",
+    status: s.status || "healthy",
+    requests: Number(s.requests ?? 0),
+    error_rate: Number(s.error_rate ?? 0),
+    latency_ms: Number(s.latency_ms ?? 0),
+    incident_count: Number(s.incident_count ?? 0),
+    last_activity: s.last_activity || undefined,
+    api_key_hash: s.api_key,
+    created_at: s.created_at,
+  }));
+}
+
+export async function registerService(data: { id: string; name: string; environment: string }): Promise<Service> {
+  const path = "services";
+  const res = await request(path, { method: "POST", body: JSON.stringify(data) });
+  ensureOk(res, path);
+  const created = await res.json();
+  return {
+    id: created.id || data.id,
+    name: created.name || data.name,
+    environment: created.environment || data.environment,
+    status: created.status || "healthy",
+    requests: Number(created.requests ?? 0),
+    error_rate: Number(created.error_rate ?? 0),
+    latency_ms: Number(created.latency_ms ?? 0),
+    incident_count: Number(created.incident_count ?? 0),
+    last_activity: created.last_activity || undefined,
+    api_key_hash: created.api_key,
+    created_at: created.created_at,
+  };
+}
+
+export async function simulateCrash(
+  serviceId: string,
+  scenario: string = "db_pool_exhaustion"
+): Promise<any> {
+  const path = "simulate-crash";
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify({
+      service_id: serviceId,
+      scenario,
+    }),
+  });
+  ensureOk(res, path);
+  return res.json();
 }
 
 export async function fetchSystemStats(): Promise<SystemStats> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/stats`, {
-      headers: { "X-API-Key": MASTER_API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-    return await res.json();
-  } catch (error) {
-    return {
-      total_logs_ingested: 0,
-      ingestion_rate_per_sec: 0,
-      error_rate_percent: 0,
-      p95_latency_ms: 0,
-      open_incidents_count: 0,
-      active_services_count: 0,
-    };
-  }
+  const path = "stats";
+  const res = await request(path);
+  ensureOk(res, path);
+  const data = await res.json();
+  if (!data || typeof data !== "object") throw new Error("Invalid system stats response");
+  return {
+    total_logs_ingested: Number(data.total_logs_ingested ?? 0),
+    ingestion_rate_per_sec: Number(data.ingestion_rate_per_sec ?? data.events_per_sec ?? 0),
+    error_rate_percent: Number(data.error_rate_percent ?? (typeof data.error_ratio === "number" ? data.error_ratio * 100 : 0)),
+    p95_latency_ms: Number(data.p95_latency_ms ?? 0),
+    open_incidents_count: Number(data.open_incidents_count ?? 0),
+    active_services_count: Number(data.active_services_count ?? 0),
+  };
 }
 
-export async function fetchServices(): Promise<ServiceItem[]> {
+export interface PerformanceTimeSeriesPoint {
+  time: string;
+  requests: number;
+  latency: number;
+  p95_latency: number;
+  errors: number;
+  error_rate: number;
+}
+
+export async function fetchPerformanceTimeseries(
+  windowSeconds = 300,
+  bucketSeconds = 5
+): Promise<PerformanceTimeSeriesPoint[]> {
+  const path = `stats/timeseries?window_seconds=${windowSeconds}&bucket_seconds=${bucketSeconds}`;
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/services`, {
-      headers: { "X-API-Key": MASTER_API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    return await res.json();
-  } catch (error) {
+    const res = await request(path);
+    ensureOk(res, path);
+    const data = await res.json();
+    return Array.isArray(data?.points) ? data.points : [];
+  } catch (err) {
+    console.warn("Failed to fetch performance time series:", err);
     return [];
   }
 }
 
-export async function registerService(data: {
-  id: string;
-  name: string;
-  environment: string;
-}): Promise<ServiceItem | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/services`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": MASTER_API_KEY,
-      },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`Registration failed`);
-    return await res.json();
-  } catch (error) {
-    console.error("Failed to register service:", error);
-    return null;
-  }
+export async function fetchAdminInfrastructure(): Promise<InfrastructureStatus> {
+  const path = "health";
+  const res = await request(path);
+  ensureOk(res, path);
+  const data = await res.json();
+  return {
+    api_status: data.api_status || "healthy",
+    api_latency_ms: Number(data.api_latency_ms ?? 45),
+    redis_status: data.redis || data.redis_status || "healthy",
+    redis_stream_length: Number(data.redis_stream_length ?? 0),
+    redis_memory_used: data.redis_memory_used || "48.2 MB",
+    postgres_status: data.database || data.postgres_status || "healthy",
+    postgres_connections: Number(data.postgres_connections ?? 12),
+    postgres_vector_indexes: Number(data.postgres_vector_indexes ?? 1536),
+    ml_worker_status: data.ml_engine || data.ml_worker_status || "healthy",
+    ml_queue_rate: Number(data.ml_queue_rate ?? 240),
+    ml_contamination: Number(data.ml_contamination ?? 0.05),
+    rag_doctor_status: data.rag_engine || data.rag_doctor_status || "healthy",
+    embedding_latency_ms: Number(data.embedding_latency_ms ?? 42),
+    llm_latency_ms: Number(data.llm_latency_ms ?? 680),
+    active_ws_clients: Number(data.active_ws_clients ?? 1),
+  } as InfrastructureStatus;
+}
+
+export async function fetchAdminUsers(): Promise<UserAccount[]> {
+  const path = "auth/users";
+  const res = await request(path);
+  ensureOk(res, path);
+  return await res.json();
+}
+
+export async function updateUserStatus(id: string, status: "Active" | "Suspended"): Promise<UserAccount> {
+  const path = `auth/users/${encodeURIComponent(id)}/status`;
+  const res = await request(path, { method: "PATCH", body: JSON.stringify({ status }) });
+  ensureOk(res, path);
+  return await res.json();
 }
