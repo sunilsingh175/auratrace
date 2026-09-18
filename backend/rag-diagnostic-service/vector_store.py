@@ -127,9 +127,8 @@ class VectorStore:
         Perform pgvector HNSW cosine similarity search against HistoricalFix.
 
         The knowledge base is backfilled before searching so seeded records
-        cannot silently disappear from the vector-search candidate set.
-        If the vector query still returns fewer than top_k records, the
-        remaining slots are filled from the newest HistoricalFix records.
+        are included in the vector-search candidate set. Results are returned
+        only when they have a valid embedding; no non-semantic fallback is used.
         """
         try:
             search_query = f"{error_type} {stack_trace}".strip()
@@ -154,28 +153,8 @@ class VectorStore:
                 result = await session.execute(stmt)
                 fixes = list(result.scalars().all())
 
-                # Defensive fallback: if an embedding could not be generated
-                # for one or more records, still return exactly top_k historical
-                # fixes whenever the knowledge base contains enough records.
-                if len(fixes) < top_k:
-                    existing_ids = {fix.id for fix in fixes}
-                    fallback_stmt = (
-                        select(HistoricalFix)
-                        .order_by(HistoricalFix.created_at.desc())
-                        .limit(top_k)
-                    )
-                    fallback_res = await session.execute(fallback_stmt)
-                    fallback_fixes = fallback_res.scalars().all()
-
-                    for fix in fallback_fixes:
-                        if fix.id not in existing_ids:
-                            fixes.append(fix)
-                            existing_ids.add(fix.id)
-                        if len(fixes) >= top_k:
-                            break
-
                 logger.info(
-                    "Returning %d/%d historical fixes for similarity search.",
+                    "Returning %d/%d semantically similar historical fixes.",
                     len(fixes),
                     top_k,
                 )
