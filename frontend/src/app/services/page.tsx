@@ -14,6 +14,7 @@ import {
   Activity,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { fetchServices, registerService } from "@/lib/api-client";
 import { Service } from "@/types";
 
@@ -87,7 +88,7 @@ export default function ServicesPage() {
 
   const filtered = services.filter((s) => {
     const q = searchQuery.toLowerCase().trim();
-    return (
+    return <ProtectedRoute>(
       !q ||
       s.name.toLowerCase().includes(q) ||
       s.id.toLowerCase().includes(q) ||
@@ -393,4 +394,5 @@ export default function ServicesPage() {
       </div>
     </AppShell>
   );
+  </ProtectedRoute>
 }
