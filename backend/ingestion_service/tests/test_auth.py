@@ -140,9 +140,10 @@ async def test_login_requires_otp_for_active_user(monkeypatch):
     async def fake_connect():
         return None
 
+    password_hash, password_salt = auth._hash_password("correct-password")
     user = {
-        "password_hash": auth._hash_password("correct-password")[0],
-        "password_salt": auth._hash_password("correct-password")[1],
+        "password_hash": password_hash,
+        "password_salt": password_salt,
         "status": "Active",
     }
 
@@ -271,7 +272,8 @@ def test_expired_token_is_rejected(monkeypatch):
     monkeypatch.setattr(auth, "AUTH_SECRET", "test-auth-secret")
     token = auth._make_token(str(uuid.uuid4()), "Developer")
 
-    monkeypatch.setattr(time, "time", lambda: time.time() + 10**6)
+    original_time = time.time
+    monkeypatch.setattr(time, "time", lambda: original_time() + 10**6)
 
     with pytest.raises(HTTPException) as exc:
         auth._decode_token(token)
