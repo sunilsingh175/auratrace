@@ -9,8 +9,8 @@ type Role = "Developer" | "Admin";
 interface AuthContextType {
   user: UserAccount | null;
   isLoading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; error?: string; otpRequired?: boolean }>;
-  register: (credentials: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }) => Promise<{ success: boolean; error?: string; otpRequired?: boolean }>;
+  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; role?: Role }>;
+  register: (credentials: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; role?: Role }>;
   verifyOtp: (credentials: { email: string; otp: string; purpose: "login" | "register" }) => Promise<{ success: boolean; error?: string; role?: Role }>;
   logout: () => void;
 }
