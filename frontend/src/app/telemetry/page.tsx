@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import { Radio, RefreshCw } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { LogConsole } from "@/components/telemetry/LogConsole";
 import { TelemetryChart } from "@/components/telemetry/TelemetryChart";
 import { AnomalyAlertBanner } from "@/components/anomaly-alert-banner";
@@ -53,7 +54,7 @@ export default function TelemetryPage() {
   React.useEffect(() => {
     void loadTimeseries();
     const interval = window.setInterval(() => void loadTimeseries(), 5000);
-    return () => window.clearInterval(interval);
+    return <ProtectedRoute>() => window.clearInterval(interval);
   }, [requestedService]);
 
   const alertLog: LogEvent | null = useMemo(() => {
@@ -154,4 +155,5 @@ export default function TelemetryPage() {
       </div>
     </AppShell>
   );
+  </ProtectedRoute>
 }
