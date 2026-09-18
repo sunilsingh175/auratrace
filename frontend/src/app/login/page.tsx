@@ -285,6 +285,22 @@ export default function LoginPage() {
                     className="field mt-1 font-mono"
                   />
                 </div>
+                {activeTab === "register" && selectedRole === "Admin" && (
+                  <div>
+                    <label className="label">Admin Registration Key</label>
+                    <input
+                      type="password"
+                      required
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Configured admin registration key"
+                      className="field mt-1 font-mono"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      Admin accounts require an additional server-side registration key.
+                    </p>
+                  </div>
+                )}
               </>
             ) : (
               <div>
