@@ -9,8 +9,9 @@ type Role = "Developer" | "Admin";
 interface AuthContextType {
   user: UserAccount | null;
   isLoading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; error?: string; role?: Role }>;
-  register: (credentials: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }) => Promise<{ success: boolean; error?: string; role?: Role }>;
+  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; error?: string; otpRequired?: boolean }>;
+  register: (credentials: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }) => Promise<{ success: boolean; error?: string; otpRequired?: boolean }>;
+  verifyOtp: (credentials: { email: string; otp: string; purpose: "login" | "register" }) => Promise<{ success: boolean; error?: string; role?: Role }>;
   logout: () => void;
 }
 
@@ -62,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async ({ email, password }: { email: string; password: string }) => {
     try {
       const data = await authRequest("login", { email, password });
+      if (data.otp_required) return { success: true, otpRequired: true };
       persistAuth(data);
       return { success: true, role: data.user.role as Role };
     } catch (error) {
@@ -85,6 +87,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const verifyOtp = async ({ email, otp, purpose }: { email: string; otp: string; purpose: "login" | "register" }) => {
+    try {
+      const data = await authRequest("verify-otp", { email, otp, purpose });
+      persistAuth(data);
+      return { success: true, role: data.user.role as Role };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "OTP verification failed." };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     sessionStorage.removeItem(STORAGE_KEY_USER_SESSION);
@@ -92,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
-  return <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, isLoading, login, register, verifyOtp, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
