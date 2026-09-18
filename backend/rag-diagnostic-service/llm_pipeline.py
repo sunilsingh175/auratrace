@@ -17,101 +17,68 @@ try:
 except ImportError:
     genai = None
 
-GEMINI_API_KEY = os.getenv(
-    "GEMINI_API_KEY",
-    ""
-).strip()
-
-_raw_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
-# Normalize valid Gemini models
-if "3.8" in _raw_model or "3.5" in _raw_model or not _raw_model:
-    GEMINI_MODEL = "gemini-2.5-flash"
-else:
-    GEMINI_MODEL = _raw_model
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip() or "gemini-3.6-flash"
 
 
 class LLMDoctor:
 
     def __init__(self):
-
         self.client = None
 
         if GEMINI_API_KEY and genai:
             try:
-                self.client = genai.Client(
-                    api_key=GEMINI_API_KEY
-                )
-
-                logger.info(
-                    "Gemini client initialized with model %s",
-                    GEMINI_MODEL
-                )
+                self.client = genai.Client(api_key=GEMINI_API_KEY)
+                logger.info("Gemini client initialized with model %s", GEMINI_MODEL)
             except Exception as e:
-                logger.warning(f"Failed to initialize Gemini client: {e}")
+                logger.warning("Failed to initialize Gemini client: %s", e)
         else:
-
             logger.warning(
                 "GEMINI_API_KEY is not configured or google-genai not installed."
             )
 
-    async def generate_diagnosis(
-        self,
-        prompt: str
-    ) -> str:
-
+    async def generate_diagnosis(self, prompt: str) -> str:
         if not self.client:
-
             return ""
 
-        model_candidates = [
-            GEMINI_MODEL,
-            "gemini-3.6-flash",
-            "gemini-2.5-flash",
-            "gemini-1.5-flash",
-            "gemini-2.0-flash",
-        ]
-        # remove duplicates preserving order
-        unique_models = list(dict.fromkeys(model_candidates))
+        # Use the configured Gemini model. Keeping the model configurable makes
+        # the deployment reproducible and avoids silently switching models.
+        for attempt in range(1, 3):
+            try:
+                logger.info(
+                    "Generating diagnosis via Gemini %s (attempt %s/2)...",
+                    GEMINI_MODEL,
+                    attempt,
+                )
 
-        for model_name in unique_models:
-            for attempt in range(1, 3):
-                try:
-                    logger.info(
-                        "Generating diagnosis via Gemini %s (attempt %s/2)...",
-                        model_name,
-                        attempt
-                    )
+                response = await asyncio.to_thread(
+                    self.client.models.generate_content,
+                    model=GEMINI_MODEL,
+                    contents=prompt,
+                )
 
-                    # Standard google-genai generate_content API
-                    response = await asyncio.to_thread(
-                        self.client.models.generate_content,
-                        model=model_name,
-                        contents=prompt,
-                    )
+                text = (getattr(response, "text", "") or "").strip()
+                if text:
+                    return text
 
-                    text = (getattr(response, "text", "") or "").strip()
+            except Exception as exc:
+                error_text = str(exc)
+                logger.warning(
+                    "Gemini %s attempt %s failed: %s",
+                    GEMINI_MODEL,
+                    attempt,
+                    error_text,
+                )
 
-                    if text:
-                        return text
+                if (
+                    "429" in error_text
+                    or "too_many_requests" in error_text.lower()
+                    or "quota exceeded" in error_text.lower()
+                ):
+                    logger.error("Gemini quota reached for %s", GEMINI_MODEL)
+                    break
 
-                except Exception as exc:
-                    error_text = str(exc)
-                    logger.warning(
-                        "Gemini %s attempt %s failed: %s",
-                        model_name,
-                        attempt,
-                        error_text
-                    )
-
-                    if (
-                        "429" in error_text
-                        or "too_many_requests" in error_text.lower()
-                        or "quota exceeded" in error_text.lower()
-                    ):
-                        logger.error("Gemini quota reached for %s", model_name)
-                        break
-
-                    await asyncio.sleep(1)
+                await asyncio.sleep(1)
 
         return ""
 
@@ -159,24 +126,21 @@ RECOVERY PATCH:
 <numbered, safe and actionable recovery steps>
 """
 
-        raw_response = await self.generate_diagnosis(
-            prompt
-        )
+        raw_response = await self.generate_diagnosis(prompt)
 
         if not raw_response:
-            # High quality fallback grounded in the RAG similar records
             if similar_records and isinstance(similar_records, list) and len(similar_records) > 0:
                 top_match = similar_records[0]
                 root_cause = top_match.get("root_cause") or f"Anomaly pattern matched historical {error_type} profile."
                 code_patch = top_match.get("code_patch") or top_match.get("fix_description") or "Apply verified context management and connection recovery patch."
                 return (
                     f"Synthesized RAG Analysis: {root_cause}",
-                    f"Recommended Remediation Patch:\n{code_patch}"
+                    f"Recommended Remediation Patch:\n{code_patch}",
                 )
 
             return (
                 f"Automated Anomaly Analysis: Detected anomalous performance spike or exception in {service_id} ({error_type}).",
-                "Review recent deployments, check service database/network connections, and inspect service logs."
+                "Review recent deployments, check service database/network connections, and inspect service logs.",
             )
 
         lower = raw_response.lower()
@@ -190,16 +154,13 @@ RECOVERY PATCH:
                 .replace("Root Cause:", "")
                 .strip()
             )
-            patch = (
-                raw_response[index + len(marker):]
-                .strip()
-            )
+            patch = raw_response[index + len(marker):].strip()
             return (root_cause, patch)
 
         return (
             raw_response.strip(),
-            "Review the incident manually and verify the affected service."
+            "Review the incident manually and verify the affected service.",
         )
 
 
-llm_doctor = LLMDoctor()
+llm_doctor = LLMDoctor()
