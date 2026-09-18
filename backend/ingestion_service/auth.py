@@ -26,6 +26,7 @@ ADMIN_REGISTRATION_KEY = os.getenv("AURA_ADMIN_REGISTRATION_KEY", "")
 SESSION_TTL_SECONDS = int(os.getenv("AURA_SESSION_TTL_SECONDS", "28800"))
 OTP_TTL_SECONDS = int(os.getenv("AURA_OTP_TTL_SECONDS", "300"))
 OTP_RESEND_SECONDS = int(os.getenv("AURA_OTP_RESEND_SECONDS", "30"))
+OTP_MAX_ATTEMPTS = int(os.getenv("AURA_OTP_MAX_ATTEMPTS", "5"))
 SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
@@ -52,7 +53,7 @@ class LoginPayload(BaseModel):
 
 class VerifyOtpPayload(BaseModel):
     email: str = Field(..., min_length=5, max_length=320)
-    otp: str = Field(..., pattern=r"^\d{6}$")
+    otp: str = Field(..., pattern=r"^d{6}$")
     purpose: str = Field(..., pattern="^(register|login)$")
 
 
@@ -112,18 +113,21 @@ def _send_otp_email(email: str, otp: str, purpose: str) -> None:
 
 
 async def _issue_otp(email: str, purpose: str) -> None:
+    email = email.strip().lower()
     cooldown_key = f"auratrace:otp:cooldown:{purpose}:{email}"
     if await _redis.exists(cooldown_key):
         raise HTTPException(status_code=429, detail="Please wait before requesting another OTP.")
     otp = f"{secrets.randbelow(1_000_000):06d}"
-    # Store only a digest so Redis never contains the plaintext code.
     digest = hmac.new(AUTH_SECRET.encode(), otp.encode(), hashlib.sha256).hexdigest()
-    await _redis.setex(f"auratrace:otp:{purpose}:{email}", OTP_TTL_SECONDS, digest)
+    otp_key = f"auratrace:otp:{purpose}:{email}"
+    attempts_key = f"auratrace:otp:attempts:{purpose}:{email}"
+    await _redis.setex(otp_key, OTP_TTL_SECONDS, digest)
+    await _redis.setex(attempts_key, OTP_TTL_SECONDS, "0")
     await _redis.setex(cooldown_key, OTP_RESEND_SECONDS, "1")
     try:
         _send_otp_email(email, otp, purpose)
     except Exception as exc:
-        await _redis.delete(f"auratrace:otp:{purpose}:{email}")
+        await _redis.delete(otp_key, attempts_key)
         raise HTTPException(status_code=502, detail="Unable to deliver verification email.") from exc
 
 
@@ -136,15 +140,21 @@ async def register(payload: RegisterPayload):
     password_hash, password_salt = _hash_password(payload.password)
     user_id = uuid.uuid4()
     async with _engine.begin() as conn:
-        existing = await conn.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email})
-        if existing.first():
+        existing = await conn.execute(text("SELECT id, status FROM users WHERE email = :email"), {"email": email})
+        existing_user = existing.mappings().first()
+        if existing_user:
             raise HTTPException(status_code=409, detail="An account with this email already exists.")
         await conn.execute(text("""
-            INSERT INTO users (id, name, email, password_hash, password_salt, role)
-            VALUES (:id, :name, :email, :password_hash, :password_salt, :role)
+            INSERT INTO users (id, name, email, password_hash, password_salt, role, status)
+            VALUES (:id, :name, :email, :password_hash, :password_salt, :role, 'Pending')
         """), {"id": user_id, "name": payload.name.strip(), "email": email,
                "password_hash": password_hash, "password_salt": password_salt, "role": payload.role})
-    await _issue_otp(email, "register")
+    try:
+        await _issue_otp(email, "register")
+    except Exception:
+        async with _engine.begin() as conn:
+            await conn.execute(text("DELETE FROM users WHERE id = :id AND status = 'Pending'"), {"id": user_id})
+        raise
     return {"otp_required": True, "message": "Verification code sent to your email.", "email": email, "purpose": "register"}
 
 
@@ -159,6 +169,9 @@ async def login(payload: LoginPayload):
         user = result.mappings().first()
     if not user or not _verify_password(payload.password, user["password_salt"], user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
+    if user["status"] == "Pending":
+        await _issue_otp(email, "register")
+        return {"otp_required": True, "message": "Verify your email to activate the account.", "email": email, "purpose": "register"}
     if user["status"] != "Active":
         raise HTTPException(status_code=403, detail="This account is suspended.")
     await _issue_otp(email, "login")
@@ -170,27 +183,58 @@ async def verify_otp(payload: VerifyOtpPayload):
     _require_config()
     email = payload.email.strip().lower()
     key = f"auratrace:otp:{payload.purpose}:{email}"
+    attempts_key = f"auratrace:otp:attempts:{payload.purpose}:{email}"
     expected = await _redis.get(key)
-    digest = hmac.new(AUTH_SECRET.encode(), payload.otp.encode(), hashlib.sha256).hexdigest()
-    if not expected or not hmac.compare_digest(expected, digest):
+    if not expected:
         raise HTTPException(status_code=401, detail="Invalid or expired OTP.")
-    await _redis.delete(key)
+    attempts = int(await _redis.get(attempts_key) or "0")
+    if attempts >= OTP_MAX_ATTEMPTS:
+        await _redis.delete(key, attempts_key)
+        raise HTTPException(status_code=429, detail="Too many incorrect OTP attempts. Request a new code.")
+    digest = hmac.new(AUTH_SECRET.encode(), payload.otp.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, digest):
+        attempts = await _redis.incr(attempts_key)
+        if attempts >= OTP_MAX_ATTEMPTS:
+            await _redis.delete(key, attempts_key)
+            raise HTTPException(status_code=429, detail="Too many incorrect OTP attempts. Request a new code.")
+        raise HTTPException(status_code=401, detail="Invalid or expired OTP.")
+    await _redis.delete(key, attempts_key)
     async with _engine.begin() as conn:
         result = await conn.execute(text("""
             SELECT id, name, email, role, status, created_at FROM users WHERE email = :email
         """), {"email": email})
         user = result.mappings().first()
-    if not user or user["status"] != "Active":
+        if not user:
+            raise HTTPException(status_code=401, detail="Account is unavailable.")
+        if payload.purpose == "register" and user["status"] == "Pending":
+            await conn.execute(text("UPDATE users SET status = 'Active' WHERE id = :id"), {"id": user["id"]})
+            user = dict(user)
+            user["status"] = "Active"
+    if user["status"] != "Active":
         raise HTTPException(status_code=401, detail="Account is unavailable.")
     token = _make_token(str(user["id"]), user["role"])
+    created_at = user["created_at"]
+    created_date = created_at.date().isoformat() if isinstance(created_at, datetime) else str(created_at)[:10]
     return {"access_token": token, "token_type": "bearer",
             "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"],
-                     "role": user["role"], "status": user["status"],
-                     "created_at": user["created_at"].date().isoformat()}}
+                     "role": user["role"], "status": user["status"], "created_at": created_date}}
 
 
 @router.post("/resend-otp")
 async def resend_otp(payload: VerifyOtpPayload):
     _require_config()
-    await _issue_otp(payload.email.strip().lower(), payload.purpose)
-    return {"message": "A new verification code was sent.", "email": payload.email.strip().lower(), "purpose": payload.purpose}
+    email = payload.email.strip().lower()
+    if payload.purpose == "register":
+        async with _engine.begin() as conn:
+            result = await conn.execute(text("SELECT status FROM users WHERE email = :email"), {"email": email})
+            user = result.mappings().first()
+        if not user or user["status"] != "Pending":
+            raise HTTPException(status_code=400, detail="No pending registration requires verification.")
+    else:
+        async with _engine.begin() as conn:
+            result = await conn.execute(text("SELECT status FROM users WHERE email = :email"), {"email": email})
+            user = result.mappings().first()
+        if not user or user["status"] != "Active":
+            raise HTTPException(status_code=400, detail="No active account is available for login verification.")
+    await _issue_otp(email, payload.purpose)
+    return {"message": "A new verification code was sent.", "email": email, "purpose": payload.purpose}
