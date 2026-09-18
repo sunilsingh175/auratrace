@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Users, Server, Plus, Copy, Check, Search, X, ShieldCheck, Ban, UserCheck } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/context/auth-context";
 import { fetchServices, registerService, fetchAdminUsers, updateUserStatus } from "@/lib/api-client";
 import { Service } from "@/types";
@@ -69,7 +70,7 @@ export default function AdminUsersServicesPage() {
     return s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.environment.toLowerCase().includes(q);
   });
 
-  return (
+  return <ProtectedRoute>(
     <AppShell title="Users & Monitored Services Management" subtitle="View the authenticated account and manage the live monitored service catalog">
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -154,4 +155,5 @@ export default function AdminUsersServicesPage() {
       </div>
     </AppShell>
   );
+  </ProtectedRoute>
 }
