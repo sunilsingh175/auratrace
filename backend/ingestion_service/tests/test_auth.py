@@ -88,6 +88,9 @@ class FakeEngine:
     def connect(self):
         return FakeConnectContext(self.conn)
 
+    def begin(self):
+        return FakeConnectContext(self.conn)
+
 
 def otp_digest(otp):
     return hmac.new(auth.AUTH_SECRET.encode(), otp.encode(), hashlib.sha256).hexdigest()
