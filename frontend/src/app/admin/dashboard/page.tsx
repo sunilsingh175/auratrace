@@ -47,7 +47,8 @@ export default function AdminDashboardPage() {
     loadData();
   }, []);
 
-  return <ProtectedRoute>(
+  return (
+    <ProtectedRoute role="Admin">
     <AppShell
       title="Admin Executive Command Center"
       subtitle="Cluster infrastructure health matrix, anomaly heatmaps and operational oversight"
@@ -255,6 +256,6 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     </AppShell>
+    </ProtectedRoute>
   );
-  </ProtectedRoute>
 }
