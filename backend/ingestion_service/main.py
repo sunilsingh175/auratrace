@@ -30,6 +30,10 @@ from pydantic import BaseModel, Field
 import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+try:
+    from .auth import router as auth_router, init_auth_table, require_admin, get_current_user
+except ImportError:
+    from auth import router as auth_router, init_auth_table, require_admin, get_current_user
 
 # ============================================================
 # Logging Setup
@@ -710,6 +714,64 @@ async def scalar_docs():
     """)
 
 
+REDIS_ANOMALY_CHANNEL = os.getenv("REDIS_ANOMALY_CHANNEL", "anomaly_events")
+
+
+# ============================================================
+# Redis Pub/Sub -> WebSocket Bridge
+# ============================================================
+
+async def redis_pubsub_bridge():
+    """
+    Subscribes to Redis anomaly_events channel and forwards incoming
+    ML anomalies and RAG AI diagnoses live to all connected WebSocket clients.
+    """
+    while True:
+        try:
+            pubsub_client = aioredis.Redis(
+                host=REDIS_HOST,
+                port=REDIS_PORT,
+                decode_responses=True,
+            )
+            pubsub = pubsub_client.pubsub()
+            await pubsub.subscribe(REDIS_ANOMALY_CHANNEL)
+            logger.info(f"FastAPI Redis Pub/Sub Bridge subscribed to channel '{REDIS_ANOMALY_CHANNEL}'")
+
+            async for message in pubsub.listen():
+                if not message or message.get("type") != "message":
+                    continue
+                raw_data = message.get("data")
+                if not raw_data:
+                    continue
+                try:
+                    event_data = json.loads(raw_data)
+                    logger.info(
+                        f"Bridge broadcasting PubSub event: {event_data.get('type')} | "
+                        f"service={event_data.get('service_id')} | incident={event_data.get('incident_id')}"
+                    )
+                    await manager.broadcast({
+                        "type": "ANOMALY_ALERT",
+                        "data": event_data,
+                    })
+                except Exception as e:
+                    logger.warning(f"Error parsing/broadcasting PubSub event: {e}")
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.warning(f"Redis Pub/Sub bridge connection dropped ({exc}), reconnecting in 2s...")
+            await asyncio.sleep(2)
+
+
+@app.on_event("startup")
+async def startup_event():
+    try:
+        await init_auth_table()
+    except Exception as exc:
+        logger.warning(f"Auth table initialization skipped: {exc}")
+    asyncio.create_task(redis_pubsub_bridge())
+
+
+app.include_router(auth_router, prefix="/api/v1")
 # ============================================================
 # API Endpoints
 # ============================================================

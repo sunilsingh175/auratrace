@@ -5,8 +5,7 @@ const API_URL =
   process.env.AURA_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:8000";
-const MASTER_KEY =
-  process.env.AURA_MASTER_API_KEY || "aura_secret_key_123";
+const MASTER_KEY = process.env.AURA_MASTER_API_KEY || "";
 
 async function proxy(request: NextRequest) {
   if (!MASTER_KEY) {
@@ -29,7 +28,9 @@ async function proxy(request: NextRequest) {
   const suffix = query.toString() ? `?${query.toString()}` : "";
   const url = `${API_URL}/api/v1/${targetPath}${suffix}`;
 
-  const headers = new Headers(request.headers);
+  const headers = new Headers();
+  const authorization = request.headers.get("authorization");
+  if (authorization) headers.set("Authorization", authorization);
   headers.set("X-API-Key", MASTER_KEY);
   headers.delete("host");
   headers.delete("content-length");

@@ -5,10 +5,6 @@ import {
   InfrastructureStatus,
   UserAccount,
 } from "@/types";
-import {
-  MOCK_INFRASTRUCTURE_STATUS,
-  MOCK_USERS,
-} from "./mockData";
 
 export * from "@/types";
 export type ServiceItem = Service;
@@ -18,14 +14,17 @@ const API_BASE_URL = "/api/aura";
 async function request(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
+
+  if (typeof window !== "undefined") {
+    const token = sessionStorage.getItem("auratrace_access_token_v1");
+    if (token) headers.set("Authorization", "Bearer " + token);
+  }
   return fetch(`${API_BASE_URL}?path=${encodeURIComponent(path.replace(/^\//, ""))}`, {
     ...options,
     headers,
     cache: "no-store",
   });
 }
-
-let localUsers: UserAccount[] = [...MOCK_USERS];
 
 function ensureOk(response: Response, path: string) {
   if (!response.ok) throw new Error(`AuraTrace API ${response.status} for ${path}`);
@@ -65,29 +64,34 @@ export async function fetchIncidents(params?: {
 }
 
 export async function fetchIncidentById(id: string): Promise<Incident | null> {
-  const path = `incidents/${encodeURIComponent(id)}`;
-  const res = await request(path);
-  if (res.status === 404) return null;
-  ensureOk(res, path);
-  const item = await res.json();
-  if (!item?.id) return null;
-  return {
-    id: item.id,
-    service_id: item.service_id || "unknown",
-    title: item.title || item.error_type || "Anomaly Detected",
-    error_type: item.error_type || "System Anomaly",
-    severity: item.severity || (item.anomaly_score > 0.85 ? "critical" : "high"),
-    status: item.status || "OPEN",
-    anomaly_score: typeof item.anomaly_score === "number" ? item.anomaly_score : 0,
-    created_at: item.created_at || new Date().toISOString(),
-    resolved_at: item.resolved_at,
-    stack_trace: item.stack_trace || item.raw_stack_trace,
-    ai_root_cause: item.ai_root_cause,
-    ai_recommended_fix: item.ai_suggested_patch || item.ai_recommended_fix,
-    code_diff: item.code_diff || item.ai_suggested_patch,
-    system_metrics: item.system_metrics,
-    similar_incidents: item.similar_incidents,
-  };
+  try {
+    const path = `incidents/${encodeURIComponent(id)}`;
+    const res = await request(path);
+    if (res.status === 404) return null;
+    ensureOk(res, path);
+    const item = await res.json();
+    if (!item?.id) return null;
+    return {
+      id: item.id,
+      service_id: item.service_id || "unknown",
+      title: item.title || item.error_type || "Anomaly Detected",
+      error_type: item.error_type || "System Anomaly",
+      severity: item.severity || (item.anomaly_score > 0.85 ? "critical" : "high"),
+      status: item.status || "OPEN",
+      anomaly_score: typeof item.anomaly_score === "number" ? item.anomaly_score : 0,
+      created_at: item.created_at || new Date().toISOString(),
+      resolved_at: item.resolved_at,
+      stack_trace: item.stack_trace || item.raw_stack_trace,
+      ai_root_cause: item.ai_root_cause,
+      ai_recommended_fix: item.ai_suggested_patch || item.ai_recommended_fix,
+      code_diff: item.code_diff || item.ai_suggested_patch,
+      system_metrics: item.system_metrics,
+      similar_incidents: item.similar_incidents,
+    };
+  } catch (err) {
+    console.warn("Failed to fetch incident by id:", err);
+    return null;
+  }
 }
 
 export async function updateIncidentStatus(id: string, status: "OPEN" | "INVESTIGATING" | "RESOLVED"): Promise<Incident | null> {
@@ -203,20 +207,28 @@ export async function fetchPerformanceTimeseries(
 }
 
 export async function fetchAdminInfrastructure(): Promise<InfrastructureStatus> {
-  return { ...MOCK_INFRASTRUCTURE_STATUS };
+  const path = "health";
+  const res = await request(path);
+  ensureOk(res, path);
+  const data = await res.json();
+  return {
+    database: data.database || "unknown",
+    redis: data.redis || "unknown",
+    ml_engine: data.ml_engine || "unknown",
+    rag_engine: data.rag_engine || "unknown",
+  } as InfrastructureStatus;
 }
 
 export async function fetchAdminUsers(): Promise<UserAccount[]> {
-  return [...localUsers];
+  const path = "auth/users";
+  const res = await request(path);
+  ensureOk(res, path);
+  return await res.json();
 }
 
-export async function createUser(user: Omit<UserAccount, "id" | "created_at">): Promise<UserAccount> {
-  const created = { id: `usr-${Math.random().toString(36).substring(2, 7)}`, ...user, created_at: new Date().toISOString().split("T")[0] };
-  localUsers = [created, ...localUsers];
-  return created;
-}
-
-export async function deleteUser(id: string): Promise<boolean> {
-  localUsers = localUsers.filter((u) => u.id !== id);
-  return true;
+export async function updateUserStatus(id: string, status: "Active" | "Suspended"): Promise<UserAccount> {
+  const path = `auth/users/${encodeURIComponent(id)}/status`;
+  const res = await request(path, { method: "PATCH", body: JSON.stringify({ status }) });
+  ensureOk(res, path);
+  return await res.json();
 }

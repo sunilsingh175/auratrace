@@ -17,13 +17,8 @@ try:
 except ImportError:
     genai = None
 
-GEMINI_API_KEY = os.getenv(
-    "GEMINI_API_KEY",
-    ""
-).strip()
-
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 _raw_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
-# Normalize valid Gemini models
 if "3.8" in _raw_model or "3.5" in _raw_model or not _raw_model:
     GEMINI_MODEL = "gemini-3.6-flash"
 else:
@@ -33,34 +28,21 @@ else:
 class LLMDoctor:
 
     def __init__(self):
-
         self.client = None
 
         if GEMINI_API_KEY and genai:
             try:
-                self.client = genai.Client(
-                    api_key=GEMINI_API_KEY
-                )
-
-                logger.info(
-                    "Gemini client initialized with model %s",
-                    GEMINI_MODEL
-                )
+                self.client = genai.Client(api_key=GEMINI_API_KEY)
+                logger.info("Gemini client initialized with model %s", GEMINI_MODEL)
             except Exception as e:
-                logger.warning(f"Failed to initialize Gemini client: {e}")
+                logger.warning("Failed to initialize Gemini client: %s", e)
         else:
-
             logger.warning(
                 "GEMINI_API_KEY is not configured or google-genai not installed."
             )
 
-    async def generate_diagnosis(
-        self,
-        prompt: str
-    ) -> str:
-
+    async def generate_diagnosis(self, prompt: str) -> str:
         if not self.client:
-
             return ""
 
         model_candidates = [
@@ -70,7 +52,6 @@ class LLMDoctor:
             "gemini-1.5-flash",
             "gemini-2.0-flash",
         ]
-        # remove duplicates preserving order
         unique_models = list(dict.fromkeys(model_candidates))
 
         for model_name in unique_models:
@@ -79,10 +60,9 @@ class LLMDoctor:
                     logger.info(
                         "Generating diagnosis via Gemini %s (attempt %s/2)...",
                         model_name,
-                        attempt
+                        attempt,
                     )
 
-                    # Standard google-genai generate_content API
                     response = await asyncio.to_thread(
                         self.client.models.generate_content,
                         model=model_name,
@@ -90,7 +70,6 @@ class LLMDoctor:
                     )
 
                     text = (getattr(response, "text", "") or "").strip()
-
                     if text:
                         return text
 
@@ -100,7 +79,7 @@ class LLMDoctor:
                         "Gemini %s attempt %s failed: %s",
                         model_name,
                         attempt,
-                        error_text
+                        error_text,
                     )
 
                     if (
@@ -159,9 +138,7 @@ RECOVERY PATCH:
 <numbered, safe and actionable recovery steps>
 """
 
-        raw_response = await self.generate_diagnosis(
-            prompt
-        )
+        raw_response = await self.generate_diagnosis(prompt)
 
         if not raw_response:
             # High quality fallback grounded in the RAG similar records
@@ -171,12 +148,12 @@ RECOVERY PATCH:
                 code_patch = top_match.get("code_patch") or top_match.get("fix_description") or "Apply verified context management and connection recovery patch."
                 return (
                     f"Synthesized RAG Analysis: {root_cause}",
-                    f"Recommended Remediation Patch:\n{code_patch}"
+                    f"Recommended Remediation Patch:\n{code_patch}",
                 )
 
             return (
                 f"Automated Anomaly Analysis: Detected anomalous performance spike or exception in {service_id} ({error_type}).",
-                "Review recent deployments, check service database/network connections, and inspect service logs."
+                "Review recent deployments, check service database/network connections, and inspect service logs.",
             )
 
         lower = raw_response.lower()
@@ -190,16 +167,13 @@ RECOVERY PATCH:
                 .replace("Root Cause:", "")
                 .strip()
             )
-            patch = (
-                raw_response[index + len(marker):]
-                .strip()
-            )
+            patch = raw_response[index + len(marker):].strip()
             return (root_cause, patch)
 
         return (
             raw_response.strip(),
-            "Review the incident manually and verify the affected service."
+            "Review the incident manually and verify the affected service.",
         )
 
 
-llm_doctor = LLMDoctor()
+llm_doctor = LLMDoctor()
