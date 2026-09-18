@@ -256,6 +256,40 @@ async def verify_otp(payload: VerifyOtpPayload):
                      "role": user["role"], "status": user["status"], "created_at": created_date}}
 
 
+@router.get("/users")
+async def list_users(_: dict = Depends(require_admin)):
+    _require_config()
+    async with _engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT id, name, email, role, status, created_at
+            FROM users ORDER BY created_at DESC
+        """))
+        rows = result.mappings().all()
+    return [{"id": str(row["id"]), "name": row["name"], "email": row["email"],
+             "role": row["role"], "status": row["status"],
+             "created_at": row["created_at"].date().isoformat() if isinstance(row["created_at"], datetime) else str(row["created_at"])[:10]}
+            for row in rows]
+
+@router.patch("/users/{user_id}/status")
+async def update_user_status(user_id: str, payload: dict, admin: dict = Depends(require_admin)):
+    _require_config()
+    new_status = payload.get("status")
+    if new_status not in {"Active", "Suspended"}:
+        raise HTTPException(status_code=400, detail="Status must be Active or Suspended.")
+    if user_id == str(admin["id"]) and new_status == "Suspended":
+        raise HTTPException(status_code=400, detail="An administrator cannot suspend their own account.")
+    async with _engine.begin() as conn:
+        result = await conn.execute(text("""
+            UPDATE users SET status = :status WHERE id = :id
+            RETURNING id, name, email, role, status, created_at
+        """), {"status": new_status, "id": user_id})
+        row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return {"id": str(row["id"]), "name": row["name"], "email": row["email"],
+            "role": row["role"], "status": row["status"],
+            "created_at": row["created_at"].date().isoformat() if isinstance(row["created_at"], datetime) else str(row["created_at"])[:10]}
+
 @router.get("/me")
 async def me(user: dict = Depends(get_current_user)):
     async with _engine.connect() as conn:
