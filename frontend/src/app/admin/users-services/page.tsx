@@ -1,16 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Users, Server, Plus, Copy, Check, Search, X } from "lucide-react";
+import { Users, Server, Plus, Copy, Check, Search, X, ShieldCheck, Ban, UserCheck } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/auth-context";
-import { fetchServices, registerService } from "@/lib/api-client";
+import { fetchServices, registerService, fetchAdminUsers, updateUserStatus } from "@/lib/api-client";
 import { Service } from "@/types";
 
 export default function AdminUsersServicesPage() {
   const [activeTab, setActiveTab] = useState<"users" | "services">("users");
   const { user: currentUser } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userError, setUserError] = useState("");
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showServiceModal, setShowServiceModal] = useState(false);
@@ -25,6 +28,25 @@ export default function AdminUsersServicesPage() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "users") return;
+    setUsersLoading(true);
+    setUserError("");
+    fetchAdminUsers()
+      .then(setUsers)
+      .catch((error) => setUserError(error instanceof Error ? error.message : "Unable to load users."))
+      .finally(() => setUsersLoading(false));
+  }, [activeTab]);
+
+  const handleUserStatus = async (id: string, status: "Active" | "Suspended") => {
+    try {
+      const updated = await updateUserStatus(id, status);
+      setUsers((prev) => prev.map((u) => u.id === updated.id ? updated : u));
+    } catch (error) {
+      setUserError(error instanceof Error ? error.message : "Unable to update user status.");
+    }
+  };
 
   const handleRegisterService = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,26 +97,43 @@ export default function AdminUsersServicesPage() {
         </div>
 
         {activeTab === "users" && (
-          <div className="panel p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
-                <Users className="h-6 w-6" />
+          <div className="panel overflow-hidden">
+            <div className="panel-header">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-indigo-400" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-white">Registered Users ({users.length})</h3>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-white">Authenticated Account</h3>
-                <p className="text-xs text-slate-500">Account identity comes from the current authentication session. Team-user CRUD is not enabled because no backend user registry exists.</p>
-              </div>
+              <span className="text-[10px] text-slate-500">PostgreSQL-backed accounts</span>
             </div>
-            {currentUser ? (
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4"><p className="label">Name</p><p className="mt-1 text-sm font-bold text-white">{currentUser.name}</p></div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4"><p className="label">Email</p><p className="mt-1 font-mono text-sm text-slate-300">{currentUser.email}</p></div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4"><p className="label">Role</p><p className="mt-1 text-sm font-bold text-indigo-400">{currentUser.role}</p></div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4"><p className="label">Session Status</p><p className="mt-1 text-sm font-bold text-emerald-400">Active</p></div>
+            {userError && <p className="mx-5 mt-4 rounded-lg border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-300">{userError}</p>}
+            {usersLoading ? (
+              <div className="p-8 text-center text-xs text-slate-500">Loading live users...</div>
+            ) : users.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-800 bg-slate-950/40 text-[10px] uppercase tracking-wider text-slate-500">
+                    <tr><th className="px-5 py-3.5">User</th><th className="px-5 py-3.5">Role</th><th className="px-5 py-3.5">Status</th><th className="px-5 py-3.5">Created</th><th className="px-5 py-3.5">Action</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {users.map((u) => (
+                      <tr key={u.id} className="transition hover:bg-slate-800/30">
+                        <td className="px-5 py-4"><p className="font-bold text-white">{u.name}</p><p className="font-mono text-[10px] text-slate-400">{u.email}</p></td>
+                        <td className="px-5 py-4"><span className="inline-flex items-center gap-1 text-indigo-300"><ShieldCheck className="h-3.5 w-3.5" />{u.role}</span></td>
+                        <td className="px-5 py-4"><span className={u.status === "Active" ? "text-emerald-400" : "text-rose-400"}>{u.status}</span></td>
+                        <td className="px-5 py-4 font-mono text-slate-400">{u.created_at}</td>
+                        <td className="px-5 py-4">
+                          {u.id === currentUser?.id ? <span className="text-slate-600">Current account</span> : u.status === "Active" ? (
+                            <button type="button" onClick={() => handleUserStatus(u.id, "Suspended")} className="inline-flex items-center gap-1 rounded-lg border border-rose-500/20 px-2.5 py-1.5 text-rose-300 hover:bg-rose-500/10"><Ban className="h-3.5 w-3.5" />Suspend</button>
+                          ) : (
+                            <button type="button" onClick={() => handleUserStatus(u.id, "Active")} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 px-2.5 py-1.5 text-emerald-300 hover:bg-emerald-500/10"><UserCheck className="h-3.5 w-3.5" />Activate</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <p className="mt-6 rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-xs text-slate-500">No authenticated account is available.</p>
-            )}
+            ) : <p className="p-8 text-center text-xs text-slate-500">No registered users found.</p>}
           </div>
         )}
 
