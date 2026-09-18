@@ -57,6 +57,11 @@ class VerifyOtpPayload(BaseModel):
     purpose: str = Field(..., pattern="^(register|login)$")
 
 
+class ResendOtpPayload(BaseModel):
+    email: str = Field(..., min_length=5, max_length=320)
+    purpose: str = Field(..., pattern="^(register|login)$")
+
+
 def _require_config() -> None:
     if not DATABASE_URL or not AUTH_SECRET:
         raise HTTPException(status_code=503, detail="Authentication service is not configured.")
@@ -302,7 +307,7 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 @router.post("/resend-otp")
-async def resend_otp(payload: VerifyOtpPayload):
+async def resend_otp(payload: ResendOtpPayload):
     _require_config()
     email = payload.email.strip().lower()
     if payload.purpose == "register":

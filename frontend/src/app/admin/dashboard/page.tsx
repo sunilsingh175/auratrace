@@ -19,6 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { SystemHealthCard } from "@/components/admin/SystemHealthCard";
 import { AnomalyHeatmap } from "@/components/admin/AnomalyHeatmap";
@@ -56,10 +57,11 @@ export default function AdminDashboardPage() {
   }, []);
 
   return (
-    <AppShell
-      title="Admin Executive Command Center"
-      subtitle="Cluster infrastructure health matrix, anomaly heatmaps and operational oversight"
-    >
+    <ProtectedRoute role="Admin">
+      <AppShell
+        title="Admin Executive Command Center"
+        subtitle="Cluster infrastructure health matrix, anomaly heatmaps and operational oversight"
+      >
       <div className="space-y-6">
         {/* Header Bar */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -263,5 +265,6 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     </AppShell>
+  </ProtectedRoute>
   );
 }

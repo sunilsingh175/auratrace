@@ -16,6 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { fetchAdminInfrastructure } from "@/lib/api-client";
 import { InfrastructureStatus } from "@/types";
 
@@ -36,222 +37,200 @@ export default function AdminMonitoringPage() {
   }, []);
 
   return (
-    <AppShell
-      title="AuraTrace Core Infrastructure Telemetry"
-      subtitle="Deep hardware & engine performance for Redis, PostgreSQL pgvector, and ML Isolation Forest"
-    >
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
-                <Cpu className="h-4 w-4" />
-              </span>
-              <span className="label">Engine Diagnostics</span>
+    <ProtectedRoute role="Admin">
+      <AppShell
+        title="AuraTrace Core Infrastructure Telemetry"
+        subtitle="Deep hardware & engine performance for Redis, PostgreSQL pgvector, and ML Isolation Forest"
+      >
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                  <Cpu className="h-4 w-4" />
+                </span>
+                <span className="label">Engine Diagnostics</span>
+              </div>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+                Cluster Infrastructure Telemetry
+              </h1>
             </div>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-              Cluster Infrastructure Telemetry
-            </h1>
+
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              className="button-secondary"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${loading ? "animate-spin text-indigo-400" : ""}`}
+              />
+              <span>Refresh Telemetry</span>
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={loading}
-            className="button-secondary"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            <span>Refresh Telemetry</span>
-          </button>
-        </div>
-
-        {/* 4 In-depth Infrastructure Cards Grid */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Card 1: Redis Stream Buffer */}
-          <div className="panel p-6">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
-                  <Radio className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-white">Redis 7.2 Telemetry Broker</h2>
-                  <p className="text-[11px] text-slate-500">Non-blocking async ingestion buffer</p>
-                </div>
+          {/* Engine Metric Cards Grid */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Redis Stream Broker */}
+            <div className="panel p-5">
+              <div className="flex items-center justify-between">
+                <span className="label">Redis Stream Engine</span>
+                <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
-              <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
-                Healthy
-              </span>
+              <div className="mt-4">
+                <span className="font-mono text-2xl font-extrabold text-white">
+                  {infra?.redis_stream_length?.toLocaleString() || "142,850"}
+                </span>
+                <span className="ml-1 text-xs text-slate-500">buffered</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] font-mono text-slate-400">
+                <span>Memory Footprint</span>
+                <span className="text-cyan-400">{infra?.redis_memory_used || "48.2 MB"}</span>
+              </div>
             </div>
 
-            <div className="mt-5 space-y-4 font-mono text-xs">
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Stream Key</span>
-                <span className="font-bold text-cyan-300">telemetry_stream</span>
+            {/* PostgreSQL + pgvector */}
+            <div className="panel p-5">
+              <div className="flex items-center justify-between">
+                <span className="label">pgvector Semantic Index</span>
+                <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Buffered Stream Length</span>
-                <span className="font-bold text-white">
-                  {(infra?.redis_stream_length || 42910).toLocaleString()} events
+              <div className="mt-4">
+                <span className="font-mono text-2xl font-extrabold text-white">
+                  {infra?.postgres_vector_indexes?.toLocaleString() || "1,536"}
                 </span>
+                <span className="ml-1 text-xs text-slate-500">dim IVFFlat</span>
               </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Memory Allocated</span>
-                <span className="font-bold text-slate-200">
-                  {infra?.redis_memory_used || "18.4 MB"}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Active WebSocket Clients</span>
-                <span className="font-bold text-emerald-400">
-                  {infra?.active_ws_clients || 8} connected
-                </span>
+              <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] font-mono text-slate-400">
+                <span>Active Connection Pool</span>
+                <span className="text-indigo-400">{infra?.postgres_connections || 12} / 50</span>
               </div>
             </div>
-          </div>
 
-          {/* Card 2: PostgreSQL 16 + pgvector */}
-          <div className="panel p-6">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
-                  <Database className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-white">PostgreSQL 16 + pgvector</h2>
-                  <p className="text-[11px] text-slate-500">Incident store & semantic vector database</p>
-                </div>
+            {/* ML Isolation Forest */}
+            <div className="panel p-5">
+              <div className="flex items-center justify-between">
+                <span className="label">ML Isolation Forest</span>
+                <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
-              <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
-                Healthy
-              </span>
+              <div className="mt-4">
+                <span className="font-mono text-2xl font-extrabold text-white">
+                  {infra?.ml_queue_rate || 240}
+                </span>
+                <span className="ml-1 text-xs text-slate-500">infer/sec</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] font-mono text-slate-400">
+                <span>Contamination Factor</span>
+                <span className="text-amber-400">{contamination}</span>
+              </div>
             </div>
 
-            <div className="mt-5 space-y-4 font-mono text-xs">
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Connection Pool (asyncpg)</span>
-                <span className="font-bold text-cyan-300">
-                  {infra?.postgres_connections || 28} / 100 active
+            {/* RAG Doctor AI Latency */}
+            <div className="panel p-5">
+              <div className="flex items-center justify-between">
+                <span className="label">Gemini RAG Doctor</span>
+                <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+              </div>
+              <div className="mt-4">
+                <span className="font-mono text-2xl font-extrabold text-white">
+                  {infra?.llm_latency_ms || 680}
                 </span>
+                <span className="ml-1 text-xs text-slate-500">ms P95</span>
               </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Vector Dimension Size</span>
-                <span className="font-bold text-white">384 dimensions (HNSW index)</span>
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Vector Knowledge Base Entries</span>
-                <span className="font-bold text-slate-200">12 historical incident embeddings</span>
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Database Read/Write SLA</span>
-                <span className="font-bold text-emerald-400">2.1ms avg response</span>
+              <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] font-mono text-slate-400">
+                <span>Embedding Model</span>
+                <span className="text-emerald-400">all-MiniLM-L6-v2</span>
               </div>
             </div>
           </div>
 
-          {/* Card 3: ML Anomaly Worker (Isolation Forest) */}
-          <div className="panel p-6">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
-                  <Zap className="h-5 w-5" />
+          {/* Detailed Engine Diagnostics Panes */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* ML Pipeline Configuration */}
+            <div className="panel p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                <div className="flex items-center gap-2">
+                  <Sliders className="h-4 w-4 text-cyan-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                    ML Anomaly Tuning & Parameters
+                  </h3>
                 </div>
+                <span className="font-mono text-[10px] text-cyan-400">Scikit-Learn IsolationForest</span>
+              </div>
+
+              <div className="space-y-4">
                 <div>
-                  <h2 className="text-sm font-bold text-white">Unsupervised ML Engine</h2>
-                  <p className="text-[11px] text-slate-500">Isolation Forest outlier detector</p>
-                </div>
-              </div>
-              <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
-                1,420 eps
-              </span>
-            </div>
-
-            <div className="mt-5 space-y-4">
-              <div>
-                <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-                  <span>Contamination Outlier Factor</span>
-                  <span className="font-bold text-amber-300">{(contamination * 100).toFixed(0)}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.01"
-                  max="0.20"
-                  step="0.01"
-                  value={contamination}
-                  onChange={(e) => setContamination(parseFloat(e.target.value))}
-                  className="mt-2 w-full accent-blue-500"
-                />
-                <p className="mt-1 text-[10px] text-slate-500">
-                  Expected anomaly threshold percentage for IsolationForest classifier.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-2 font-mono text-xs">
-                <div className="rounded-xl bg-slate-950/60 p-3">
-                  <span className="text-[10px] text-slate-500 uppercase">Rolling Feature Window</span>
-                  <p className="mt-1 font-bold text-slate-200">300s (5m)</p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-300">Contamination Threshold</span>
+                    <span className="font-mono text-cyan-400 font-bold">{contamination}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.01"
+                    max="0.20"
+                    step="0.01"
+                    value={contamination}
+                    onChange={(e) => setContamination(parseFloat(e.target.value))}
+                    className="mt-2 w-full accent-cyan-400"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Controls the expected proportion of outliers in the telemetry dataset. Higher values increase sensitivity.
+                  </p>
                 </div>
 
-                <div className="rounded-xl bg-slate-950/60 p-3">
-                  <span className="text-[10px] text-slate-500 uppercase">Feature Vector Size</span>
-                  <p className="mt-1 font-bold text-slate-200">8 dimensions</p>
+                <div className="grid grid-cols-2 gap-3 pt-2 font-mono text-xs">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                    <span className="text-[10px] uppercase text-slate-500 block">n_estimators</span>
+                    <span className="text-white font-bold text-sm">100 Trees</span>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                    <span className="text-[10px] uppercase text-slate-500 block">max_samples</span>
+                    <span className="text-white font-bold text-sm">auto (256)</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Card 4: RAG & Gemini AI Doctor */}
-          <div className="panel p-6">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400">
-                  <Sparkles className="h-5 w-5" />
+            {/* RAG Knowledge Base Stats */}
+            <div className="panel p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-indigo-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                    RAG Knowledge Base & pgvector Index
+                  </h3>
                 </div>
-                <div>
-                  <h2 className="text-sm font-bold text-white">RAG AI Doctor Engine</h2>
-                  <p className="text-[11px] text-slate-500">Google Gemini LLM & sentence transformers</p>
+                <span className="font-mono text-[10px] text-indigo-400">HNSW / Cosine</span>
+              </div>
+
+              <div className="space-y-3 font-mono text-xs">
+                <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
+                  <span className="text-slate-400">Indexed Incident Embeddings</span>
+                  <span className="font-bold text-white">2,840 vectors</span>
                 </div>
-              </div>
-              <span className="rounded-full bg-purple-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-purple-300">
-                Gemini 2.5 Flash
-              </span>
-            </div>
 
-            <div className="mt-5 space-y-4 font-mono text-xs">
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Embedding Model</span>
-                <span className="font-bold text-cyan-300">all-MiniLM-L6-v2</span>
-              </div>
+                <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
+                  <span className="text-slate-400">Embedding Computation</span>
+                  <span className="font-bold text-cyan-400">{infra?.embedding_latency_ms || 42}ms</span>
+                </div>
 
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">Embedding Latency</span>
-                <span className="font-bold text-white">
-                  {infra?.embedding_latency_ms || 42}ms per vector
-                </span>
-              </div>
+                <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
+                  <span className="text-slate-400">LLM Generation Latency</span>
+                  <span className="font-bold text-slate-200">
+                    {infra?.llm_latency_ms || 680}ms per diagnosis
+                  </span>
+                </div>
 
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">LLM Generation Latency</span>
-                <span className="font-bold text-slate-200">
-                  {infra?.llm_latency_ms || 680}ms per diagnosis
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
-                <span className="text-slate-400">RAG Context Injection</span>
-                <span className="font-bold text-emerald-400">Top-3 Cosine Candidates</span>
+                <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
+                  <span className="text-slate-400">RAG Context Injection</span>
+                  <span className="font-bold text-emerald-400">Top-3 Cosine Candidates</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </AppShell>
+      </AppShell>
+    </ProtectedRoute>
   );
 }

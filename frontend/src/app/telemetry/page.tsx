@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import { Radio, RefreshCw } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { LogConsole } from "@/components/telemetry/LogConsole";
 import { TelemetryChart } from "@/components/telemetry/TelemetryChart";
 import { AnomalyAlertBanner } from "@/components/anomaly-alert-banner";
@@ -97,62 +98,64 @@ function TelemetryContent() {
   }, [alertLog, logs, requestedService]);
 
   return (
-    <AppShell
-      title="Live Telemetry Inspector"
-      subtitle={requestedService ? `Real-time telemetry stream for ${requestedService}` : "Real-time distributed telemetry and anomaly stream"}
-    >
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400">
-                <Radio className="h-4 w-4 animate-pulse" />
-              </span>
-              <span className="label">Live Ingestion Pipeline</span>
+    <ProtectedRoute>
+      <AppShell
+        title="Live Telemetry Inspector"
+        subtitle={requestedService ? `Real-time telemetry stream for ${requestedService}` : "Real-time distributed telemetry and anomaly stream"}
+      >
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400">
+                  <Radio className="h-4 w-4 animate-pulse" />
+                </span>
+                <span className="label">Live Ingestion Pipeline</span>
+              </div>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+                Live Telemetry & Event Inspector
+              </h1>
+              {requestedService && (
+                <p className="mt-1 font-mono text-xs text-cyan-400">Service: {requestedService}</p>
+              )}
             </div>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-              Live Telemetry & Event Inspector
-            </h1>
-            {requestedService && (
-              <p className="mt-1 font-mono text-xs text-cyan-400">Service: {requestedService}</p>
-            )}
+
+            <div className="flex items-center gap-2">
+              <span className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold ${isConnected ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}`}>
+                <span className={`h-2 w-2 rounded-full ${isConnected ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
+                {isConnected ? "WebSocket Connected" : "WebSocket Offline"}
+              </span>
+              <button type="button" onClick={() => void loadTimeseries()} disabled={chartLoading} className="button-secondary">
+                <RefreshCw className={`h-3.5 w-3.5 ${chartLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold ${isConnected ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}`}>
-              <span className={`h-2 w-2 rounded-full ${isConnected ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
-              {isConnected ? "WebSocket Connected" : "WebSocket Offline"}
-            </span>
-            <button type="button" onClick={() => void loadTimeseries()} disabled={chartLoading} className="button-secondary">
-              <RefreshCw className={`h-3.5 w-3.5 ${chartLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </button>
-          </div>
+          <AnomalyAlertBanner alert={currentAlert} onDismiss={() => setCurrentAlert(null)} />
+
+          {chartError && (
+            <div className="panel border-amber-500/20 bg-amber-500/5 px-5 py-3 text-xs text-amber-300">
+              Live telemetry metrics are unavailable: {chartError}
+            </div>
+          )}
+
+          {!chartLoading && !chartError && chartData.length === 0 && (
+            <div className="panel px-5 py-3 text-xs text-slate-400">
+              No telemetry points were recorded in the current 5-minute window{requestedService ? ` for ${requestedService}` : ""}.
+            </div>
+          )}
+
+          <TelemetryChart data={chartData} />
+
+          <LogConsole
+            logs={visibleLogs}
+            onClear={clearLogs}
+            isConnected={isConnected}
+          />
         </div>
-
-        <AnomalyAlertBanner alert={currentAlert} onDismiss={() => setCurrentAlert(null)} />
-
-        {chartError && (
-          <div className="panel border-amber-500/20 bg-amber-500/5 px-5 py-3 text-xs text-amber-300">
-            Live telemetry metrics are unavailable: {chartError}
-          </div>
-        )}
-
-        {!chartLoading && !chartError && chartData.length === 0 && (
-          <div className="panel px-5 py-3 text-xs text-slate-400">
-            No telemetry points were recorded in the current 5-minute window{requestedService ? ` for ${requestedService}` : ""}.
-          </div>
-        )}
-
-        <TelemetryChart data={chartData} />
-
-        <LogConsole
-          logs={visibleLogs}
-          onClear={clearLogs}
-          isConnected={isConnected}
-        />
-      </div>
-    </AppShell>
+      </AppShell>
+    </ProtectedRoute>
   );
 }
 
