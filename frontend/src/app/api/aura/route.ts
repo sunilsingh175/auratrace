@@ -28,7 +28,9 @@ async function proxy(request: NextRequest) {
   const suffix = query.toString() ? `?${query.toString()}` : "";
   const url = `${API_URL}/api/v1/${targetPath}${suffix}`;
 
-  const headers = new Headers(request.headers);
+  const headers = new Headers();
+  const authorization = request.headers.get("authorization");
+  if (authorization) headers.set("Authorization", authorization);
   headers.set("X-API-Key", MASTER_KEY);
   headers.delete("host");
   headers.delete("content-length");
