@@ -16,6 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { fetchAdminInfrastructure } from "@/lib/api-client";
 import { InfrastructureStatus } from "@/types";
 
@@ -35,7 +36,7 @@ export default function AdminMonitoringPage() {
     loadData();
   }, []);
 
-  return (
+  return <ProtectedRoute>(
     <AppShell
       title="AuraTrace Core Infrastructure Telemetry"
       subtitle="Deep hardware & engine performance for Redis, PostgreSQL pgvector, and ML Isolation Forest"
@@ -254,4 +255,5 @@ export default function AdminMonitoringPage() {
       </div>
     </AppShell>
   );
+  </ProtectedRoute>
 }
