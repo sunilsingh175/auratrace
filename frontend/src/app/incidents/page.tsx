@@ -3,6 +3,7 @@
 import React from "react";
 import { ShieldAlert, RefreshCw, Sparkles, Filter, AlertTriangle, CheckCircle2, Clock3 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useIncidents } from "@/hooks/use-incidents";
 import { IncidentTable } from "@/components/incidents/IncidentTable";
 
@@ -13,7 +14,7 @@ export default function IncidentsPage() {
   const investigatingCount = incidents.filter((i) => i.status === "INVESTIGATING").length;
   const resolvedCount = incidents.filter((i) => i.status === "RESOLVED").length;
 
-  return (
+  return <ProtectedRoute>(
     <AppShell
       title="Incident Intelligence Hub"
       subtitle="Automated anomaly diagnostics, pgvector RAG matching and AI triage"
@@ -98,4 +99,5 @@ export default function IncidentsPage() {
       </div>
     </AppShell>
   );
+  </ProtectedRoute>
 }
