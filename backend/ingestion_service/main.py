@@ -30,7 +30,10 @@ from pydantic import BaseModel, Field
 import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-from .auth import router as auth_router, init_auth_table
+try:
+    from .auth import router as auth_router, init_auth_table
+except ImportError:
+    from auth import router as auth_router, init_auth_table
 
 # ============================================================
 # Logging Setup
