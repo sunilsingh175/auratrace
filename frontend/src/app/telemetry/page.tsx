@@ -158,7 +158,11 @@ function TelemetryContent() {
 }
 
 export default function TelemetryPage() {
-  return (\n    <ProtectedRoute role="Developer">
+  return (
+    <ProtectedRoute role="Developer">
     <React.Suspense fallback={<div className="panel p-6 text-slate-400">Loading telemetry inspector...</div>}>
       <TelemetryContent />
-    </React.Suspense>\n    </ProtectedRoute>\n  );\n}
+    </React.Suspense>
+    </ProtectedRoute>
+  );
+}
