@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useIncidents } from "@/hooks/use-incidents";
 import { useWebSocket, type AnomalyAlertEvent } from "@/hooks/use-websocket";
 import { IncidentTable } from "@/components/incidents/IncidentTable";
