@@ -96,8 +96,7 @@ export default function ServicesPage() {
     );
   });
 
-  return (
-    <AppShell
+  return (\n    <ProtectedRoute role="Developer">\n      <AppShell
       title="Service Registry & Microservices"
       subtitle="Monitored service catalog, performance SLAs, and ingestion credentials"
     >
@@ -392,6 +391,4 @@ export default function ServicesPage() {
             </div>
           )}
         </div>
-      </AppShell>
-  );
-}
+      </AppShell>\n    </ProtectedRoute>\n  );\n}
