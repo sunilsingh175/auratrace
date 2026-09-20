@@ -163,54 +163,38 @@ export default function AdminDashboardPage() {
           {/* Anomaly Heatmap */}
           <AnomalyHeatmap data={heatmapData} />
 
-          {/* System Activity Log & Audit Feed */}
+          {/* Recent live incidents */}
           <div className="panel p-5">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
               <div className="flex items-center gap-2">
                 <Activity className="h-4 w-4 text-cyan-400" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                  Recent Cluster Audit & Security Events
+                  Recent Live Incidents
                 </h3>
               </div>
-              <span className="font-mono text-[10px] text-slate-500">Live PostgreSQL Event Log</span>
+              <span className="font-mono text-[10px] text-slate-500">Live backend incident records</span>
             </div>
-
             <div className="mt-4 space-y-2.5 font-mono text-xs">
-              <div className="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-950/60 p-3">
-                <div className="flex items-center gap-3">
-                  <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-bold text-cyan-400">
-                    RAG_DOCTOR
-                  </span>
-                  <span className="text-slate-200">
-                    Automated diagnosis synthesized for incident <strong>#INC-1024</strong> (Similarity: 96%)
-                  </span>
+              {incidents.slice(0, 5).length > 0 ? incidents.slice(0, 5).map((incident) => (
+                <div key={incident.id} className="flex flex-col gap-2 rounded-lg border border-slate-800/60 bg-slate-950/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-400">
+                      {incident.severity || "ANOMALY"}
+                    </span>
+                    <span className="truncate text-slate-200">
+                      {incident.error_type || incident.title || "Anomaly"} · {incident.service_id}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 text-[10px] text-slate-500">
+                    <span>score {typeof incident.anomaly_score === "number" ? incident.anomaly_score.toFixed(2) : "—"}</span>
+                    <span>{incident.created_at ? new Date(incident.created_at).toLocaleString() : "—"}</span>
+                  </div>
                 </div>
-                <span className="text-[10px] text-slate-500">2m ago</span>
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-950/60 p-3">
-                <div className="flex items-center gap-3">
-                  <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-400">
-                    ML_ANOMALY
-                  </span>
-                  <span className="text-slate-200">
-                    Isolation Forest outlier triggered for service <strong>payment-api</strong> (Score: 0.94)
-                  </span>
+              )) : (
+                <div className="rounded-lg border border-slate-800/60 bg-slate-950/60 p-4 text-center text-slate-500">
+                  No incident records returned by the backend.
                 </div>
-                <span className="text-[10px] text-slate-500">6m ago</span>
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-950/60 p-3">
-                <div className="flex items-center gap-3">
-                  <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">
-                    SERVICE_REG
-                  </span>
-                  <span className="text-slate-200">
-                    Service <strong>inventory-service</strong> authenticated and generated ingestion API key
-                  </span>
-                </div>
-                <span className="text-[10px] text-slate-500">1h ago</span>
-              </div>
+              )}
             </div>
           </div>
         </div>
