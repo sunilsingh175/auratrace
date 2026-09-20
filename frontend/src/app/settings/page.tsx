@@ -19,6 +19,7 @@ import {
   Layers,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/context/auth-context";
 
 export default function ProfileSettingsPage() {
