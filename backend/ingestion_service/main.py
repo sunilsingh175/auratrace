@@ -8,6 +8,7 @@ import json
 import uuid
 import logging
 import asyncio
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -2063,11 +2064,69 @@ async def simulate_crash(
     include_in_schema=False,
 )
 async def health_check():
+    started = time.perf_counter()
+    redis_status = "healthy"
+    redis_stream_length = None
+    redis_memory_used = None
+    try:
+        redis_stream_length = await redis_client.xlen(STREAM_KEY)
+        redis_info = await redis_client.info("memory")
+        redis_memory_used = redis_info.get("used_memory_human")
+    except Exception as exc:
+        redis_status = "offline"
+        logger.warning("Health check Redis probe failed: %s", exc)
+
+    postgres_status = "unknown"
+    postgres_connections = None
+    postgres_vector_indexes = None
+    if db_engine is not None:
+        try:
+            async with db_engine.connect() as conn:
+                postgres_connections = int(
+                    (await conn.execute(
+                        text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()")
+                    )).scalar_one()
+                )
+                postgres_vector_indexes = int(
+                    (await conn.execute(
+                        text(
+                            "SELECT count(*) FROM pg_indexes "
+                            "WHERE schemaname NOT IN ('pg_catalog', 'information_schema') "
+                            "AND indexdef ILIKE '%vector%'"
+                        )
+                    )).scalar_one()
+                )
+            postgres_status = "healthy"
+        except Exception as exc:
+            postgres_status = "offline"
+            logger.warning("Health check PostgreSQL probe failed: %s", exc)
+    else:
+        postgres_status = "offline"
+
     return {
         "status": "healthy",
         "service": "auratrace-ingestion-service",
         "version": "1.2.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "api_status": "healthy",
+        "api_latency_ms": round((time.perf_counter() - started) * 1000, 2),
+        "redis_status": redis_status,
+        "redis_stream_length": redis_stream_length,
+        "redis_memory_used": redis_memory_used,
+        "postgres_status": postgres_status,
+        "postgres_connections": postgres_connections,
+        "postgres_vector_indexes": postgres_vector_indexes,
+        "ml_worker_status": "unknown",
+        "ml_queue_rate": None,
+        "ml_contamination": None,
+        "rag_doctor_status": "unknown",
+        "embedding_latency_ms": None,
+        "llm_latency_ms": None,
+        "active_ws_clients": len(manager.active_connections),
+        "anomaly_threshold": float(os.getenv("ANOMALY_THRESHOLD", "0.75")),
+        "anomaly_window_seconds": int(os.getenv("ANOMALY_WINDOW_SIZE_SECONDS", "300")),
+        "embedding_model": os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
+        "llm_model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
     }
 
 
