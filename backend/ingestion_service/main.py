@@ -1904,7 +1904,7 @@ async def list_services(api_key: str = Depends(verify_api_key)):
 )
 async def create_service(
     payload: ServiceCreatePayload,
-    api_key: str = Depends(verify_api_key),
+    current_user: dict = Depends(get_current_user),
 ):
     service_name = payload.id or payload.name
     new_key = f"at_live_{uuid.uuid4().hex[:16]}"
