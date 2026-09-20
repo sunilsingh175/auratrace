@@ -39,7 +39,7 @@ export default function AdminMonitoringPage() {
   return (
     <ProtectedRoute role="Admin">
       <AppShell
-        title="AuraTrace Core Infrastructure Telemetry"
+        title="Core Infrastructure Telemetry"
         subtitle="Deep hardware & engine performance for Redis, PostgreSQL pgvector, and ML Isolation Forest"
       >
         <div className="space-y-6">

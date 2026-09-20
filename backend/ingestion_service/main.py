@@ -148,24 +148,11 @@ async def redis_pubsub_bridge():
 # ============================================================
 
 app = FastAPI(
-    title="⚡ AuraTrace Ingestion & Telemetry API",
+    title="⚡ Automatic Backend Diagnostics Platform API",
     version="1.2.0",
     description="""
-# 🚀 AuraTrace Autonomous Observability Gateway
-
-Welcome to the **AuraTrace High-Performance Ingestion Engine**. This gateway accepts high-velocity telemetry logs from Python & Node.js SDKs, buffers them through Redis Streams, performs real-time ML anomaly detection, and stores vector embeddings in PostgreSQL pgvector.
-
----
-
-### 🔑 Authentication
-- Pass your secret key in the **`X-API-Key`** header (configured via `AURA_MASTER_API_KEY`).
-- Set `ENABLE_API_AUTH=true` in production to enforce strict validation.
-
-### 🛰️ Core Infrastructure
-- **Redis Stream**: `telemetry_stream`
-- **PostgreSQL 16**: `pgvector` HNSW vector indexes (384-d sentence transformers)
-- **ML Isolation Forest Daemon**: Contamination threshold `0.05`
-- **AI Doctor**: Automated Root-Cause Synthesis via Gemini 2.5 Flash
+# 🚀 Automatic Backend Diagnostics Platform
+Autonomous telemetry ingestion pipeline, real-time Isolation Forest anomaly detection, pgvector similarity search, and RAG crash diagnostics doctor.
     """,
     docs_url=None,  # We will serve our custom styled Swagger UI at /docs
     redoc_url=None,
@@ -612,7 +599,7 @@ window.addEventListener('DOMContentLoaded', () => {
         </svg>
       </div>
       <div>
-        <span class="auratrace-title">AuraTrace Ingestion API</span>
+        <span class="auratrace-title">Automatic Backend Diagnostics</span>
         <span class="auratrace-badge">v1.2 Live</span>
       </div>
     </a>

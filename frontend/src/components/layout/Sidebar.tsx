@@ -113,14 +113,14 @@ export function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-800/80 bg-slate-950/95 backdrop-blur-2xl">
       <div className="flex h-16 items-center gap-3 border-b border-slate-800/80 px-6">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-md shadow-blue-500/20">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-md shadow-blue-500/20 flex-shrink-0">
           <Sparkles className="h-5 w-5 text-cyan-200" />
         </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold tracking-tight text-white">AuraTrace</span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-extrabold tracking-tight text-white text-sm truncate">Backend Diagnostics</span>
             <span
-              className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider ${
+              className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider flex-shrink-0 ${
                 isAdmin
                   ? "bg-indigo-500/20 text-indigo-300"
                   : user
@@ -131,7 +131,7 @@ export function Sidebar() {
               {isAdmin ? "Admin" : user ? "Dev" : "Live"}
             </span>
           </div>
-          <p className="text-[10px] font-medium text-slate-500">Autonomous Observability</p>
+          <p className="text-[10px] font-medium text-slate-400 truncate">Automatic Platform</p>
         </div>
       </div>
 
@@ -282,7 +282,7 @@ export function Sidebar() {
         ) : (
           <div className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-3 space-y-2.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-300">AuraTrace Engine</span>
+              <span className="font-bold text-slate-300">Diagnostics Engine</span>
               <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Online

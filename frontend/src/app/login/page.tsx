@@ -108,7 +108,9 @@ export default function LoginPage() {
                 <Sparkles className="h-7 w-7 text-cyan-300" />
               </div>
             </div>
-            <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-white">AuraTrace Console</h1>
+            <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-white leading-tight">
+              Automatic Backend Diagnostics Platform
+            </h1>
             <p className="mt-1 text-xs text-slate-400">Autonomous AI Observability & Crash Diagnostics</p>
           </div>
 

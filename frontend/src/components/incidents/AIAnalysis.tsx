@@ -47,7 +47,7 @@ export function AIAnalysis({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-extrabold text-white">
-                AuraTrace RAG AI Crash Doctor
+                RAG AI Diagnostics Doctor
               </h2>
               <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[9px] font-bold text-cyan-300">
                 Gemini 2.5 Flash RAG

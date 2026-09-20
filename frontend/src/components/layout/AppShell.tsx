@@ -26,7 +26,7 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
       <div className="min-h-screen bg-[#080c14] flex items-center justify-center text-slate-400 font-mono text-xs">
         <div className="flex flex-col items-center gap-3">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-          <span>Loading AuraTrace...</span>
+          <span>Loading Diagnostics Platform...</span>
         </div>
       </div>
     );

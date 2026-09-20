@@ -3,10 +3,11 @@ import "@/app/globals.css";
 import { AuthProvider } from "@/context/auth-context";
 
 export const metadata: Metadata = {
-  title: "AuraTrace | AI Observability & Crash Diagnostics",
+  title: "Automatic Backend Diagnostics Platform | AI Observability & Crash Diagnostics",
   description:
-    "Autonomous telemetry ingestion, unsupervised Isolation Forest anomaly detection, and automated RAG self-healing root-cause diagnostics.",
+    "Automatic Backend Diagnostics Platform - Autonomous telemetry ingestion, unsupervised Isolation Forest anomaly detection, and automated RAG self-healing root-cause diagnostics.",
 };
+
 
 export default function RootLayout({
   children,

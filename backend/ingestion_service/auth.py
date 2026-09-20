@@ -146,12 +146,12 @@ def _send_otp_email(email: str, otp: str, purpose: str) -> None:
 
     msg = EmailMessage()
     subject_purpose = "Account Registration" if purpose == "register" else "Login Verification"
-    msg["Subject"] = f"AuraTrace - {subject_purpose} Code: {otp}"
-    msg["From"] = SMTP_FROM or f"AuraTrace Security <{SMTP_USER}>"
+    msg["Subject"] = f"Automatic Backend Diagnostics - {subject_purpose} Code: {otp}"
+    msg["From"] = SMTP_FROM or f"Automatic Backend Diagnostics Security <{SMTP_USER}>"
     msg["To"] = email
 
     text_content = (
-        f"Your AuraTrace verification code is {otp}.\n\n"
+        f"Your verification code is {otp}.\n\n"
         f"This code was requested for {purpose}. It will expire in 5 minutes.\n"
         f"If you did not request this code, please ignore this email."
     )
@@ -175,7 +175,7 @@ def _send_otp_email(email: str, otp: str, purpose: str) -> None:
     </head>
     <body>
       <div class="card">
-        <div class="brand">✦ AuraTrace</div>
+        <div class="brand">✦ Automatic Backend Diagnostics Platform</div>
         <div class="subtitle">Autonomous AI Observability</div>
         <div class="title">Email Verification Code</div>
         <p class="desc">Please use the 6-digit verification code below to complete your {purpose}.</p>
@@ -184,7 +184,7 @@ def _send_otp_email(email: str, otp: str, purpose: str) -> None:
         </div>
         <p class="desc" style="font-size: 12px; margin-bottom: 0;">This code is valid for <strong>5 minutes</strong>. If you did not make this request, you can safely ignore this message.</p>
         <div class="footer">
-          AuraTrace Security Notification · Do not reply to this email
+          Automatic Backend Diagnostics Platform · Security Notification
         </div>
       </div>
     </body>

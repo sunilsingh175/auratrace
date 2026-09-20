@@ -52,7 +52,7 @@ export function Topbar({ title, subtitle }: TopbarProps) {
       pageTitle = "Incident Diagnostic & AI Doctor";
       pageSub = "Root-cause analysis, RAG matching and auto-remediation";
     } else if (pathname === "/admin/dashboard") {
-      pageTitle = "AuraTrace Admin Operations";
+      pageTitle = "Backend Diagnostics Admin Operations";
       pageSub = "Infrastructure health matrix and cluster telemetry";
     } else if (pathname === "/admin/users-services") {
       pageTitle = "Team & Global Services Administration";
@@ -61,8 +61,8 @@ export function Topbar({ title, subtitle }: TopbarProps) {
       pageTitle = "Core Infrastructure Monitoring";
       pageSub = "Redis streams, PostgreSQL pgvector and ML worker telemetry";
     } else {
-      pageTitle = "AuraTrace Console";
-      pageSub = "Intelligent AI Observability Platform";
+      pageTitle = "Automatic Backend Diagnostics Platform";
+      pageSub = "Autonomous AI Observability & Crash Diagnostics";
     }
   }
 
