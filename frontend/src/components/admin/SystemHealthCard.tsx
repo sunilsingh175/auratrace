@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CheckCircle2, AlertTriangle, XCircle, LucideIcon } from "lucide-react";
+import { LucideIcon } from "lucide-react";
 
 interface SystemHealthCardProps {
   name: string;
