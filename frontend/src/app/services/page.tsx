@@ -14,7 +14,6 @@ import {
   Activity,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { fetchServices, registerService } from "@/lib/api-client";
 import { Service } from "@/types";
 
@@ -97,11 +96,10 @@ export default function ServicesPage() {
   });
 
   return (
-    <ProtectedRoute>
-      <AppShell
-        title="Service Registry & Microservices"
-        subtitle="Monitored service catalog, performance SLAs, and ingestion credentials"
-      >
+    <AppShell
+      title="Service Registry & Microservices"
+      subtitle="Monitored service catalog, performance SLAs, and ingestion credentials"
+    >
         <div className="space-y-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -394,6 +392,5 @@ export default function ServicesPage() {
           )}
         </div>
       </AppShell>
-    </ProtectedRoute>
   );
 }

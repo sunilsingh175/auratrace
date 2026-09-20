@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Sparkles, Lock, ArrowRight, User, Shield, UserPlus, LogIn, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Lock, ArrowRight, ArrowLeft, User, Shield, UserPlus, LogIn, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 
 export default function LoginPage() {
@@ -190,8 +191,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 border-t border-slate-800/80 pt-4 text-center text-[10px] text-slate-500">
-            Authentication is required. Admin registration additionally requires the configured server-side registration key.
+          <div className="mt-6 flex flex-col items-center gap-3 border-t border-slate-800/80 pt-4 text-center">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-1.5 text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Return to Live Dashboard</span>
+            </Link>
+            <p className="text-[10px] text-slate-500">
+              Admin registration additionally requires the configured server-side registration key.
+            </p>
           </div>
         </div>
       </div>

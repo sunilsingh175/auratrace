@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useIncidents } from "@/hooks/use-incidents";
 import { useWebSocket, type AnomalyAlertEvent } from "@/hooks/use-websocket";
 import { IncidentTable } from "@/components/incidents/IncidentTable";
@@ -40,11 +39,10 @@ export default function IncidentsPage() {
   ).length;
 
   return (
-    <ProtectedRoute>
-      <AppShell
-        title="Incident Intelligence Hub"
-        subtitle="Automated anomaly diagnostics, pgvector RAG matching and AI triage"
-      >
+    <AppShell
+      title="Incident Intelligence Hub"
+      subtitle="Automated anomaly diagnostics, pgvector RAG matching and AI triage"
+    >
         <div className="space-y-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -147,6 +145,5 @@ export default function IncidentsPage() {
           />
         </div>
       </AppShell>
-    </ProtectedRoute>
   );
 }

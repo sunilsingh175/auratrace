@@ -69,7 +69,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.removeItem(STORAGE_KEY_ACCESS_TOKEN);
         if (!cancelled) {
           setUser(null);
-          router.replace("/login");
         }
       } finally {
         if (!cancelled) setIsLoading(false);
