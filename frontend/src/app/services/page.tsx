@@ -14,6 +14,7 @@ import {
   Activity,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { fetchServices, registerService } from "@/lib/api-client";
 import { Service } from "@/types";
 
