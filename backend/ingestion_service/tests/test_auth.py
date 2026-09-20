@@ -291,3 +291,63 @@ def test_resend_payload_does_not_require_otp():
     )
     assert payload.email == "dev@example.com"
     assert payload.purpose == "login"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_persists_name(monkeypatch):
+    user_id = uuid.uuid4()
+    created_at = None
+    row = {
+        "id": user_id,
+        "name": "Updated Developer",
+        "email": "dev@example.com",
+        "role": "Developer",
+        "status": "Active",
+        "created_at": created_at,
+    }
+
+    class ProfileConn:
+        async def execute(self, statement, params=None):
+            sql = str(statement)
+            assert "UPDATE users SET name" in sql
+            assert params["name"] == "Updated Developer"
+            assert params["id"] == user_id
+            return FakeResult(row)
+
+    monkeypatch.setattr(auth, "_engine", FakeEngine(ProfileConn()))
+    monkeypatch.setattr(auth, "DATABASE_URL", "postgresql+asyncpg://test")
+
+    result = await auth.update_profile(
+        auth.UpdateProfilePayload(name=" Updated Developer "),
+        {"id": user_id},
+    )
+
+    assert result["user"]["name"] == "Updated Developer"
+    assert result["message"]
+
+
+@pytest.mark.asyncio
+async def test_change_password_rejects_wrong_current_password(monkeypatch):
+    password_hash, password_salt = auth._hash_password("correct-password")
+    user_id = uuid.uuid4()
+
+    class PasswordConn:
+        async def execute(self, statement, params=None):
+            return FakeResult({
+                "password_hash": password_hash,
+                "password_salt": password_salt,
+            })
+
+    monkeypatch.setattr(auth, "_engine", FakeEngine(PasswordConn()))
+
+    with pytest.raises(HTTPException) as exc:
+        await auth.change_password(
+            auth.ChangePasswordPayload(
+                current_password="wrong-password",
+                new_password="new-password-123",
+            ),
+            {"id": user_id},
+        )
+
+    assert exc.value.status_code == 400
+    assert "current password" in exc.value.detail.lower()
