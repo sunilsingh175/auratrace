@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowRight, Cpu, Layers, Radio, RefreshCw, Server, Sparkles, Zap } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { PerformanceChart } from "@/components/dashboard/PerformanceChart";
 import { IncidentOverview } from "@/components/dashboard/IncidentOverview";
@@ -78,7 +79,8 @@ export default function DeveloperDashboardPage() {
     : [];
 
   return (
-    <AppShell
+    <ProtectedRoute role="Developer">
+      <AppShell
       title="Developer Observability Hub"
       subtitle="Real-time telemetry streams, ML anomaly detection, and automated AI diagnosis."
     >
@@ -287,6 +289,7 @@ export default function DeveloperDashboardPage() {
           </div>
         </div>
       </div>
-    </AppShell>
+      </AppShell>
+    </ProtectedRoute>
   );
 }
