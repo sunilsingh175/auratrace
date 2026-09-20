@@ -23,6 +23,14 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/context/auth-context";
 
 export default function ProfileSettingsPage() {
+  return (
+    <ProtectedRoute>
+      <ProfileSettingsContent />
+    </ProtectedRoute>
+  );
+}
+
+function ProfileSettingsContent() {
   const { user, updateProfile, changePassword } = useAuth();
 
   // Profile Edit State

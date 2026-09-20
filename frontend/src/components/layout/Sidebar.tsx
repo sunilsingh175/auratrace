@@ -99,12 +99,16 @@ export function Sidebar() {
       badge: openIncidentCount === null ? "—" : `${openIncidentCount} Open`,
       badgeTone: "rose",
     },
-    {
-      name: "Settings & Profile",
-      href: "/settings",
-      icon: Settings,
-      badge: null,
-    },
+    ...(user
+      ? [
+          {
+            name: "Settings & Profile",
+            href: "/settings",
+            icon: Settings,
+            badge: null,
+          },
+        ]
+      : []),
   ];
 
 
