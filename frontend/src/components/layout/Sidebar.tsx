@@ -18,6 +18,7 @@ import {
   Sparkles,
   User,
   Users,
+  Settings,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { fetchSystemStats } from "@/lib/api-client";
@@ -98,7 +99,14 @@ export function Sidebar() {
       badge: openIncidentCount === null ? "—" : `${openIncidentCount} Open`,
       badgeTone: "rose",
     },
+    {
+      name: "Settings & Profile",
+      href: "/settings",
+      icon: Settings,
+      badge: null,
+    },
   ];
+
 
   const isAdmin = user?.role === "Admin";
   const userInitials = user?.name

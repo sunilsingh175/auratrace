@@ -62,6 +62,16 @@ class ResendOtpPayload(BaseModel):
     purpose: str = Field(..., pattern="^(register|login)$")
 
 
+class UpdateProfilePayload(BaseModel):
+    name: str = Field(..., min_length=2, max_length=120)
+
+
+class ChangePasswordPayload(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+
 def _require_config() -> None:
     if not DATABASE_URL or not AUTH_SECRET:
         raise HTTPException(status_code=503, detail="Authentication service is not configured.")
@@ -380,6 +390,88 @@ async def update_user_status(user_id: str, payload: dict, admin: dict = Depends(
             "role": row["role"], "status": row["status"],
             "created_at": row["created_at"].date().isoformat() if isinstance(row["created_at"], datetime) else str(row["created_at"])[:10]}
 
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
+    _require_config()
+    if user_id == str(admin["id"]):
+        raise HTTPException(status_code=400, detail="An administrator cannot delete their own account.")
+    async with _engine.begin() as conn:
+        result = await conn.execute(text("DELETE FROM users WHERE id = :id RETURNING id, name, email"), {"id": user_id})
+        deleted = result.mappings().first()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return {
+        "success": True,
+        "message": f"User {deleted['name']} ({deleted['email']}) has been permanently deleted.",
+        "id": str(deleted["id"])
+    }
+
+
+@router.get("/users/{user_id}")
+async def get_user_detail(user_id: str, _: dict = Depends(require_admin)):
+    _require_config()
+    async with _engine.connect() as conn:
+        result = await conn.execute(text("""
+            SELECT id, name, email, role, status, created_at
+            FROM users WHERE id = :id
+        """), {"id": user_id})
+        row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found.")
+    created_at = row["created_at"]
+    return {
+        "id": str(row["id"]),
+        "name": row["name"],
+        "email": row["email"],
+        "role": row["role"],
+        "status": row["status"],
+        "created_at": created_at.date().isoformat() if isinstance(created_at, datetime) else str(created_at)[:10]
+    }
+
+
+@router.patch("/profile")
+async def update_profile(payload: UpdateProfilePayload, user: dict = Depends(get_current_user)):
+    _require_config()
+    clean_name = payload.name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Name cannot be empty.")
+    async with _engine.begin() as conn:
+        result = await conn.execute(text("""
+            UPDATE users SET name = :name WHERE id = :id
+            RETURNING id, name, email, role, status, created_at
+        """), {"name": clean_name, "id": user["id"]})
+        row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found.")
+    created_at = row["created_at"]
+    return {
+        "user": {
+            "id": str(row["id"]),
+            "name": row["name"],
+            "email": row["email"],
+            "role": row["role"],
+            "status": row["status"],
+            "created_at": created_at.date().isoformat() if isinstance(created_at, datetime) else str(created_at)[:10]
+        },
+        "message": "Profile details updated successfully."
+    }
+
+
+@router.post("/change-password")
+async def change_password(payload: ChangePasswordPayload, user: dict = Depends(get_current_user)):
+    _require_config()
+    async with _engine.begin() as conn:
+        result = await conn.execute(text("SELECT password_hash, password_salt FROM users WHERE id = :id"), {"id": user["id"]})
+        db_user = result.mappings().first()
+        if not db_user or not _verify_password(payload.current_password, db_user["password_salt"], db_user["password_hash"]):
+            raise HTTPException(status_code=400, detail="Current password does not match.")
+        new_hash, new_salt = _hash_password(payload.new_password)
+        await conn.execute(text("""
+            UPDATE users SET password_hash = :hash, password_salt = :salt WHERE id = :id
+        """), {"hash": new_hash, "salt": new_salt, "id": user["id"]})
+    return {"success": True, "message": "Password changed successfully."}
+
+
 @router.get("/me")
 async def me(user: dict = Depends(get_current_user)):
     async with _engine.connect() as conn:
@@ -388,7 +480,16 @@ async def me(user: dict = Depends(get_current_user)):
     if not row or row["status"] != "Active":
         raise HTTPException(status_code=401, detail="Account is unavailable.")
     created_at = row["created_at"]
-    return {"user": {"id": str(row["id"]), "name": row["name"], "email": row["email"], "role": row["role"], "status": row["status"], "created_at": created_at.date().isoformat() if isinstance(created_at, datetime) else str(created_at)[:10]}}
+    return {
+        "user": {
+            "id": str(row["id"]),
+            "name": row["name"],
+            "email": row["email"],
+            "role": row["role"],
+            "status": row["status"],
+            "created_at": created_at.date().isoformat() if isinstance(created_at, datetime) else str(created_at)[:10]
+        }
+    }
 
 
 @router.post("/resend-otp")
@@ -418,4 +519,6 @@ async def resend_otp(payload: ResendOtpPayload):
         "email": email,
         "purpose": payload.purpose
     }
+
+
 

@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Sparkles,
   User,
+  Settings,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 
@@ -241,6 +242,16 @@ export function Topbar({ title, subtitle }: TopbarProps) {
                       <span>My Services</span>
                     </Link>
                   )}
+
+                  <Link
+                    href="/settings"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <Settings className="h-3.5 w-3.5 text-purple-400" />
+                    <span>Profile & Security</span>
+                  </Link>
+
 
                   <button
                     type="button"

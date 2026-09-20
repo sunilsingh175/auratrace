@@ -253,3 +253,40 @@ export async function updateUserStatus(id: string, status: "Active" | "Suspended
   ensureOk(res, path);
   return await res.json();
 }
+
+export async function deleteAdminUser(id: string): Promise<{ success: boolean; message: string; id: string }> {
+  const path = `auth/users/${encodeURIComponent(id)}`;
+  const res = await request(path, { method: "DELETE" });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to delete user (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchUserDetails(id: string): Promise<UserAccount> {
+  const path = `auth/users/${encodeURIComponent(id)}`;
+  const res = await request(path);
+  ensureOk(res, path);
+  return await res.json();
+}
+
+export async function updateUserProfile(data: { name: string }): Promise<{ user: UserAccount; message: string }> {
+  const path = "auth/profile";
+  const res = await request(path, { method: "PATCH", body: JSON.stringify(data) });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to update profile (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function changeUserPassword(data: { current_password: string; new_password: string }): Promise<{ success: boolean; message: string }> {
+  const path = "auth/change-password";
+  const res = await request(path, { method: "POST", body: JSON.stringify(data) });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to change password (${res.status})`);
+  }
+  return await res.json();
+}

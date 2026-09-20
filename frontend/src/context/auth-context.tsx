@@ -20,8 +20,11 @@ interface AuthContextType {
   register: (credentials: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }) => Promise<AuthResult>;
   verifyOtp: (credentials: { email: string; otp: string; purpose: "login" | "register" }) => Promise<AuthResult>;
   resendOtp: (credentials: { email: string; purpose: "login" | "register" }) => Promise<AuthResult>;
+  updateProfile: (name: string) => Promise<{ success: boolean; error?: string }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
+
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const STORAGE_KEY_USER_SESSION = "auratrace_auth_session_v3";
@@ -155,6 +158,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateProfile = async (name: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const token = sessionStorage.getItem(STORAGE_KEY_ACCESS_TOKEN);
+      const res = await fetch("/api/aura?path=" + encodeURIComponent("auth/profile"), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: "Bearer " + token } : {}),
+        },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.detail || data?.error || "Failed to update profile.");
+      }
+      if (data?.user) {
+        setUser(data.user as UserAccount);
+        sessionStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(data.user));
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Failed to update profile." };
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const token = sessionStorage.getItem(STORAGE_KEY_ACCESS_TOKEN);
+      const res = await fetch("/api/aura?path=" + encodeURIComponent("auth/change-password"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: "Bearer " + token } : {}),
+        },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.detail || data?.error || "Failed to change password.");
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Failed to change password." };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     sessionStorage.removeItem(STORAGE_KEY_USER_SESSION);
@@ -162,7 +211,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
-  return <AuthContext.Provider value={{ user, isLoading, login, register, verifyOtp, resendOtp, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        login,
+        register,
+        verifyOtp,
+        resendOtp,
+        updateProfile,
+        changePassword,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+
 }
 
 export function useAuth() {

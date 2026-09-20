@@ -1,58 +1,133 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Users, Server, Plus, Copy, Check, Search, X, ShieldCheck, Ban, UserCheck } from "lucide-react";
+import {
+  Users,
+  Server,
+  Plus,
+  Copy,
+  Check,
+  Search,
+  X,
+  ShieldCheck,
+  Ban,
+  UserCheck,
+  Trash2,
+  Eye,
+  Calendar,
+  Mail,
+  User as UserIcon,
+  Shield,
+  KeyRound,
+  AlertTriangle,
+} from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/context/auth-context";
-import { fetchServices, registerService, fetchAdminUsers, updateUserStatus } from "@/lib/api-client";
-import { Service } from "@/types";
+import {
+  fetchServices,
+  registerService,
+  fetchAdminUsers,
+  updateUserStatus,
+  deleteAdminUser,
+} from "@/lib/api-client";
+import { Service, UserAccount } from "@/types";
 
 export default function AdminUsersServicesPage() {
   const [activeTab, setActiveTab] = useState<"users" | "services">("users");
   const { user: currentUser } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<UserAccount[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userError, setUserError] = useState("");
+  const [userSuccess, setUserSuccess] = useState("");
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+
+  // Modals & Drawers
+  const [selectedUser, setSelectedUser] = useState<UserAccount | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserAccount | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
+
+  // New Service Form
   const [serviceId, setServiceId] = useState("");
   const [serviceName, setServiceName] = useState("");
   const [serviceEnv, setServiceEnv] = useState("production");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchServices().then((serviceData) => {
-      setServices(serviceData);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    fetchServices()
+      .then((serviceData) => {
+        setServices(serviceData);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (activeTab !== "users") return;
+  const loadUsers = () => {
     setUsersLoading(true);
     setUserError("");
     fetchAdminUsers()
       .then(setUsers)
-      .catch((error) => setUserError(error instanceof Error ? error.message : "Unable to load users."))
+      .catch((error) =>
+        setUserError(error instanceof Error ? error.message : "Unable to load users.")
+      )
       .finally(() => setUsersLoading(false));
+  };
+
+  useEffect(() => {
+    if (activeTab === "users") {
+      loadUsers();
+    }
   }, [activeTab]);
 
   const handleUserStatus = async (id: string, status: "Active" | "Suspended") => {
+    setUserError("");
+    setUserSuccess("");
     try {
       const updated = await updateUserStatus(id, status);
-      setUsers((prev) => prev.map((u) => u.id === updated.id ? updated : u));
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      if (selectedUser?.id === id) {
+        setSelectedUser(updated);
+      }
+      setUserSuccess(`User status updated to ${status}.`);
+      setTimeout(() => setUserSuccess(""), 4000);
     } catch (error) {
       setUserError(error instanceof Error ? error.message : "Unable to update user status.");
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeleting(true);
+    setUserError("");
+    setUserSuccess("");
+    try {
+      await deleteAdminUser(userToDelete.id);
+      setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+      if (selectedUser?.id === userToDelete.id) {
+        setSelectedUser(null);
+      }
+      setUserSuccess(`User ${userToDelete.name} (${userToDelete.email}) permanently deleted.`);
+      setUserToDelete(null);
+      setTimeout(() => setUserSuccess(""), 4000);
+    } catch (error) {
+      setUserError(error instanceof Error ? error.message : "Failed to delete user.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleRegisterService = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!serviceId || !serviceName) return;
-    const created = await registerService({ id: serviceId, name: serviceName, environment: serviceEnv });
+    const created = await registerService({
+      id: serviceId,
+      name: serviceName,
+      environment: serviceEnv,
+    });
     setServices((prev) => [created, ...prev]);
     setServiceId("");
     setServiceName("");
@@ -65,69 +140,378 @@ export default function AdminUsersServicesPage() {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const filteredUsers = users.filter((u) => {
+    const q = userSearchQuery.toLowerCase();
+    return (
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      u.role.toLowerCase().includes(q) ||
+      u.status.toLowerCase().includes(q) ||
+      u.id.toLowerCase().includes(q)
+    );
+  });
+
   const filteredServices = services.filter((s) => {
     const q = searchQuery.toLowerCase();
-    return s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.environment.toLowerCase().includes(q);
+    return (
+      s.name.toLowerCase().includes(q) ||
+      s.id.toLowerCase().includes(q) ||
+      s.environment.toLowerCase().includes(q)
+    );
   });
 
   return (
     <ProtectedRoute role="Admin">
-      <AppShell title="Users & Monitored Services Management" subtitle="View the authenticated account and manage the live monitored service catalog">
+      <AppShell
+        title="Team & Global Services Administration"
+        subtitle="Manage user accounts, privileges, access control, and registered microservices"
+      >
         <div className="space-y-6">
+          {/* Top Header */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400"><Users className="h-4 w-4" /></span>
-                <span className="label">Access & Catalog</span>
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                  <Shield className="h-4 w-4" />
+                </span>
+                <span className="label">Admin Operations</span>
               </div>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">Users & Services Console</h1>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+                Users & Services Management
+              </h1>
             </div>
             {activeTab === "services" && (
-              <button type="button" onClick={() => setShowServiceModal(true)} className="button-primary">
-                <Plus className="h-4 w-4" /><span>Register Service</span>
+              <button
+                type="button"
+                onClick={() => setShowServiceModal(true)}
+                className="button-primary"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Register Service</span>
               </button>
             )}
           </div>
 
-          <div className="flex rounded-xl border border-slate-800 bg-slate-900/60 p-1 max-w-xs">
-            <button type="button" onClick={() => { setActiveTab("users"); setSearchQuery(""); }} className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold ${activeTab === "users" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}>
-              <Users className="h-3.5 w-3.5" /><span>Account</span>
+          {/* Navigation Tabs */}
+          <div className="flex rounded-xl border border-slate-800 bg-slate-900/60 p-1 max-w-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("users");
+                setUserSearchQuery("");
+              }}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition ${
+                activeTab === "users"
+                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>User Accounts ({users.length})</span>
             </button>
-            <button type="button" onClick={() => { setActiveTab("services"); setSearchQuery(""); }} className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold ${activeTab === "services" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}>
-              <Server className="h-3.5 w-3.5" /><span>Services ({services.length})</span>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("services");
+                setSearchQuery("");
+              }}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition ${
+                activeTab === "services"
+                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Server className="h-3.5 w-3.5" />
+              <span>Services ({services.length})</span>
             </button>
           </div>
 
+          {/* Alert Notifications */}
+          {userError && (
+            <div className="flex items-center justify-between rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs text-rose-300">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" />
+                <span>{userError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUserError("")}
+                className="text-rose-400 hover:text-rose-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {userSuccess && (
+            <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-300">
+              <div className="flex items-center gap-2">
+                <Check className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                <span>{userSuccess}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUserSuccess("")}
+                className="text-emerald-400 hover:text-emerald-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {/* USERS TAB */}
           {activeTab === "users" && (
             <div className="panel overflow-hidden">
-              <div className="panel-header">
+              <div className="panel-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-indigo-400" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">Registered Users ({users.length})</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                    Registered Accounts ({filteredUsers.length} / {users.length})
+                  </h3>
                 </div>
-                <span className="text-[10px] text-slate-500">PostgreSQL-backed accounts</span>
+                <div className="relative min-w-[240px]">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                  <input
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    placeholder="Search by name, email, or role..."
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 py-1.5 pl-8.5 pr-3 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-indigo-500"
+                  />
+                </div>
               </div>
-              {userError && <p className="mx-5 mt-4 rounded-lg border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-300">{userError}</p>}
+
               {usersLoading ? (
-                <div className="p-8 text-center text-xs text-slate-500">Loading live users...</div>
-              ) : users.length ? (
+                <div className="p-12 text-center text-xs text-slate-500">
+                  <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+                  Loading accounts from database...
+                </div>
+              ) : filteredUsers.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="border-b border-slate-800 bg-slate-950/40 text-[10px] uppercase tracking-wider text-slate-500">
-                      <tr><th className="px-5 py-3.5">User</th><th className="px-5 py-3.5">Role</th><th className="px-5 py-3.5">Status</th><th className="px-5 py-3.5">Created</th><th className="px-5 py-3.5">Action</th></tr>
+                      <tr>
+                        <th className="px-5 py-3.5">User</th>
+                        <th className="px-5 py-3.5">Role</th>
+                        <th className="px-5 py-3.5">Status</th>
+                        <th className="px-5 py-3.5">Registered</th>
+                        <th className="px-5 py-3.5 text-right">Actions</th>
+                      </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
-                      {users.map((u) => (
-                        <tr key={u.id} className="transition hover:bg-slate-800/30">
-                          <td className="px-5 py-4"><p className="font-bold text-white">{u.name}</p><p className="font-mono text-[10px] text-slate-400">{u.email}</p></td>
-                          <td className="px-5 py-4"><span className="inline-flex items-center gap-1 text-indigo-300"><ShieldCheck className="h-3.5 w-3.5" />{u.role}</span></td>
-                          <td className="px-5 py-4"><span className={u.status === "Active" ? "text-emerald-400" : "text-rose-400"}>{u.status}</span></td>
-                          <td className="px-5 py-4 font-mono text-slate-400">{u.created_at}</td>
+                      {filteredUsers.map((u) => {
+                        const isSelf = u.id === currentUser?.id;
+                        return (
+                          <tr key={u.id} className="transition hover:bg-slate-800/30">
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${
+                                    u.role === "Admin"
+                                      ? "bg-indigo-500/20 text-indigo-300"
+                                      : "bg-blue-500/10 text-cyan-400"
+                                  }`}
+                                >
+                                  {u.name
+                                    .split(" ")
+                                    .map((n) => n[0])
+                                    .join("")
+                                    .toUpperCase()
+                                    .substring(0, 2)}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="font-bold text-white">{u.name}</p>
+                                    {isSelf && (
+                                      <span className="rounded bg-indigo-500/20 px-1.5 py-0.2 text-[9px] font-bold text-indigo-300">
+                                        You
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="font-mono text-[10px] text-slate-400">{u.email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                  u.role === "Admin"
+                                    ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+                                    : "bg-blue-500/10 text-cyan-400 border border-blue-500/20"
+                                }`}
+                              >
+                                <ShieldCheck className="h-3 w-3" />
+                                {u.role}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span
+                                className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                  u.status === "Active"
+                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                    : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                }`}
+                              >
+                                <span
+                                  className={`h-1.5 w-1.5 rounded-full ${
+                                    u.status === "Active" ? "bg-emerald-400" : "bg-rose-400"
+                                  }`}
+                                />
+                                {u.status}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 font-mono text-slate-400">{u.created_at}</td>
+                            <td className="px-5 py-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {/* View Details Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedUser(u)}
+                                  title="View Account Details"
+                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs text-slate-300 transition hover:border-slate-600 hover:bg-slate-700 hover:text-white"
+                                >
+                                  <Eye className="h-3.5 w-3.5 text-cyan-400" />
+                                  <span>Details</span>
+                                </button>
+
+                                {/* Suspend / Activate Button */}
+                                {!isSelf && (
+                                  <>
+                                    {u.status === "Active" ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUserStatus(u.id, "Suspended")}
+                                        title="Suspend User Account"
+                                        className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300 transition hover:bg-amber-500/20"
+                                      >
+                                        <Ban className="h-3.5 w-3.5" />
+                                        <span>Suspend</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUserStatus(u.id, "Active")}
+                                        title="Activate User Account"
+                                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-300 transition hover:bg-emerald-500/20"
+                                      >
+                                        <UserCheck className="h-3.5 w-3.5" />
+                                        <span>Activate</span>
+                                      </button>
+                                    )}
+
+                                    {/* Delete User Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setUserToDelete(u)}
+                                      title="Permanently Delete User"
+                                      className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300 transition hover:bg-rose-500/20 hover:text-rose-200"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <span>Delete</span>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-500">
+                  No matching registered accounts found.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* SERVICES TAB */}
+          {activeTab === "services" && (
+            <div className="panel overflow-hidden">
+              <div className="panel-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <Server className="h-4 w-4 text-cyan-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                    Global Registered Microservices ({services.length})
+                  </h3>
+                </div>
+                <div className="relative min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search services..."
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 py-1.5 pl-8.5 pr-3 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+              {loading ? (
+                <div className="p-8 text-center text-xs text-slate-500">Loading live services...</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-slate-800/80 bg-slate-950/40 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      <tr>
+                        <th className="px-5 py-3.5">Service</th>
+                        <th className="px-5 py-3.5">Environment</th>
+                        <th className="px-5 py-3.5">Health</th>
+                        <th className="px-5 py-3.5">Error Rate</th>
+                        <th className="px-5 py-3.5">Open Incidents</th>
+                        <th className="px-5 py-3.5">API Key Hash</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {filteredServices.map((s) => (
+                        <tr key={s.id} className="transition hover:bg-slate-800/30">
                           <td className="px-5 py-4">
-                            {u.id === currentUser?.id ? <span className="text-slate-600">Current account</span> : u.status === "Active" ? (
-                              <button type="button" onClick={() => handleUserStatus(u.id, "Suspended")} className="inline-flex items-center gap-1 rounded-lg border border-rose-500/20 px-2.5 py-1.5 text-rose-300 hover:bg-rose-500/10"><Ban className="h-3.5 w-3.5" />Suspend</button>
+                            <p className="font-bold text-white">{s.name}</p>
+                            <p className="font-mono text-[10px] text-blue-400">ID: {s.id}</p>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-[9px] font-bold uppercase text-slate-300">
+                              {s.environment}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
+                                s.status === "healthy"
+                                  ? "bg-emerald-500/10 text-emerald-400"
+                                  : s.status === "warning"
+                                  ? "bg-amber-500/10 text-amber-400"
+                                  : "bg-rose-500/10 text-rose-400"
+                              }`}
+                            >
+                              ● {s.status}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 font-mono font-bold text-slate-200">
+                            {s.error_rate.toFixed(1)}%
+                          </td>
+                          <td className="px-5 py-4 font-mono font-bold">
+                            {s.incident_count > 0 ? (
+                              <span className="text-rose-400">{s.incident_count} open</span>
                             ) : (
-                              <button type="button" onClick={() => handleUserStatus(u.id, "Active")} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 px-2.5 py-1.5 text-emerald-300 hover:bg-emerald-500/10"><UserCheck className="h-3.5 w-3.5" />Activate</button>
+                              <span className="text-slate-500">0</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-4">
+                            {s.api_key_hash && (
+                              <div className="flex max-w-xs items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1 font-mono text-[10px]">
+                                <span className="truncate text-slate-400">{s.api_key_hash}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyKey(s.api_key_hash!)}
+                                  className="ml-2 text-slate-500 hover:text-white"
+                                >
+                                  {copiedKey === s.api_key_hash ? (
+                                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -135,24 +519,263 @@ export default function AdminUsersServicesPage() {
                     </tbody>
                   </table>
                 </div>
-              ) : <p className="p-8 text-center text-xs text-slate-500">No registered users found.</p>}
-            </div>
-          )}
-
-          {activeTab === "services" && (
-            <div className="panel overflow-hidden">
-              <div className="panel-header">
-                <div className="flex items-center gap-2"><Server className="h-4 w-4 text-cyan-400" /><h3 className="text-xs font-bold uppercase tracking-wider text-white">Global Registered Microservices ({services.length})</h3></div>
-                <div className="relative min-w-[200px]"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" /><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search services..." className="w-full rounded-xl border border-slate-800 bg-slate-950 py-1.5 pl-8.5 pr-3 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500" /></div>
-              </div>
-              {loading ? <div className="p-8 text-center text-xs text-slate-500">Loading live services...</div> : (
-                <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-slate-800/80 bg-slate-950/40 text-[10px] font-bold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3.5">Service</th><th className="px-5 py-3.5">Environment</th><th className="px-5 py-3.5">Health</th><th className="px-5 py-3.5">Error Rate</th><th className="px-5 py-3.5">Open Incidents</th><th className="px-5 py-3.5">API Key Hash</th></tr></thead>
-                <tbody className="divide-y divide-slate-800/60">{filteredServices.map((s) => <tr key={s.id} className="transition hover:bg-slate-800/30"><td className="px-5 py-4"><p className="font-bold text-white">{s.name}</p><p className="font-mono text-[10px] text-blue-400">ID: {s.id}</p></td><td className="px-5 py-4"><span className="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-[9px] font-bold uppercase text-slate-300">{s.environment}</span></td><td className="px-5 py-4"><span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${s.status === "healthy" ? "bg-emerald-500/10 text-emerald-400" : s.status === "warning" ? "bg-amber-500/10 text-amber-400" : "bg-rose-500/10 text-rose-400"}`}>● {s.status}</span></td><td className="px-5 py-4 font-mono font-bold text-slate-200">{s.error_rate.toFixed(1)}%</td><td className="px-5 py-4 font-mono font-bold">{s.incident_count > 0 ? <span className="text-rose-400">{s.incident_count} open</span> : <span className="text-slate-500">0</span>}</td><td className="px-5 py-4">{s.api_key_hash && <div className="flex max-w-xs items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1 font-mono text-[10px]"><span className="truncate text-slate-400">{s.api_key_hash}</span><button type="button" onClick={() => copyKey(s.api_key_hash!)} className="ml-2 text-slate-500 hover:text-white">{copiedKey === s.api_key_hash ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}</button></div>}</td></tr>)}</tbody></table></div>
               )}
             </div>
           )}
 
-          {showServiceModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"><div className="panel w-full max-w-md border-cyan-500/30 p-6 shadow-2xl"><div className="flex items-center justify-between border-b border-slate-800 pb-3"><div className="flex items-center gap-2"><Server className="h-5 w-5 text-cyan-400" /><h2 className="text-sm font-bold text-white">Register Monitored Service</h2></div><button type="button" onClick={() => setShowServiceModal(false)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-white"><X className="h-4 w-4" /></button></div><form onSubmit={handleRegisterService} className="mt-4 space-y-4"><div><label className="label">Service ID</label><input required value={serviceId} onChange={(e) => setServiceId(e.target.value)} placeholder="e.g. auth-service" className="field mt-1.5 font-mono" /></div><div><label className="label">Service Name</label><input required value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="e.g. Authentication Service" className="field mt-1.5" /></div><div><label className="label">Environment</label><select value={serviceEnv} onChange={(e) => setServiceEnv(e.target.value)} className="field mt-1.5"><option value="production">Production</option><option value="staging">Staging</option><option value="development">Development</option></select></div><div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-2"><button type="button" onClick={() => setShowServiceModal(false)} className="button-secondary">Cancel</button><button type="submit" className="button-primary">Register Service</button></div></form></div></div>}
+          {/* USER DETAILS MODAL */}
+          {selectedUser && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+              <div className="panel w-full max-w-lg border-indigo-500/30 p-6 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-300">
+                      <UserIcon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-white">Account Details</h2>
+                      <p className="text-[11px] text-slate-400">PostgreSQL record & permissions</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUser(null)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-5 space-y-4 text-xs">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                        Full Name
+                      </span>
+                      <p className="font-bold text-slate-100">{selectedUser.name}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                        Assigned Role
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-bold text-indigo-300">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        {selectedUser.role}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                      Email Address
+                    </span>
+                    <div className="flex items-center gap-2 text-slate-200 font-mono">
+                      <Mail className="h-3.5 w-3.5 text-slate-500" />
+                      <span>{selectedUser.email}</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                      Unique User UUID
+                    </span>
+                    <p className="font-mono text-[11px] text-cyan-400 break-all">{selectedUser.id}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                        Account Status
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 font-bold ${
+                          selectedUser.status === "Active" ? "text-emerald-400" : "text-rose-400"
+                        }`}
+                      >
+                        ● {selectedUser.status}
+                      </span>
+                    </div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                        Registration Date
+                      </span>
+                      <div className="flex items-center gap-1.5 text-slate-300 font-mono">
+                        <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                        <span>{selectedUser.created_at}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-4">
+                  {selectedUser.id !== currentUser?.id ? (
+                    <div className="flex items-center gap-2">
+                      {selectedUser.status === "Active" ? (
+                        <button
+                          type="button"
+                          onClick={() => handleUserStatus(selectedUser.id, "Suspended")}
+                          className="button-secondary text-amber-300 border-amber-500/30"
+                        >
+                          <Ban className="h-3.5 w-3.5" /> Suspend
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleUserStatus(selectedUser.id, "Active")}
+                          className="button-secondary text-emerald-300 border-emerald-500/30"
+                        >
+                          <UserCheck className="h-3.5 w-3.5" /> Activate
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserToDelete(selectedUser);
+                          setSelectedUser(null);
+                        }}
+                        className="button-secondary text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Delete User
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-500">
+                      Logged in as current session administrator.
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUser(null)}
+                    className="button-primary ml-auto"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DELETE CONFIRMATION MODAL */}
+          {userToDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+              <div className="panel w-full max-w-md border-rose-500/40 p-6 shadow-2xl">
+                <div className="flex items-center gap-3 text-rose-400">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/10 border border-rose-500/30">
+                    <Trash2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white">Delete User Account</h2>
+                    <p className="text-xs text-rose-300">Irreversible Action</p>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-xs text-slate-300 leading-relaxed">
+                  Are you sure you want to permanently delete user{" "}
+                  <strong className="text-white">{userToDelete.name}</strong> (
+                  <span className="font-mono text-cyan-300">{userToDelete.email}</span>)?
+                </p>
+                <p className="mt-2 text-[11px] text-slate-400">
+                  This user will no longer be able to sign in or access telemetry dashboards.
+                </p>
+
+                <div className="mt-6 flex items-center justify-end gap-2 border-t border-slate-800 pt-4">
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={() => setUserToDelete(null)}
+                    className="button-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={handleDeleteUser}
+                    className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-rose-600/30 transition hover:bg-rose-500 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent" />
+                        <span>Deleting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Confirm Delete</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* REGISTER SERVICE MODAL */}
+          {showServiceModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+              <div className="panel w-full max-w-md border-cyan-500/30 p-6 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Server className="h-5 w-5 text-cyan-400" />
+                    <h2 className="text-sm font-bold text-white">Register Monitored Service</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowServiceModal(false)}
+                    className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <form onSubmit={handleRegisterService} className="mt-4 space-y-4">
+                  <div>
+                    <label className="label">Service ID</label>
+                    <input
+                      required
+                      value={serviceId}
+                      onChange={(e) => setServiceId(e.target.value)}
+                      placeholder="e.g. auth-service"
+                      className="field mt-1.5 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Service Name</label>
+                    <input
+                      required
+                      value={serviceName}
+                      onChange={(e) => setServiceName(e.target.value)}
+                      placeholder="e.g. Authentication Service"
+                      className="field mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Environment</label>
+                    <select
+                      value={serviceEnv}
+                      onChange={(e) => setServiceEnv(e.target.value)}
+                      className="field mt-1.5"
+                    >
+                      <option value="production">Production</option>
+                      <option value="staging">Staging</option>
+                      <option value="development">Development</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowServiceModal(false)}
+                      className="button-secondary"
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="button-primary">
+                      Register Service
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       </AppShell>
     </ProtectedRoute>
