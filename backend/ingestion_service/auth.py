@@ -202,7 +202,7 @@ def _send_otp_email(email: str, otp: str, purpose: str) -> None:
 
 
 
-async def _issue_otp(email: str, purpose: str) -> str:
+async def _issue_otp(email: str, purpose: str) -> tuple[str, bool]:
     email = email.strip().lower()
     cooldown_key = f"auratrace:otp:cooldown:{purpose}:{email}"
     if await _redis.exists(cooldown_key):
@@ -214,16 +214,16 @@ async def _issue_otp(email: str, purpose: str) -> str:
     await _redis.setex(otp_key, OTP_TTL_SECONDS, digest)
     await _redis.setex(attempts_key, OTP_TTL_SECONDS, "0")
     await _redis.setex(cooldown_key, OTP_RESEND_SECONDS, "1")
+    email_delivered = True
     try:
         _send_otp_email(email, otp, purpose)
     except Exception as exc:
+        email_delivered = False
         print(f"[AuraTrace SMTP Delivery Error] {exc}")
-        await _redis.delete(otp_key, attempts_key)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Unable to deliver verification email: {str(exc).strip() or 'SMTP authentication failed'}"
-        ) from exc
-    return otp
+        print("=" * 60)
+        print(f" [AuraTrace Verification Code] {purpose.upper()} for {email}: {otp}")
+        print("=" * 60)
+    return otp, email_delivered
 
 
 @router.post("/register")
@@ -245,14 +245,19 @@ async def register(payload: RegisterPayload):
         """), {"id": user_id, "name": payload.name.strip(), "email": email,
                "password_hash": password_hash, "password_salt": password_salt, "role": payload.role})
     try:
-        await _issue_otp(email, "register")
+        otp, delivered = await _issue_otp(email, "register")
     except Exception:
         async with _engine.begin() as conn:
             await conn.execute(text("DELETE FROM users WHERE id = :id AND status = 'Pending'"), {"id": user_id})
         raise
+    msg = (
+        "A 6-digit verification code has been sent to your email. Please check your inbox."
+        if delivered
+        else "Verification code generated. (Email delivery notice: Check server logs for OTP or verify Gmail App Password in .env)"
+    )
     return {
         "otp_required": True,
-        "message": "A 6-digit verification code has been sent to your email. Please check your inbox.",
+        "message": msg,
         "email": email,
         "purpose": "register"
     }
@@ -270,22 +275,33 @@ async def login(payload: LoginPayload):
     if not user or not _verify_password(payload.password, user["password_salt"], user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     if user["status"] == "Pending":
-        await _issue_otp(email, "register")
+        otp, delivered = await _issue_otp(email, "register")
+        msg = (
+            "A verification code has been sent to activate your account. Please check your inbox."
+            if delivered
+            else "Verification code generated. (Check server logs for code: docker logs auratrace-ingestion)"
+        )
         return {
             "otp_required": True,
-            "message": "A verification code has been sent to activate your account. Please check your inbox.",
+            "message": msg,
             "email": email,
             "purpose": "register"
         }
     if user["status"] != "Active":
         raise HTTPException(status_code=403, detail="This account is suspended.")
-    await _issue_otp(email, "login")
+    otp, delivered = await _issue_otp(email, "login")
+    msg = (
+        "A 6-digit verification code has been sent to your email. Please check your inbox."
+        if delivered
+        else "Verification code generated. (Check server logs for code: docker logs auratrace-ingestion)"
+    )
     return {
         "otp_required": True,
-        "message": "A 6-digit verification code has been sent to your email. Please check your inbox.",
+        "message": msg,
         "email": email,
         "purpose": "login"
     }
+
 
 
 @router.post("/verify-otp")
@@ -391,9 +407,15 @@ async def resend_otp(payload: ResendOtpPayload):
             user = result.mappings().first()
         if not user or user["status"] != "Active":
             raise HTTPException(status_code=400, detail="No active account is available for login verification.")
-    await _issue_otp(email, payload.purpose)
+    otp, delivered = await _issue_otp(email, payload.purpose)
+    msg = (
+        "A new verification code has been sent to your email. Please check your inbox."
+        if delivered
+        else "A new verification code was generated. (Check server logs for code: docker logs auratrace-ingestion)"
+    )
     return {
-        "message": "A new verification code has been sent to your email. Please check your inbox.",
+        "message": msg,
         "email": email,
         "purpose": payload.purpose
     }
+
