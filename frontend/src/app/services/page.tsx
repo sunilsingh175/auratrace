@@ -14,7 +14,6 @@ import {
   Activity,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { fetchServices, registerService } from "@/lib/api-client";
 import { Service } from "@/types";
 
@@ -97,7 +96,6 @@ export default function ServicesPage() {
   });
 
   return (
-    <ProtectedRoute role="Developer">
       <AppShell
       title="Service Registry & Microservices"
       subtitle="Monitored service catalog, performance SLAs, and ingestion credentials"
@@ -394,6 +392,5 @@ export default function ServicesPage() {
           )}
         </div>
       </AppShell>
-    </ProtectedRoute>
   );
 }
