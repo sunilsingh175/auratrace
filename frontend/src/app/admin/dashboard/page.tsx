@@ -23,38 +23,45 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { SystemHealthCard } from "@/components/admin/SystemHealthCard";
 import { AnomalyHeatmap } from "@/components/admin/AnomalyHeatmap";
-import { fetchAdminInfrastructure, fetchSystemStats } from "@/lib/api-client";
+import { fetchAdminInfrastructure, fetchSystemStats, fetchIncidents } from "@/lib/api-client";
 import { InfrastructureStatus, SystemStats, AnomalyHeatmapDay } from "@/types";
 
-const DEFAULT_HEATMAP_DATA: AnomalyHeatmapDay[] = [
-  { day: "Mon", hours: [0, 0, 0, 1, 0, 0, 2, 4, 3, 1, 0, 0, 1, 2, 5, 2, 1, 0, 0, 1, 0, 0, 0, 0] },
-  { day: "Tue", hours: [0, 1, 0, 0, 0, 0, 1, 3, 6, 2, 1, 0, 2, 4, 3, 1, 0, 0, 0, 0, 0, 1, 0, 0] },
-  { day: "Wed", hours: [0, 0, 0, 0, 1, 0, 2, 5, 8, 3, 2, 1, 3, 6, 4, 2, 1, 1, 0, 0, 0, 0, 0, 0] },
-  { day: "Thu", hours: [0, 0, 1, 0, 0, 0, 3, 7, 9, 4, 2, 2, 4, 8, 7, 3, 2, 1, 0, 1, 0, 0, 0, 0] },
-  { day: "Fri", hours: [0, 0, 0, 0, 0, 1, 2, 4, 6, 3, 1, 1, 2, 5, 6, 2, 1, 0, 0, 0, 1, 0, 0, 0] },
-  { day: "Sat", hours: [0, 0, 0, 0, 0, 0, 1, 1, 2, 1, 0, 0, 1, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0] },
-  { day: "Sun", hours: [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0] },
-];
 
 export default function AdminDashboardPage() {
   const [infra, setInfra] = useState<InfrastructureStatus | null>(null);
   const [stats, setStats] = useState<SystemStats | null>(null);
+  const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
-    const [infraData, statsData] = await Promise.all([
+    const [infraData, statsData, incidentData] = await Promise.all([
       fetchAdminInfrastructure(),
       fetchSystemStats(),
+      fetchIncidents({ limit: 500 }),
     ]);
     setInfra(infraData);
     setStats(statsData);
+    setIncidents(incidentData);
     setLoading(false);
   };
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const heatmapData: AnomalyHeatmapDay[] = React.useMemo(() => {
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const buckets = days.map((day) => ({ day, hours: Array(24).fill(0) as number[] }));
+    for (const incident of incidents) {
+      const date = new Date(incident.created_at);
+      if (Number.isNaN(date.getTime())) continue;
+      const day = date.getDay();
+      const hour = date.getHours();
+      buckets[day].hours[hour] = Math.min(10, buckets[day].hours[hour] + 1);
+    }
+    return buckets;
+  }, [incidents]);
 
   return (
     <ProtectedRoute role="Admin">
@@ -114,47 +121,47 @@ export default function AdminDashboardPage() {
               <SystemHealthCard
                 name="FastAPI Ingestion Gateway"
                 role="REST & WebSocket Broker"
-                status={infra?.api_status || "healthy"}
-                latency={`${infra?.api_latency_ms || 45}ms`}
+                status={infra?.api_status || "unknown"}
+                latency={infra?.api_latency_ms != null ? `${infra.api_latency_ms}ms` : "—"}
                 metricLabel="Clients"
-                metricValue={`${infra?.active_ws_clients || 1} live`}
+                metricValue={infra?.active_ws_clients != null ? `${infra.active_ws_clients} live` : "—"}
                 icon={Radio}
               />
 
               <SystemHealthCard
                 name="Redis Stream Engine"
                 role="Event Pipeline Broker"
-                status={infra?.redis_status || "healthy"}
-                latency="1.2ms"
+                status={infra?.redis_status || "unknown"}
+                latency="—"
                 metricLabel="Buffer"
-                metricValue={`${infra?.redis_stream_length?.toLocaleString() || "142k"} msgs`}
+                metricValue={infra?.redis_stream_length != null ? `${infra.redis_stream_length.toLocaleString()} msgs` : "—"}
                 icon={Zap}
               />
 
               <SystemHealthCard
                 name="PostgreSQL pgvector"
                 role="Hybrid Storage & Vector DB"
-                status={infra?.postgres_status || "healthy"}
-                latency="4.8ms"
+                status={infra?.postgres_status || "unknown"}
+                latency="—"
                 metricLabel="Pool"
-                metricValue={`${infra?.postgres_connections || 12} / 50`}
+                metricValue={infra?.postgres_connections != null ? `${infra.postgres_connections}` : "—"}
                 icon={Database}
               />
 
               <SystemHealthCard
                 name="RAG Doctor LLM"
                 role="Gemini 2.5 Flash"
-                status={infra?.rag_doctor_status || "healthy"}
-                latency={`${infra?.llm_latency_ms || 680}ms`}
+                status={infra?.rag_doctor_status || "unknown"}
+                latency={infra?.llm_latency_ms != null ? `${infra.llm_latency_ms}ms` : "—"}
                 metricLabel="Embed"
-                metricValue={`${infra?.embedding_latency_ms || 42}ms`}
+                metricValue={infra?.embedding_latency_ms != null ? `${infra.embedding_latency_ms}ms` : "—"}
                 icon={Sparkles}
               />
             </div>
           </div>
 
           {/* Anomaly Heatmap */}
-          <AnomalyHeatmap data={DEFAULT_HEATMAP_DATA} />
+          <AnomalyHeatmap data={heatmapData} />
 
           {/* System Activity Log & Audit Feed */}
           <div className="panel p-5">
