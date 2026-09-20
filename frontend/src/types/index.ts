@@ -89,6 +89,10 @@ export interface InfrastructureStatus {
   embedding_latency_ms?: number;
   llm_latency_ms?: number;
   active_ws_clients?: number;
+  anomaly_threshold?: number;
+  anomaly_window_seconds?: number;
+  embedding_model?: string;
+  llm_model?: string;
 }
 
 export interface UserAccount {
