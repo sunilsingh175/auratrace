@@ -75,20 +75,20 @@ export interface SystemStats {
 
 export interface InfrastructureStatus {
   api_status: "healthy" | "degraded" | "offline";
-  api_latency_ms: number;
+  api_latency_ms?: number;
   redis_status: "healthy" | "degraded" | "offline";
-  redis_stream_length: number;
-  redis_memory_used: string;
+  redis_stream_length?: number;
+  redis_memory_used?: string;
   postgres_status: "healthy" | "degraded" | "offline";
-  postgres_connections: number;
-  postgres_vector_indexes: number;
-  ml_worker_status: "healthy" | "degraded" | "offline";
-  ml_queue_rate: number;
-  ml_contamination: number;
-  rag_doctor_status: "healthy" | "degraded" | "offline";
-  embedding_latency_ms: number;
-  llm_latency_ms: number;
-  active_ws_clients: number;
+  postgres_connections?: number;
+  postgres_vector_indexes?: number;
+  ml_worker_status: "healthy" | "degraded" | "offline" | "unknown";
+  ml_queue_rate?: number;
+  ml_contamination?: number;
+  rag_doctor_status: "healthy" | "degraded" | "offline" | "unknown";
+  embedding_latency_ms?: number;
+  llm_latency_ms?: number;
+  active_ws_clients?: number;
 }
 
 export interface UserAccount {
