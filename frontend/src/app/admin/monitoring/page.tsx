@@ -161,8 +161,8 @@ export default function AdminMonitoringPage() {
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-300">Contamination Threshold</span>
-                    <span className="font-mono text-cyan-400 font-bold">{contamination}</span>
+                    <span className="font-bold text-slate-300">Anomaly Detection Threshold</span>
+                    <span className="font-mono text-cyan-400 font-bold">{infra?.anomaly_threshold ?? "—"}</span>
                   </div>
                   <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 font-mono text-xs text-slate-300">
                     Configured anomaly threshold: <span className="font-bold text-cyan-400">{infra?.anomaly_threshold ?? "—"}</span>
@@ -170,17 +170,17 @@ export default function AdminMonitoringPage() {
                   </div>
                   <p className="mt-1 text-[11px] text-slate-500">
                     Read-only values reported from the backend configuration; this dashboard does not mutate the ML worker at runtime.
-                  </p>/p>
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2 font-mono text-xs">
                   <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                     <span className="text-[10px] uppercase text-slate-500 block">n_estimators</span>
-                    <span className="text-white font-bold text-sm">100 Trees</span>
+                    <span className="text-white font-bold text-sm">200 Trees</span>
                   </div>
                   <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                     <span className="text-[10px] uppercase text-slate-500 block">max_samples</span>
-                    <span className="text-white font-bold text-sm">auto (256)</span>
+                    <span className="text-white font-bold text-sm">4096</span>
                   </div>
                 </div>
               </div>
