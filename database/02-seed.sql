@@ -231,10 +231,35 @@ sqlalchemy.exc.TimeoutError: QueuePool limit of size 10 overflow 10 reached, con
 
     'Configure granular connection and read timeouts with a circuit breaker pattern.',
 
-    '--- a/gateway/payment.py
+--- a/gateway/payment.py
 +++ b/gateway/payment.py
 @@ -45,2 +45,3 @@
 -res = httpx.post(WEBHOOK_URL, json=payload)
 +timeout = httpx.Timeout(5.0, connect=2.0)
 +res = httpx.post(WEBHOOK_URL, json=payload, timeout=timeout)'
 );
+
+
+-- ==============================================================================
+-- DEFAULT ADMIN SEED
+-- ==============================================================================
+
+INSERT INTO users (
+    id,
+    name,
+    email,
+    password_hash,
+    password_salt,
+    role,
+    status
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000099',
+    'Startup Hub',
+    'startuphub695@gmail.com',
+    'PE0SALEAmEG1PXYEcuiWU7DnRRP7v57c0/TJsWjVUwU=',
+    'bcAjnQlV0nz0OcFca75Cvg==',
+    'Admin',
+    'Active'
+)
+ON CONFLICT (email) DO NOTHING;

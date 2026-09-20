@@ -6,12 +6,20 @@ import { UserAccount } from "@/types";
 
 type Role = "Developer" | "Admin";
 
+interface AuthResult {
+  success: boolean;
+  error?: string;
+  otpRequired?: boolean;
+  role?: Role;
+}
+
 interface AuthContextType {
   user: UserAccount | null;
   isLoading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; role?: Role }>;
-  register: (credentials: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }) => Promise<{ success: boolean; error?: string; otpRequired?: boolean; role?: Role }>;
-  verifyOtp: (credentials: { email: string; otp: string; purpose: "login" | "register" }) => Promise<{ success: boolean; error?: string; role?: Role }>;
+  login: (credentials: { email: string; password: string }) => Promise<AuthResult>;
+  register: (credentials: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }) => Promise<AuthResult>;
+  verifyOtp: (credentials: { email: string; otp: string; purpose: "login" | "register" }) => Promise<AuthResult>;
+  resendOtp: (credentials: { email: string; purpose: "login" | "register" }) => Promise<AuthResult>;
   logout: () => void;
 }
 
@@ -27,7 +35,23 @@ async function authRequest(path: string, body: unknown) {
     cache: "no-store",
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.detail || "Authentication request failed.");
+  if (!response.ok) {
+    let errorMsg = "Authentication request failed.";
+    if (typeof data?.detail === "string") {
+      errorMsg = data.detail;
+    } else if (Array.isArray(data?.detail)) {
+      errorMsg = data.detail
+        .map((item: any) => (item?.msg ? `${item.msg}${item?.loc ? ` (${item.loc.slice(1).join(".")})` : ""}` : JSON.stringify(item)))
+        .join("; ");
+    } else if (data?.detail && typeof data.detail === "object") {
+      errorMsg = data.detail.msg || JSON.stringify(data.detail);
+    } else if (typeof data?.error === "string") {
+      errorMsg = data.error;
+    } else if (typeof data?.message === "string") {
+      errorMsg = data.message;
+    }
+    throw new Error(errorMsg);
+  }
   return data;
 }
 
@@ -86,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data.access_token) sessionStorage.setItem(STORAGE_KEY_ACCESS_TOKEN, data.access_token);
   };
 
-  const login = async ({ email, password }: { email: string; password: string }) => {
+  const login = async ({ email, password }: { email: string; password: string }): Promise<AuthResult> => {
     try {
       const data = await authRequest("login", { email, password });
       if (data.otp_required) return { success: true, otpRequired: true };
@@ -97,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async ({ name, email, password, role, adminRegistrationKey }: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }) => {
+  const register = async ({ name, email, password, role, adminRegistrationKey }: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }): Promise<AuthResult> => {
     try {
       const data = await authRequest("register", {
         name,
@@ -112,13 +136,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const verifyOtp = async ({ email, otp, purpose }: { email: string; otp: string; purpose: "login" | "register" }) => {
+  const verifyOtp = async ({ email, otp, purpose }: { email: string; otp: string; purpose: "login" | "register" }): Promise<AuthResult> => {
     try {
       const data = await authRequest("verify-otp", { email, otp, purpose });
       persistAuth(data);
       return { success: true, role: data.user.role as Role };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : "OTP verification failed." };
+    }
+  };
+
+  const resendOtp = async ({ email, purpose }: { email: string; purpose: "login" | "register" }): Promise<AuthResult> => {
+    try {
+      await authRequest("resend-otp", { email, purpose });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Failed to resend verification code." };
     }
   };
 
@@ -129,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
-  return <AuthContext.Provider value={{ user, isLoading, login, register, verifyOtp, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, isLoading, login, register, verifyOtp, resendOtp, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

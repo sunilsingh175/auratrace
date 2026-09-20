@@ -8,7 +8,7 @@ import { useAuth } from "@/context/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, register, verifyOtp } = useAuth();
+  const { login, register, verifyOtp, resendOtp } = useAuth();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [role, setRole] = useState<"Developer" | "Admin">("Developer");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [otpRequired, setOtpRequired] = useState(false);
   const [otp, setOtp] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -46,10 +47,10 @@ export default function LoginPage() {
         purpose: activeTab === "register" ? "register" : "login",
       });
       if (result.success) {
-        setSuccessMessage("Verification successful. Redirecting...");
+        setSuccessMessage("Verification successful! Redirecting to dashboard...");
         setTimeout(() => router.push(result.role === "Admin" ? "/admin/dashboard" : "/dashboard"), 400);
       } else {
-        setErrorMessage(result.error || "Invalid or expired OTP.");
+        setErrorMessage(result.error || "Invalid or expired OTP code.");
         setLoading(false);
       }
       return;
@@ -67,15 +68,31 @@ export default function LoginPage() {
 
     if (result.success && result.otpRequired) {
       setOtpRequired(true);
-      setSuccessMessage("A 6-digit verification code has been sent to your email.");
+      setOtp("");
+      setSuccessMessage("A 6-digit verification code has been sent to your email. Please check your inbox.");
       setLoading(false);
     } else if (result.success) {
       setSuccessMessage("Authentication successful. Redirecting...");
       setTimeout(() => router.push(result.role === "Admin" ? "/admin/dashboard" : "/dashboard"), 400);
     } else {
-      setErrorMessage(result.error || "Authentication failed.");
+      setErrorMessage(typeof result.error === "string" ? result.error : "Authentication failed.");
       setLoading(false);
     }
+  };
+
+  const handleResend = async () => {
+    setResending(true);
+    resetMessages();
+    const result = await resendOtp({
+      email,
+      purpose: activeTab === "register" ? "register" : "login",
+    });
+    if (result.success) {
+      setSuccessMessage("A fresh verification code has been sent to your email.");
+    } else {
+      setErrorMessage(result.error || "Failed to resend code.");
+    }
+    setResending(false);
   };
 
   return (
@@ -130,35 +147,64 @@ export default function LoginPage() {
                   </p>
                 </div>
                 <div>
-                  <label className="label">One-Time Password</label>
+                  <label className="label">One-Time Verification Code</label>
                   <input
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     maxLength={6}
-                    pattern="\\d{6}"
+                    pattern="[0-9]{6}"
                     required
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\\D/g, "").slice(0, 6))}
-                    placeholder="000000"
-                    className="field mt-1 text-center text-lg tracking-[0.5em] font-mono"
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="Enter 6-digit OTP code"
+                    className="field mt-1 text-center text-lg tracking-[0.4em] font-mono"
                   />
                 </div>
-                <button type="button" onClick={() => { setOtpRequired(false); setOtp(""); resetMessages(); }} className="w-full text-[11px] text-slate-500 hover:text-slate-300">
-                  Back to email and password
-                </button>
+                <div className="flex items-center justify-between text-[11px] pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setOtpRequired(false); setOtp(""); resetMessages(); }}
+                    className="text-slate-400 hover:text-slate-200 transition"
+                  >
+                    ← Edit email & password
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={resending}
+                    onClick={handleResend}
+                    className="font-semibold text-cyan-400 hover:text-cyan-300 disabled:opacity-50 transition"
+                  >
+                    {resending ? "Sending code..." : "Resend code"}
+                  </button>
+                </div>
               </>
             ) : (
               <>
                 {activeTab === "register" && (
                   <div>
                     <label className="label">Full Name</label>
-                    <input type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sunil Singh" className="field mt-1" />
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Enter your full name (e.g. Sunil Rajput)"
+                      className="field mt-1"
+                    />
                   </div>
                 )}
                 <div>
                   <label className="label">Work Email</label>
-                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={role === "Admin" ? "admin@auratrace.io" : "engineer@auratrace.io"} className="field mt-1" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your work email address (e.g. sunil@company.com)"
+                    className="field mt-1"
+                  />
                 </div>
                 <div>
                   <div className="flex items-center justify-between">
@@ -167,12 +213,26 @@ export default function LoginPage() {
                       {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />} {showPassword ? "Hide" : "Show"}
                     </button>
                   </div>
-                  <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" className="field mt-1 font-mono" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password (min. 8 characters)"
+                    className="field mt-1 font-mono"
+                  />
                 </div>
                 {activeTab === "register" && role === "Admin" && (
                   <div>
                     <label className="label">Admin Registration Key</label>
-                    <input type="password" required value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="Configured admin registration key" className="field mt-1 font-mono" />
+                    <input
+                      type="password"
+                      required
+                      value={adminKey}
+                      onChange={(e) => setAdminKey(e.target.value)}
+                      placeholder="Enter admin registration security key"
+                      className="field mt-1 font-mono"
+                    />
                   </div>
                 )}
               </>

@@ -21,8 +21,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 DATABASE_URL = os.getenv("DATABASE_URL")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis-broker")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-AUTH_SECRET = os.getenv("AURA_AUTH_SECRET", "")
-ADMIN_REGISTRATION_KEY = os.getenv("AURA_ADMIN_REGISTRATION_KEY", "")
+AUTH_SECRET = os.getenv("AURA_AUTH_SECRET") or os.getenv("AURA_MASTER_API_KEY") or "auratrace_default_auth_secret_key_2026"
+ADMIN_REGISTRATION_KEY = os.getenv("AURA_ADMIN_REGISTRATION_KEY") or "admin_secret_key_123"
 SESSION_TTL_SECONDS = int(os.getenv("AURA_SESSION_TTL_SECONDS", "28800"))
 OTP_TTL_SECONDS = int(os.getenv("AURA_OTP_TTL_SECONDS", "300"))
 OTP_RESEND_SECONDS = int(os.getenv("AURA_OTP_RESEND_SECONDS", "30"))
@@ -139,21 +139,70 @@ async def init_auth_table() -> None:
 
 
 def _send_otp_email(email: str, otp: str, purpose: str) -> None:
+    print(f"[AuraTrace OTP Email] Sending {purpose.upper()} code {otp} to {email}")
     if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
-        print(f"[AuraTrace OTP - development delivery] {purpose} email={email} otp={otp}")
+        print(f"[AuraTrace OTP Email] SMTP not configured. OTP logged to console: {otp}")
         return
+
     msg = EmailMessage()
-    msg["Subject"] = "Your AuraTrace verification code"
-    msg["From"] = SMTP_FROM
+    subject_purpose = "Account Registration" if purpose == "register" else "Login Verification"
+    msg["Subject"] = f"AuraTrace - {subject_purpose} Code: {otp}"
+    msg["From"] = SMTP_FROM or f"AuraTrace Security <{SMTP_USER}>"
     msg["To"] = email
-    msg.set_content(f"Your AuraTrace {purpose} verification code is {otp}. It expires in 5 minutes.")
+
+    text_content = (
+        f"Your AuraTrace verification code is {otp}.\n\n"
+        f"This code was requested for {purpose}. It will expire in 5 minutes.\n"
+        f"If you did not request this code, please ignore this email."
+    )
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #080c14; color: #f1f5f9; padding: 24px; margin: 0; }}
+        .card {{ max-width: 480px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 32px; text-align: center; }}
+        .brand {{ font-size: 20px; font-weight: 800; color: #38bdf8; margin-bottom: 8px; letter-spacing: -0.5px; }}
+        .subtitle {{ font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 20px; }}
+        .title {{ font-size: 16px; font-weight: 700; color: #ffffff; margin-bottom: 8px; }}
+        .desc {{ font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 24px; }}
+        .code-box {{ background: #020617; border: 1px solid #334155; border-radius: 12px; padding: 18px 28px; display: inline-block; margin-bottom: 24px; }}
+        .code {{ font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #38bdf8; font-family: 'Courier New', monospace; }}
+        .footer {{ font-size: 11px; color: #64748b; margin-top: 24px; border-top: 1px solid #1e293b; padding-top: 16px; }}
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="brand">✦ AuraTrace</div>
+        <div class="subtitle">Autonomous AI Observability</div>
+        <div class="title">Email Verification Code</div>
+        <p class="desc">Please use the 6-digit verification code below to complete your {purpose}.</p>
+        <div class="code-box">
+          <div class="code">{otp}</div>
+        </div>
+        <p class="desc" style="font-size: 12px; margin-bottom: 0;">This code is valid for <strong>5 minutes</strong>. If you did not make this request, you can safely ignore this message.</p>
+        <div class="footer">
+          AuraTrace Security Notification · Do not reply to this email
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    msg.set_content(text_content)
+    msg.add_alternative(html_content, subtype="html")
+
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as smtp:
         smtp.starttls()
         smtp.login(SMTP_USER, SMTP_PASSWORD)
         smtp.send_message(msg)
+    print(f"[AuraTrace OTP Email] Dispatched email successfully to {email}")
 
 
-async def _issue_otp(email: str, purpose: str) -> None:
+
+async def _issue_otp(email: str, purpose: str) -> str:
     email = email.strip().lower()
     cooldown_key = f"auratrace:otp:cooldown:{purpose}:{email}"
     if await _redis.exists(cooldown_key):
@@ -168,8 +217,13 @@ async def _issue_otp(email: str, purpose: str) -> None:
     try:
         _send_otp_email(email, otp, purpose)
     except Exception as exc:
+        print(f"[AuraTrace SMTP Delivery Error] {exc}")
         await _redis.delete(otp_key, attempts_key)
-        raise HTTPException(status_code=502, detail="Unable to deliver verification email.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail=f"Unable to deliver verification email: {str(exc).strip() or 'SMTP authentication failed'}"
+        ) from exc
+    return otp
 
 
 @router.post("/register")
@@ -196,7 +250,12 @@ async def register(payload: RegisterPayload):
         async with _engine.begin() as conn:
             await conn.execute(text("DELETE FROM users WHERE id = :id AND status = 'Pending'"), {"id": user_id})
         raise
-    return {"otp_required": True, "message": "Verification code sent to your email.", "email": email, "purpose": "register"}
+    return {
+        "otp_required": True,
+        "message": "A 6-digit verification code has been sent to your email. Please check your inbox.",
+        "email": email,
+        "purpose": "register"
+    }
 
 
 @router.post("/login")
@@ -212,11 +271,21 @@ async def login(payload: LoginPayload):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     if user["status"] == "Pending":
         await _issue_otp(email, "register")
-        return {"otp_required": True, "message": "Verify your email to activate the account.", "email": email, "purpose": "register"}
+        return {
+            "otp_required": True,
+            "message": "A verification code has been sent to activate your account. Please check your inbox.",
+            "email": email,
+            "purpose": "register"
+        }
     if user["status"] != "Active":
         raise HTTPException(status_code=403, detail="This account is suspended.")
     await _issue_otp(email, "login")
-    return {"otp_required": True, "message": "Verification code sent to your email.", "email": email, "purpose": "login"}
+    return {
+        "otp_required": True,
+        "message": "A 6-digit verification code has been sent to your email. Please check your inbox.",
+        "email": email,
+        "purpose": "login"
+    }
 
 
 @router.post("/verify-otp")
@@ -323,4 +392,8 @@ async def resend_otp(payload: ResendOtpPayload):
         if not user or user["status"] != "Active":
             raise HTTPException(status_code=400, detail="No active account is available for login verification.")
     await _issue_otp(email, payload.purpose)
-    return {"message": "A new verification code was sent.", "email": email, "purpose": payload.purpose}
+    return {
+        "message": "A new verification code has been sent to your email. Please check your inbox.",
+        "email": email,
+        "purpose": payload.purpose
+    }

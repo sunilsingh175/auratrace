@@ -80,12 +80,23 @@ services:
       REDIS_ANOMALY_CHANNEL: ${REDIS_ANOMALY_CHANNEL}
 
       AURA_MASTER_API_KEY: ${AURA_MASTER_API_KEY}
+      AURA_AUTH_SECRET: ${AURA_AUTH_SECRET:-aura_auth_super_secret_key_123}
+      AURA_ADMIN_REGISTRATION_KEY: ${AURA_ADMIN_REGISTRATION_KEY:-admin_secret_key_123}
       ENABLE_API_AUTH: ${ENABLE_API_AUTH:-false}
+
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
 
       INGESTION_SERVICE_PORT: ${INGESTION_SERVICE_PORT}
 
     ports:
       - "${INGESTION_SERVICE_PORT}:8000"
+
+    volumes:
+      - ./backend:/app/backend
 
     depends_on:
       postgres-db:

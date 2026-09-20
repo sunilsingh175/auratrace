@@ -29,6 +29,12 @@ async function proxy(request: NextRequest) {
   const url = `${API_URL}/api/v1/${targetPath}${suffix}`;
 
   const headers = new Headers();
+  const contentType = request.headers.get("content-type");
+  if (contentType) {
+    headers.set("Content-Type", contentType);
+  } else {
+    headers.set("Content-Type", "application/json");
+  }
   const authorization = request.headers.get("authorization");
   if (authorization) headers.set("Authorization", authorization);
   headers.set("X-API-Key", MASTER_KEY);

@@ -14,7 +14,13 @@ async function handler(request: NextRequest, context: { params: { path: string[]
 
   const headers = new Headers();
   const contentType = request.headers.get("content-type");
-  if (contentType) headers.set("content-type", contentType);
+  if (contentType) {
+    headers.set("content-type", contentType);
+  } else {
+    headers.set("content-type", "application/json");
+  }
+  const authorization = request.headers.get("authorization");
+  if (authorization) headers.set("authorization", authorization);
   headers.set("X-API-Key", MASTER_API_KEY);
 
   let body: BodyInit | undefined;
