@@ -139,6 +139,7 @@ async def test_login_requires_otp_for_active_user(monkeypatch):
 
     async def fake_issue_otp(email, purpose):
         issued.append((email, purpose))
+        return "123456", False
 
     async def fake_connect():
         return None
