@@ -21,8 +21,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 DATABASE_URL = os.getenv("DATABASE_URL")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis-broker")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-AUTH_SECRET = os.getenv("AURA_AUTH_SECRET") or os.getenv("AURA_MASTER_API_KEY") or "auratrace_default_auth_secret_key_2026"
-ADMIN_REGISTRATION_KEY = os.getenv("AURA_ADMIN_REGISTRATION_KEY") or "admin_secret_key_123"
+AUTH_SECRET = os.getenv("AURA_AUTH_SECRET", "").strip()
+ADMIN_REGISTRATION_KEY = os.getenv("AURA_ADMIN_REGISTRATION_KEY", "").strip()
 SESSION_TTL_SECONDS = int(os.getenv("AURA_SESSION_TTL_SECONDS", "28800"))
 OTP_TTL_SECONDS = int(os.getenv("AURA_OTP_TTL_SECONDS", "300"))
 OTP_RESEND_SECONDS = int(os.getenv("AURA_OTP_RESEND_SECONDS", "30"))
@@ -239,8 +239,11 @@ async def _issue_otp(email: str, purpose: str) -> tuple[str, bool]:
 @router.post("/register")
 async def register(payload: RegisterPayload):
     _require_config()
-    if payload.role == "Admin" and payload.admin_registration_key != ADMIN_REGISTRATION_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin registration key.")
+    if payload.role == "Admin":
+        if not ADMIN_REGISTRATION_KEY:
+            raise HTTPException(status_code=503, detail="Admin registration is not configured.")
+        if not hmac.compare_digest(payload.admin_registration_key or "", ADMIN_REGISTRATION_KEY):
+            raise HTTPException(status_code=403, detail="Invalid admin registration key.")
     email = payload.email.strip().lower()
     password_hash, password_salt = _hash_password(payload.password)
     user_id = uuid.uuid4()
