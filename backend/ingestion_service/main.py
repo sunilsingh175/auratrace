@@ -55,7 +55,7 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 STREAM_KEY = os.getenv("REDIS_STREAM_KEY", "telemetry_stream")
 REDIS_ANOMALY_CHANNEL = os.getenv("REDIS_ANOMALY_CHANNEL", "anomaly_events")
 MASTER_API_KEY = os.getenv("AURA_MASTER_API_KEY", "")
-ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "false").lower() in ("true", "1", "yes")
+ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "true").lower() in ("true", "1", "yes")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Redis Async Client
