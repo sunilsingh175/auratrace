@@ -23,7 +23,6 @@ import { InfrastructureStatus } from "@/types";
 export default function AdminMonitoringPage() {
   const [infra, setInfra] = useState<InfrastructureStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [contamination, setContamination] = useState(0.05);
 
   const loadData = async () => {
     setLoading(true);
@@ -80,13 +79,13 @@ export default function AdminMonitoringPage() {
               </div>
               <div className="mt-4">
                 <span className="font-mono text-2xl font-extrabold text-white">
-                  {infra?.redis_stream_length?.toLocaleString() || "142,850"}
+                  {infra?.redis_stream_length != null ? infra.redis_stream_length.toLocaleString() : "—"}
                 </span>
                 <span className="ml-1 text-xs text-slate-500">buffered</span>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] font-mono text-slate-400">
                 <span>Memory Footprint</span>
-                <span className="text-cyan-400">{infra?.redis_memory_used || "48.2 MB"}</span>
+                <span className="text-cyan-400">{infra?.redis_memory_used || "—"}</span>
               </div>
             </div>
 
@@ -98,13 +97,13 @@ export default function AdminMonitoringPage() {
               </div>
               <div className="mt-4">
                 <span className="font-mono text-2xl font-extrabold text-white">
-                  {infra?.postgres_vector_indexes?.toLocaleString() || "1,536"}
+                  {infra?.postgres_vector_indexes != null ? infra.postgres_vector_indexes.toLocaleString() : "—"}
                 </span>
                 <span className="ml-1 text-xs text-slate-500">dim IVFFlat</span>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] font-mono text-slate-400">
                 <span>Active Connection Pool</span>
-                <span className="text-indigo-400">{infra?.postgres_connections || 12} / 50</span>
+                <span className="text-indigo-400">{infra?.postgres_connections != null ? infra.postgres_connections : "—"}</span>
               </div>
             </div>
 
@@ -116,13 +115,13 @@ export default function AdminMonitoringPage() {
               </div>
               <div className="mt-4">
                 <span className="font-mono text-2xl font-extrabold text-white">
-                  {infra?.ml_queue_rate || 240}
+                  {infra?.ml_queue_rate != null ? infra.ml_queue_rate : "—"}
                 </span>
                 <span className="ml-1 text-xs text-slate-500">infer/sec</span>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] font-mono text-slate-400">
                 <span>Contamination Factor</span>
-                <span className="text-amber-400">{contamination}</span>
+                <span className="text-amber-400">{infra?.anomaly_threshold != null ? infra.anomaly_threshold : "—"}</span>
               </div>
             </div>
 
@@ -134,13 +133,13 @@ export default function AdminMonitoringPage() {
               </div>
               <div className="mt-4">
                 <span className="font-mono text-2xl font-extrabold text-white">
-                  {infra?.llm_latency_ms || 680}
+                  {infra?.llm_latency_ms != null ? infra.llm_latency_ms : "—"}
                 </span>
                 <span className="ml-1 text-xs text-slate-500">ms P95</span>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] font-mono text-slate-400">
                 <span>Embedding Model</span>
-                <span className="text-emerald-400">all-MiniLM-L6-v2</span>
+                <span className="text-emerald-400">{infra?.embedding_model || "—"}</span>
               </div>
             </div>
           </div>
@@ -165,18 +164,13 @@ export default function AdminMonitoringPage() {
                     <span className="font-bold text-slate-300">Contamination Threshold</span>
                     <span className="font-mono text-cyan-400 font-bold">{contamination}</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0.01"
-                    max="0.20"
-                    step="0.01"
-                    value={contamination}
-                    onChange={(e) => setContamination(parseFloat(e.target.value))}
-                    className="mt-2 w-full accent-cyan-400"
-                  />
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 font-mono text-xs text-slate-300">
+                    Configured anomaly threshold: <span className="font-bold text-cyan-400">{infra?.anomaly_threshold ?? "—"}</span>
+                    <span className="ml-3 text-slate-500">Rolling window: {infra?.anomaly_window_seconds ? `${infra.anomaly_window_seconds}s` : "—"}</span>
+                  </div>
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Controls the expected proportion of outliers in the telemetry dataset. Higher values increase sensitivity.
-                  </p>
+                    Read-only values reported from the backend configuration; this dashboard does not mutate the ML worker at runtime.
+                  </p>/p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2 font-mono text-xs">
@@ -201,24 +195,24 @@ export default function AdminMonitoringPage() {
                     RAG Knowledge Base & pgvector Index
                   </h3>
                 </div>
-                <span className="font-mono text-[10px] text-indigo-400">HNSW / Cosine</span>
+                <span className="font-mono text-[10px] text-indigo-400">{infra?.embedding_model || "Embedding model unavailable"}</span>
               </div>
 
               <div className="space-y-3 font-mono text-xs">
                 <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
                   <span className="text-slate-400">Indexed Incident Embeddings</span>
-                  <span className="font-bold text-white">2,840 vectors</span>
+                  <span className="font-bold text-white">{infra?.postgres_vector_indexes != null ? infra.postgres_vector_indexes : "—"} vector indexes</span>
                 </div>
 
                 <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
                   <span className="text-slate-400">Embedding Computation</span>
-                  <span className="font-bold text-cyan-400">{infra?.embedding_latency_ms || 42}ms</span>
+                  <span className="font-bold text-cyan-400">{infra?.embedding_latency_ms != null ? infra.embedding_latency_ms : "—"}ms</span>
                 </div>
 
                 <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3">
                   <span className="text-slate-400">LLM Generation Latency</span>
                   <span className="font-bold text-slate-200">
-                    {infra?.llm_latency_ms || 680}ms per diagnosis
+                    {infra?.llm_latency_ms != null ? infra.llm_latency_ms : "—"}ms per diagnosis
                   </span>
                 </div>
 
