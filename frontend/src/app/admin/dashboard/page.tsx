@@ -113,7 +113,7 @@ export default function AdminDashboardPage() {
                 </h3>
               </div>
               <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
-                All 4 Systems Operational
+                {infra ? "Live subsystem status" : "Awaiting health probes"}
               </span>
             </div>
 
@@ -150,7 +150,7 @@ export default function AdminDashboardPage() {
 
               <SystemHealthCard
                 name="RAG Doctor LLM"
-                role="Gemini 2.5 Flash"
+                role={infra?.llm_model || "LLM model unavailable"}
                 status={infra?.rag_doctor_status || "unknown"}
                 latency={infra?.llm_latency_ms != null ? `${infra.llm_latency_ms}ms` : "—"}
                 metricLabel="Embed"
