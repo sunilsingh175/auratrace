@@ -6,7 +6,7 @@ import { CheckCircle2, AlertTriangle, XCircle, LucideIcon } from "lucide-react";
 interface SystemHealthCardProps {
   name: string;
   role: string;
-  status: "healthy" | "degraded" | "offline";
+  status: "healthy" | "degraded" | "offline" | "unknown";
   latency?: string | number;
   metricLabel?: string;
   metricValue?: string | number;
@@ -24,6 +24,7 @@ export function SystemHealthCard({
 }: SystemHealthCardProps) {
   const isHealthy = status === "healthy";
   const isDegraded = status === "degraded";
+  const isUnknown = status === "unknown";
 
   return (
     <div className="panel p-4 transition hover:-translate-y-0.5">
@@ -35,6 +36,8 @@ export function SystemHealthCard({
                 ? "bg-emerald-500/10 text-emerald-400"
                 : isDegraded
                 ? "bg-amber-500/10 text-amber-400"
+                : isUnknown
+                ? "bg-slate-500/10 text-slate-400"
                 : "bg-rose-500/10 text-rose-400"
             }`}
           >
@@ -52,12 +55,14 @@ export function SystemHealthCard({
               ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/30"
               : isDegraded
               ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/30"
+              : isUnknown
+              ? "bg-slate-500/10 text-slate-400 ring-1 ring-slate-500/30"
               : "bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/30"
           }`}
         >
           <span
             className={`h-1.5 w-1.5 rounded-full ${
-              isHealthy ? "bg-emerald-400 animate-pulse" : isDegraded ? "bg-amber-400" : "bg-rose-400"
+              isHealthy ? "bg-emerald-400 animate-pulse" : isDegraded ? "bg-amber-400" : isUnknown ? "bg-slate-400" : "bg-rose-400"
             }`}
           />
           <span>{status}</span>
