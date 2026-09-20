@@ -1731,7 +1731,7 @@ async def get_incident(
 async def update_incident_status(
     incident_id: str,
     payload: IncidentStatusUpdate,
-    api_key: str = Depends(verify_api_key),
+    current_user: dict = Depends(require_admin),
 ):
     if db_engine:
         try:
@@ -1766,7 +1766,7 @@ async def update_incident_status(
     tags=["Incidents & Diagnostics"],
     summary="Trigger automated AI Doctor RAG re-diagnosis",
 )
-async def trigger_ai_doctor(incident_id: str, api_key: str = Depends(verify_api_key)):
+async def trigger_ai_doctor(incident_id: str, current_user: dict = Depends(require_admin)):
     # Fetch incident and republish anomaly event to trigger RAG worker
     if db_engine:
         try:
@@ -1904,7 +1904,7 @@ async def list_services(api_key: str = Depends(verify_api_key)):
 )
 async def create_service(
     payload: ServiceCreatePayload,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     service_name = payload.id or payload.name
     new_key = f"at_live_{uuid.uuid4().hex[:16]}"
@@ -1966,7 +1966,7 @@ async def create_service(
 )
 async def simulate_crash(
     payload: CrashSimulationPayload,
-    api_key: str = Depends(verify_api_key),
+    current_user: dict = Depends(require_admin),
 ):
     scenarios = {
         "db_pool_exhaustion": {
@@ -2098,49 +2098,3 @@ async def health_check():
                 )
             postgres_status = "healthy"
         except Exception as exc:
-            postgres_status = "offline"
-            logger.warning("Health check PostgreSQL probe failed: %s", exc)
-    else:
-        postgres_status = "offline"
-
-    return {
-        "status": "healthy",
-        "service": "auratrace-ingestion-service",
-        "version": "1.2.0",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "api_status": "healthy",
-        "api_latency_ms": round((time.perf_counter() - started) * 1000, 2),
-        "redis_status": redis_status,
-        "redis_stream_length": redis_stream_length,
-        "redis_memory_used": redis_memory_used,
-        "postgres_status": postgres_status,
-        "postgres_connections": postgres_connections,
-        "postgres_vector_indexes": postgres_vector_indexes,
-        "ml_worker_status": "unknown",
-        "ml_queue_rate": None,
-        "ml_contamination": None,
-        "rag_doctor_status": "unknown",
-        "embedding_latency_ms": None,
-        "llm_latency_ms": None,
-        "active_ws_clients": len(manager.active_connections),
-        "anomaly_threshold": float(os.getenv("ANOMALY_THRESHOLD", "0.75")),
-        "anomaly_window_seconds": int(os.getenv("ANOMALY_WINDOW_SIZE_SECONDS", "300")),
-        "embedding_model": os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
-        "llm_model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
-    }
-
-
-# 7. WebSocket Live Stream
-@app.websocket("/ws")
-@app.websocket("/ws/telemetry")
-@app.websocket("/ws/telementry")
-@app.websocket("/api/v1/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-    except Exception:
-        manager.disconnect(websocket)
