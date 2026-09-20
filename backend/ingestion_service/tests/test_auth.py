@@ -351,3 +351,26 @@ async def test_change_password_rejects_wrong_current_password(monkeypatch):
 
     assert exc.value.status_code == 400
     assert "current password" in exc.value.detail.lower()
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_suspend_self():
+    admin_id = uuid.uuid4()
+    with pytest.raises(HTTPException) as exc:
+        await auth.update_user_status(
+            str(admin_id),
+            {"status": "Suspended"},
+            {"id": admin_id, "role": "Admin", "status": "Active"},
+        )
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_delete_self():
+    admin_id = uuid.uuid4()
+    with pytest.raises(HTTPException) as exc:
+        await auth.delete_user(
+            str(admin_id),
+            {"id": admin_id, "role": "Admin", "status": "Active"},
+        )
+    assert exc.value.status_code == 400
