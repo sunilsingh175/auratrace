@@ -74,12 +74,12 @@ export interface SystemStats {
 }
 
 export interface InfrastructureStatus {
-  api_status: "healthy" | "degraded" | "offline";
+  api_status: "healthy" | "degraded" | "offline" | "unknown";
   api_latency_ms?: number;
-  redis_status: "healthy" | "degraded" | "offline";
+  redis_status: "healthy" | "degraded" | "offline" | "unknown";
   redis_stream_length?: number;
   redis_memory_used?: string;
-  postgres_status: "healthy" | "degraded" | "offline";
+  postgres_status: "healthy" | "degraded" | "offline" | "unknown";
   postgres_connections?: number;
   postgres_vector_indexes?: number;
   ml_worker_status: "healthy" | "degraded" | "offline" | "unknown";
