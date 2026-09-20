@@ -39,8 +39,7 @@ export default function IncidentsPage() {
     (i) => i.status === "RESOLVED"
   ).length;
 
-  return (
-    <AppShell
+  return (\n    <ProtectedRoute role="Developer">\n      <AppShell
       title="Incident Intelligence Hub"
       subtitle="Automated anomaly diagnostics, pgvector RAG matching and AI triage"
     >
@@ -145,6 +144,4 @@ export default function IncidentsPage() {
             onRefresh={refresh}
           />
         </div>
-      </AppShell>
-  );
-}
+      </AppShell>\n    </ProtectedRoute>\n  );\n}
