@@ -124,7 +124,9 @@ function ProfileSettingsContent() {
         .substring(0, 2)
     : "SR";
 
-  return (\n    <ProtectedRoute role="Developer">\n      <AppShell
+  return (
+    <ProtectedRoute role="Developer">
+      <AppShell
       title="Profile & Security Settings"
       subtitle="Manage your personal account credentials, profile details, and security configuration"
     >
@@ -417,4 +419,7 @@ function ProfileSettingsContent() {
           </div>
         </div>
       </div>
-      </AppShell>\n    </ProtectedRoute>\n  );\n}
+      </AppShell>
+    </ProtectedRoute>
+  );
+}
