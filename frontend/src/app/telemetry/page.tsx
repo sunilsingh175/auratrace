@@ -4,7 +4,6 @@ import React, { useMemo, useState } from "react";
 import { Radio, RefreshCw } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { LogConsole } from "@/components/telemetry/LogConsole";
 import { TelemetryChart } from "@/components/telemetry/TelemetryChart";
 import { AnomalyAlertBanner } from "@/components/anomaly-alert-banner";
@@ -159,10 +158,8 @@ function TelemetryContent() {
 
 export default function TelemetryPage() {
   return (
-    <ProtectedRoute role="Developer">
     <React.Suspense fallback={<div className="panel p-6 text-slate-400">Loading telemetry inspector...</div>}>
       <TelemetryContent />
     </React.Suspense>
-    </ProtectedRoute>
   );
 }
