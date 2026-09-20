@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   Activity,
   AlertTriangle,
@@ -400,6 +401,7 @@ export default function IncidentDetailsPage() {
   }
 
   return (
+    <ProtectedRoute>
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-7xl px-6 py-8">
 
@@ -865,6 +867,7 @@ export default function IncidentDetailsPage() {
 
       </div>
     </main>
+    </ProtectedRoute>
   );
 }
 
