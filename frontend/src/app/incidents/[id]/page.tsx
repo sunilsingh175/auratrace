@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { useAuth } from "@/context/auth-context";
 import {
   Activity,
   AlertTriangle,
@@ -135,6 +136,8 @@ function statusLabel(status: string): string {
 
 export default function IncidentDetailsPage() {
   const params = useParams();
+
+  const { user } = useAuth();
 
   const incidentId = Array.isArray(params?.id)
     ? params.id[0]
@@ -414,6 +417,7 @@ export default function IncidentDetailsPage() {
             Back to incidents
           </Link>
 
+          {user && (
           <button
             type="button"
             onClick={handleRegenerate}
@@ -432,6 +436,7 @@ export default function IncidentDetailsPage() {
               ? "Regenerating..."
               : "Regenerate Diagnosis"}
           </button>
+          )}
         </div>
 
         {error && (
@@ -500,7 +505,7 @@ export default function IncidentDetailsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            {user && <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() =>
@@ -522,7 +527,7 @@ export default function IncidentDetailsPage() {
               >
                 Resolve
               </button>
-            </div>
+            </div>}
           </div>
         </section>
 
