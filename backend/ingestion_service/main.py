@@ -234,6 +234,12 @@ class ServiceCreatePayload(BaseModel):
     description: Optional[str] = Field(None, description="Service description")
     environment: str = Field("production", description="Environment: 'production', 'staging', 'development'")
 
+class ServiceUpdatePayload(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    environment: Optional[str] = Field(None, pattern="^(development|staging|production)$")
+    status: Optional[str] = Field(None, pattern="^(ACTIVE|INACTIVE|DEGRADED)$")
+
 class IncidentStatusUpdate(BaseModel):
     status: str = Field(..., description="Target status: 'OPEN', 'INVESTIGATING', 'RESOLVED'")
 
@@ -1824,10 +1830,11 @@ async def list_services(api_key: str = Depends(verify_api_key)):
                         s.status,
                         s.api_key_hash,
                         s.created_at,
+                        s.owner_id,
                         COUNT(i.id) AS incident_count
                     FROM services s
                     LEFT JOIN incidents i ON s.id = i.service_id AND i.status IN ('OPEN', 'INVESTIGATING')
-                    GROUP BY s.id, s.name, s.environment, s.status, s.api_key_hash, s.created_at
+                    GROUP BY s.id, s.name, s.environment, s.status, s.api_key_hash, s.created_at, s.owner_id
                     ORDER BY s.name ASC
                 """)
                 res = await conn.execute(stmt)
@@ -1887,6 +1894,7 @@ async def list_services(api_key: str = Depends(verify_api_key)):
                         ),
                         "api_key_hash": row[4],
                         "created_at": row[5].isoformat() if row[5] else None,
+                        "owner_id": str(row[7]) if row[7] else None,
                     })
 
                 if services:
@@ -1904,52 +1912,86 @@ async def list_services(api_key: str = Depends(verify_api_key)):
 )
 async def create_service(
     payload: ServiceCreatePayload,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
     service_name = payload.id or payload.name
     new_key = f"at_live_{uuid.uuid4().hex[:16]}"
 
-    if db_engine:
-        try:
-            async with db_engine.begin() as conn:
-                res = await conn.execute(
-                    text("""
-                        INSERT INTO services (name, description, environment, status, api_key_hash)
-                        VALUES (:name, :desc, :env, 'ACTIVE', :key)
-                        ON CONFLICT (name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-                        RETURNING id, name, environment, status, created_at
-                    """),
-                    {
-                        "name": service_name,
-                        "desc": payload.description or f"Microservice {service_name}",
-                        "env": payload.environment,
-                        "key": new_key,
-                    },
-                )
-                row = res.first()
-                if row:
-                    return {
-                        "id": row[1],
-                        "name": row[1],
-                        "environment": row[2],
-                        "status": "active",
-                        "api_key": new_key,
-                        "created_at": row[4].isoformat() if row[4] else datetime.now(timezone.utc).isoformat(),
-                        "message": "Service successfully registered in PostgreSQL.",
-                    }
-        except Exception as exc:
-            logger.error(f"Error creating service: {exc}")
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
 
-    return {
-        "id": service_name,
-        "name": payload.name,
-        "environment": payload.environment,
-        "status": "healthy",
-        "api_key": new_key,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "message": "Service registered.",
-    }
+    try:
+        async with db_engine.begin() as conn:
+            res = await conn.execute(
+                text("""
+                    INSERT INTO services (name, description, environment, status, api_key_hash, owner_id)
+                    VALUES (:name, :desc, :env, 'ACTIVE', :key, :owner_id)
+                    RETURNING id, name, environment, status, created_at, owner_id
+                """),
+                {"name": service_name, "desc": payload.description or f"Microservice {service_name}",
+                 "env": payload.environment, "key": new_key, "owner_id": current_user["id"]},
+            )
+            row = res.mappings().first()
+            if row:
+                return {"id": row["name"], "name": row["name"], "environment": row["environment"],
+                        "status": "active", "api_key": new_key,
+                        "created_at": row["created_at"].isoformat() if row["created_at"] else datetime.now(timezone.utc).isoformat(),
+                        "owner_id": str(row["owner_id"]) if row["owner_id"] else None,
+                        "message": "Service successfully registered in PostgreSQL."}
+    except Exception as exc:
+        logger.error(f"Error creating service: {exc}")
+        if "unique" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="A service with this name already exists.")
+        raise HTTPException(status_code=500, detail="Failed to register service.")
 
+
+@app.patch("/api/v1/services/{service_id}", tags=["Service Registry"], summary="Update an owned service or any service as Admin")
+async def update_service(service_id: str, payload: ServiceUpdatePayload, current_user: dict = Depends(get_current_user)):
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
+    updates=[]; params: Dict[str,Any]={"service_id":service_id}
+    if payload.name is not None: updates.append("name = :name"); params["name"]=payload.name.strip()
+    if payload.description is not None: updates.append("description = :description"); params["description"]=payload.description
+    if payload.environment is not None: updates.append("environment = :environment"); params["environment"]=payload.environment
+    if payload.status is not None: updates.append("status = :status"); params["status"]=payload.status
+    if not updates: raise HTTPException(status_code=400, detail="No service fields supplied for update.")
+    owner_clause="" if current_user["role"]=="Admin" else " AND owner_id = :owner_id"
+    if current_user["role"]!="Admin": params["owner_id"]=current_user["id"]
+    try:
+        async with db_engine.begin() as conn:
+            result=await conn.execute(text(f"""UPDATE services SET {", ".join(updates)}, updated_at=CURRENT_TIMESTAMP
+                WHERE (id::text=:service_id OR name=:service_id){owner_clause}
+                RETURNING id,name,environment,status,owner_id,created_at"""),params)
+            row=result.mappings().first()
+            if not row:
+                raise HTTPException(status_code=403 if current_user["role"]!="Admin" else 404,
+                                    detail="You can only modify services you own." if current_user["role"]!="Admin" else "Service not found.")
+            return {"id":row["name"],"name":row["name"],"environment":row["environment"],"status":row["status"].lower(),
+                    "owner_id":str(row["owner_id"]) if row["owner_id"] else None,
+                    "created_at":row["created_at"].isoformat() if row["created_at"] else None,"message":"Service updated successfully."}
+    except HTTPException: raise
+    except Exception as exc:
+        logger.error(f"Error updating service: {exc}"); raise HTTPException(status_code=500, detail="Failed to update service.")
+
+@app.delete("/api/v1/services/{service_id}", tags=["Service Registry"], summary="Delete an owned service or any service as Admin")
+async def delete_service(service_id: str, current_user: dict = Depends(get_current_user)):
+    if not db_engine: raise HTTPException(status_code=503, detail="Database unavailable.")
+    owner_clause="" if current_user["role"]=="Admin" else " AND owner_id = :owner_id"
+    params: Dict[str,Any]={"service_id":service_id}
+    if current_user["role"]!="Admin": params["owner_id"]=current_user["id"]
+    try:
+        async with db_engine.begin() as conn:
+            result=await conn.execute(text(f"""DELETE FROM services
+                WHERE (id::text=:service_id OR name=:service_id){owner_clause}
+                RETURNING id,name"""),params)
+            row=result.mappings().first()
+            if not row:
+                raise HTTPException(status_code=403 if current_user["role"]!="Admin" else 404,
+                                    detail="You can only delete services you own." if current_user["role"]!="Admin" else "Service not found.")
+            return {"success":True,"id":str(row["id"]),"name":row["name"],"message":"Service deleted successfully."}
+    except HTTPException: raise
+    except Exception as exc:
+        logger.error(f"Error deleting service: {exc}"); raise HTTPException(status_code=500, detail="Failed to delete service.")
 
 # 5. Chaos Testing & Simulation
 @app.post(
@@ -2098,3 +2140,4 @@ async def health_check():
                 )
             postgres_status = "healthy"
         except Exception as exc:
+
