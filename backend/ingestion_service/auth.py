@@ -122,7 +122,7 @@ async def get_current_user(authorization: str | None = Header(default=None)) -> 
         raise HTTPException(status_code=401, detail="Bearer access token required.")
     payload = _decode_token(authorization.split(" ", 1)[1].strip())
     async with _engine.connect() as conn:
-        result = await conn.execute(text("SELECT id, name, email, role, status FROM users WHERE id = :id"), {"id": payload["sub"]})
+        result = await conn.execute(text("SELECT id, name, email, role, status FROM users WHERE id::text = :id"), {"id": str(payload["sub"])})
         user = result.mappings().first()
     if not user or user["status"] != "Active" or user["role"] != payload["role"]:
         raise HTTPException(status_code=401, detail="Account is unavailable.")
