@@ -4,7 +4,7 @@ export type Severity = "critical" | "high" | "medium" | "low";
 
 export type IncidentStatus = "OPEN" | "INVESTIGATING" | "RESOLVED";
 
-export type ServiceStatus = "healthy" | "warning" | "critical";
+export type ServiceStatus = "healthy" | "warning" | "critical" | "active" | "inactive" | "degraded";
 
 export interface Service {
   id: string;
@@ -16,7 +16,7 @@ export interface Service {
   latency_ms: number;
   incident_count: number;
   last_activity?: string;
-  api_key_hash?: string;
+  api_key?: string;
   created_at?: string;
   owner_id?: string;
 }

@@ -148,11 +148,8 @@ async def send_burst(
 
 async def run(args: argparse.Namespace) -> int:
     headers = {"Content-Type": "application/json"}
-    if args.auth:
-        api_key = os.getenv("AURA_MASTER_API_KEY")
-        if not api_key:
-            print("ERROR: --auth was supplied but AURA_MASTER_API_KEY is not set.")
-            return 2
+    api_key = os.getenv("AURA_MASTER_API_KEY") or os.getenv("AURA_API_KEY") or "aura_secret_key_123"
+    if api_key:
         headers["X-API-Key"] = api_key
 
     async with httpx.AsyncClient(timeout=5.0) as client:

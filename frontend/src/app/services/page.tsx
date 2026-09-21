@@ -84,7 +84,7 @@ export default function ServicesPage() {
       });
 
       setServices((prev) => [res, ...prev.filter((service) => service.id !== res.id)]);
-      setCreatedKey(res.api_key_hash || null);
+      setCreatedKey(res.api_key || null);
       setActionSuccess(`Microservice "${res.name}" registered successfully.`);
       setTimeout(() => setActionSuccess(null), 5000);
     } catch (err) {
@@ -272,8 +272,9 @@ export default function ServicesPage() {
         ) : (
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((svc) => {
-              const isCrit = svc.status === "critical";
-              const isWarn = svc.status === "warning";
+              const normStatus = (svc.status || "active").toLowerCase();
+              const isCrit = normStatus === "critical" || normStatus === "degraded";
+              const isWarn = normStatus === "warning" || normStatus === "inactive";
               const hasTelemetry = svc.requests > 0 || svc.latency_ms > 0 || svc.error_rate > 0;
               const hasManagePermission = canManageService(svc);
               const isOwner = Boolean(user && svc.owner_id === user.id);

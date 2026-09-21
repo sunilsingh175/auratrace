@@ -154,7 +154,7 @@ export async function registerService(data: { id: string; name: string; environm
     latency_ms: Number(created.latency_ms ?? 0),
     incident_count: Number(created.incident_count ?? 0),
     last_activity: created.last_activity || undefined,
-    api_key_hash: created.api_key,
+    api_key: created.api_key,
     created_at: created.created_at,
     owner_id: created.owner_id || undefined,
   };

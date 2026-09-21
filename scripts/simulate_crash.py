@@ -17,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASET_PATH = os.path.join(BASE_DIR, "datasets", "HDFS_v1", "HDFS.log")
 INGESTION_URL = os.getenv("INGESTION_URL", "http://127.0.0.1:8000/api/v1/telemetry")
-API_KEY = os.getenv("AURA_MASTER_API_KEY", "")
+API_KEY = os.getenv("AURA_MASTER_API_KEY") or "aura_secret_key_123"
 
 SERVICES = [
     "payment-service",
