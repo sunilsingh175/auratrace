@@ -5,7 +5,7 @@ Official Python telemetry and unhandled crash diagnostics SDK for Trace.
 ## Quickstart
 
 ```python
-from auratrace import Trace
+from auratrace import Trace, TraceMiddleware
 
 # Initialize Trace Client
 trace = Trace(
@@ -23,7 +23,7 @@ try:
 except Exception as e:
     trace.capture_exception(e, message="Payment processing failure")
 
-# 3. Use as a FastAPI / Flask middleware
+# 3. Use as a FastAPI / Starlette middleware
 # Automatically records latency and reports unhandled exceptions
-app.add_middleware(trace.get_fastapi_middleware())
+app.add_middleware(TraceMiddleware, client=trace)
 ```

@@ -8,9 +8,16 @@ import time
 import queue
 import threading
 import traceback
+import json
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-import httpx
+from typing import Optional, Dict, Any, List
+import urllib.request
+import urllib.error
+try:
+    import httpx
+except ImportError:
+    httpx = None
+
 
 
 class Trace:
@@ -119,7 +126,7 @@ class Trace:
 
     def _flusher_loop(self):
         """Background daemon sending buffered logs to Trace Ingestion Gateway."""
-        client = httpx.Client(timeout=5.0)
+        client = httpx.Client(timeout=5.0) if httpx is not None else None
         url = f"{self.endpoint}/api/v1/telemetry/batch"
         headers = {
             "Content-Type": "application/json",
@@ -139,7 +146,13 @@ class Trace:
 
             if batch:
                 try:
-                    client.post(url, json={"events": batch}, headers=headers)
+                    if client is not None:
+                        client.post(url, json={"events": batch}, headers=headers)
+                    else:
+                        req_data = json.dumps({"events": batch}).encode("utf-8")
+                        req = urllib.request.Request(url, data=req_data, headers=headers, method="POST")
+                        with urllib.request.urlopen(req, timeout=5.0) as resp:
+                            pass
                 except Exception:
                     pass  # Fail silent to avoid degrading primary service
 
