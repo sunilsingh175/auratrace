@@ -74,12 +74,14 @@ export default function AdminDashboardPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
                   <ShieldCheck className="h-4 w-4" />
                 </span>
-                <span className="label">Cluster Control Surface</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
+                  Cluster Control Surface
+                </span>
               </div>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 font-heading md:text-3xl">
                 Executive Health & Ops Matrix
               </h1>
             </div>
@@ -92,12 +94,12 @@ export default function AdminDashboardPage() {
                 className="button-secondary"
               >
                 <RefreshCw
-                  className={`h-3.5 w-3.5 ${loading ? "animate-spin text-indigo-400" : ""}`}
+                  className={`h-3.5 w-3.5 ${loading ? "animate-spin text-slate-600" : ""}`}
                 />
                 <span>Sync Node Cluster</span>
               </button>
               <Link href="/admin/monitoring" className="button-primary">
-                <Cpu className="h-3.5 w-3.5 text-indigo-200" />
+                <Cpu className="h-3.5 w-3.5 text-white" />
                 <span>Deep Engine Telemetry</span>
               </Link>
             </div>
@@ -105,14 +107,14 @@ export default function AdminDashboardPage() {
 
           {/* Core Cluster Health Matrix (4 Core Systems) */}
           <div className="panel p-5">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <Server className="h-4 w-4 text-indigo-400" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                <Server className="h-4 w-4 text-red-600" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-heading">
                   Distributed Subsystem Health & Latency
                 </h3>
               </div>
-              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
+              <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 font-mono text-[10px] font-bold text-emerald-700 border border-emerald-200">
                 {infra ? "Live subsystem status" : "Awaiting health probes"}
               </span>
             </div>
@@ -165,33 +167,33 @@ export default function AdminDashboardPage() {
 
           {/* Recent live incidents */}
           <div className="panel p-5">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-cyan-400" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                <Activity className="h-4 w-4 text-red-600" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-heading">
                   Recent Live Incidents
                 </h3>
               </div>
-              <span className="font-mono text-[10px] text-slate-500">Live backend incident records</span>
+              <span className="font-mono text-[10px] text-slate-400">Live backend incident records</span>
             </div>
             <div className="mt-4 space-y-2.5 font-mono text-xs">
               {incidents.slice(0, 5).length > 0 ? incidents.slice(0, 5).map((incident) => (
-                <div key={incident.id} className="flex flex-col gap-2 rounded-lg border border-slate-800/60 bg-slate-950/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div key={incident.id} className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-[#f8fafc] p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-400">
+                    <span className="rounded bg-rose-50 border border-rose-200 px-1.5 py-0.5 text-[9px] font-bold text-rose-700">
                       {incident.severity || "ANOMALY"}
                     </span>
-                    <span className="truncate text-slate-200">
+                    <span className="truncate text-slate-800 font-semibold">
                       {incident.error_type || incident.title || "Anomaly"} · {incident.service_id}
                     </span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3 text-[10px] text-slate-500">
+                  <div className="flex shrink-0 items-center gap-3 text-[10px] text-slate-400">
                     <span>score {typeof incident.anomaly_score === "number" ? incident.anomaly_score.toFixed(2) : "—"}</span>
                     <span>{incident.created_at ? new Date(incident.created_at).toLocaleString() : "—"}</span>
                   </div>
                 </div>
               )) : (
-                <div className="rounded-lg border border-slate-800/60 bg-slate-950/60 p-4 text-center text-slate-500">
+                <div className="rounded-xl border border-slate-100 bg-[#f8fafc] p-4 text-center text-slate-400">
                   No incident records returned by the backend.
                 </div>
               )}

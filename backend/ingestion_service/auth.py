@@ -32,6 +32,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "startuphub695@gmail.com").strip()
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 _engine = create_async_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
@@ -54,12 +55,22 @@ class LoginPayload(BaseModel):
 class VerifyOtpPayload(BaseModel):
     email: str = Field(..., min_length=5, max_length=320)
     otp: str = Field(..., pattern=r"^\d{6}$")
-    purpose: str = Field(..., pattern="^(register|login)$")
+    purpose: str = Field(..., pattern="^(register|login|reset_password)$")
 
 
 class ResendOtpPayload(BaseModel):
     email: str = Field(..., min_length=5, max_length=320)
-    purpose: str = Field(..., pattern="^(register|login)$")
+    purpose: str = Field(..., pattern="^(register|login|reset_password)$")
+
+
+class ForgotPasswordPayload(BaseModel):
+    email: str = Field(..., min_length=5, max_length=320)
+
+
+class ResetPasswordPayload(BaseModel):
+    email: str = Field(..., min_length=5, max_length=320)
+    otp: str = Field(..., pattern=r"^\d{6}$")
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 class UpdateProfilePayload(BaseModel):
@@ -155,14 +166,28 @@ def _send_otp_email(email: str, otp: str, purpose: str) -> None:
         return
 
     msg = EmailMessage()
-    subject_purpose = "Account Registration" if purpose == "register" else "Login Verification"
+    subject_purpose = (
+        "Account Registration"
+        if purpose == "register"
+        else "Password Reset"
+        if purpose == "reset_password"
+        else "Security Verification"
+    )
     msg["Subject"] = f"Automatic Backend Diagnostics - {subject_purpose} Code: {otp}"
     msg["From"] = SMTP_FROM or f"Automatic Backend Diagnostics Security <{SMTP_USER}>"
     msg["To"] = email
 
+    readable_purpose = (
+        "account registration"
+        if purpose == "register"
+        else "password recovery"
+        if purpose == "reset_password"
+        else "verification"
+    )
+
     text_content = (
         f"Your verification code is {otp}.\n\n"
-        f"This code was requested for {purpose}. It will expire in 5 minutes.\n"
+        f"This code was requested for {readable_purpose}. It will expire in 5 minutes.\n"
         f"If you did not request this code, please ignore this email."
     )
 
@@ -188,7 +213,7 @@ def _send_otp_email(email: str, otp: str, purpose: str) -> None:
         <div class="brand">✦ Automatic Backend Diagnostics Platform</div>
         <div class="subtitle">Autonomous AI Observability</div>
         <div class="title">Email Verification Code</div>
-        <p class="desc">Please use the 6-digit verification code below to complete your {purpose}.</p>
+        <p class="desc">Please use the 6-digit verification code below to complete your {readable_purpose}.</p>
         <div class="code-box">
           <div class="code">{otp}</div>
         </div>
@@ -282,7 +307,7 @@ async def login(payload: LoginPayload):
     email = payload.email.strip().lower()
     async with _engine.begin() as conn:
         result = await conn.execute(text("""
-            SELECT password_hash, password_salt, status FROM users WHERE email = :email
+            SELECT id, name, role, password_hash, password_salt, status, created_at FROM users WHERE email = :email
         """), {"email": email})
         user = result.mappings().first()
     if not user or not _verify_password(payload.password, user["password_salt"], user["password_hash"]):
@@ -302,17 +327,84 @@ async def login(payload: LoginPayload):
         }
     if user["status"] != "Active":
         raise HTTPException(status_code=403, detail="This account is suspended.")
-    otp, delivered = await _issue_otp(email, "login")
+
+    # Direct password login without OTP for active users
+    token = _make_token(str(user["id"]), user["role"])
+    created_at = user["created_at"]
+    created_date = created_at.date().isoformat() if isinstance(created_at, datetime) else str(created_at)[:10]
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": str(user["id"]),
+            "name": user["name"],
+            "email": email,
+            "role": user["role"],
+            "status": user["status"],
+            "created_at": created_date
+        }
+    }
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordPayload):
+    _require_config()
+    email = payload.email.strip().lower()
+    async with _engine.begin() as conn:
+        result = await conn.execute(text("SELECT id, status FROM users WHERE email = :email"), {"email": email})
+        user = result.mappings().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not registered.")
+    if user["status"] != "Active":
+        raise HTTPException(status_code=403, detail="This account is unavailable or pending activation.")
+    otp, delivered = await _issue_otp(email, "reset_password")
     msg = (
-        "A 6-digit verification code has been sent to your email. Please check your inbox."
+        "A 6-digit password reset code has been sent to your email. Please check your inbox."
         if delivered
-        else "Verification code generated. (Check server logs for code: docker logs auratrace-ingestion)"
+        else "Password reset code generated. (Check server logs for code: docker logs auratrace-ingestion)"
     )
     return {
         "otp_required": True,
         "message": msg,
         "email": email,
-        "purpose": "login"
+        "purpose": "reset_password"
+    }
+
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordPayload):
+    _require_config()
+    email = payload.email.strip().lower()
+    key = f"auratrace:otp:reset_password:{email}"
+    attempts_key = f"auratrace:otp:attempts:reset_password:{email}"
+    expected = await _redis.get(key)
+    if not expected:
+        raise HTTPException(status_code=401, detail="Invalid or expired OTP.")
+    attempts = int(await _redis.get(attempts_key) or "0")
+    if attempts >= OTP_MAX_ATTEMPTS:
+        await _redis.delete(key, attempts_key)
+        raise HTTPException(status_code=429, detail="Too many incorrect OTP attempts. Request a new code.")
+    digest = hmac.new(AUTH_SECRET.encode(), payload.otp.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, digest):
+        attempts = await _redis.incr(attempts_key)
+        if attempts >= OTP_MAX_ATTEMPTS:
+            await _redis.delete(key, attempts_key)
+            raise HTTPException(status_code=429, detail="Too many incorrect OTP attempts. Request a new code.")
+        raise HTTPException(status_code=401, detail="Invalid or expired OTP.")
+    await _redis.delete(key, attempts_key)
+
+    new_hash, new_salt = _hash_password(payload.new_password)
+    async with _engine.begin() as conn:
+        result = await conn.execute(text("""
+            UPDATE users SET password_hash = :hash, password_salt = :salt WHERE email = :email
+            RETURNING id, name, role, status
+        """), {"hash": new_hash, "salt": new_salt, "email": email})
+        user = result.mappings().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not registered.")
+    return {
+        "success": True,
+        "message": "Password reset successfully. You can now log in with your new password."
     }
 
 
@@ -505,12 +597,20 @@ async def resend_otp(payload: ResendOtpPayload):
             user = result.mappings().first()
         if not user or user["status"] != "Pending":
             raise HTTPException(status_code=400, detail="No pending registration requires verification.")
+    elif payload.purpose == "reset_password":
+        async with _engine.begin() as conn:
+            result = await conn.execute(text("SELECT status FROM users WHERE email = :email"), {"email": email})
+            user = result.mappings().first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Email not registered.")
+        if user["status"] != "Active":
+            raise HTTPException(status_code=400, detail="No active account is available for password reset.")
     else:
         async with _engine.begin() as conn:
             result = await conn.execute(text("SELECT status FROM users WHERE email = :email"), {"email": email})
             user = result.mappings().first()
         if not user or user["status"] != "Active":
-            raise HTTPException(status_code=400, detail="No active account is available for login verification.")
+            raise HTTPException(status_code=400, detail="No active account is available for verification.")
     otp, delivered = await _issue_otp(email, payload.purpose)
     msg = (
         "A new verification code has been sent to your email. Please check your inbox."
@@ -522,6 +622,116 @@ async def resend_otp(payload: ResendOtpPayload):
         "email": email,
         "purpose": payload.purpose
     }
+
+
+class ContactInquiryPayload(BaseModel):
+    name: str = Field(default="", max_length=120)
+    email: str = Field(..., min_length=5, max_length=320)
+    phone: str = Field(default="", max_length=50)
+    comment: str = Field(..., min_length=1, max_length=4000)
+
+
+def _send_contact_email(name: str, user_email: str, phone: str, comment: str) -> bool:
+    target_admin = ADMIN_EMAIL or "startuphub695@gmail.com"
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
+        print(f"[AuraTrace Contact Ingestion] SMTP not configured. Inquiry for {target_admin} from {user_email}: {comment}")
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = f"[Automatic Backend Detection Inquiry] New message from {name or user_email}"
+    msg["From"] = SMTP_FROM or f"Automatic Backend Detection <{SMTP_USER}>"
+    msg["To"] = target_admin
+    msg["Reply-To"] = user_email
+
+    text_content = f"""
+New Contact Inquiry Received via Automatic Backend Detection Portal:
+
+Sender Name: {name or 'N/A'}
+Sender Email: {user_email}
+Phone: {phone or 'N/A'}
+Timestamp: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}
+
+Message:
+--------------------------------------------------
+{comment}
+--------------------------------------------------
+"""
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1e293b; background-color: #f8fafc; padding: 24px;">
+      <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+          <h2 style="color: #0f172a; margin: 0; font-size: 20px;">Automatic Backend Detection</h2>
+        </div>
+        <div style="padding: 12px 16px; background-color: #fef2f2; border-left: 4px solid #dc2626; border-radius: 4px; margin-bottom: 24px;">
+          <strong style="color: #991b1b; font-size: 14px;">New Contact Message Received</strong>
+        </div>
+        <table style="width: 100%; font-size: 14px; border-collapse: collapse; margin-bottom: 24px;">
+          <tr>
+            <td style="font-weight: 600; color: #64748b; padding: 8px 0; width: 120px;">Sender Name:</td>
+            <td style="color: #0f172a; font-weight: 600;">{name or 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: 600; color: #64748b; padding: 8px 0;">Sender Email:</td>
+            <td style="color: #dc2626; font-weight: 600;"><a href="mailto:{user_email}" style="color: #dc2626; text-decoration: none;">{user_email}</a></td>
+          </tr>
+          <tr>
+            <td style="font-weight: 600; color: #64748b; padding: 8px 0;">Phone:</td>
+            <td style="color: #0f172a;">{phone or 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: 600; color: #64748b; padding: 8px 0;">Time (UTC):</td>
+            <td style="color: #64748b;">{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</td>
+          </tr>
+        </table>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;">
+          <span style="display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 8px;">Message Content</span>
+          <p style="margin: 0; white-space: pre-wrap; color: #334155; font-size: 14px; line-height: 1.6;">{comment}</p>
+        </div>
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; text-align: center; color: #94a3b8; font-size: 12px;">
+          Direct communication routed to administrator inbox ({target_admin}).
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    msg.set_content(text_content)
+    msg.add_alternative(html_content, subtype="html")
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(SMTP_USER, SMTP_PASSWORD)
+            smtp.send_message(msg)
+        print(f"[AuraTrace Contact Email] Dispatched contact message to admin ({target_admin}) from {user_email}")
+        return True
+    except Exception as exc:
+        print(f"[AuraTrace Contact SMTP Delivery Error] {exc}")
+        return False
+
+
+@router.post("/contact")
+async def handle_contact_inquiry(payload: ContactInquiryPayload):
+    inquiry_id = f"INQ-{uuid.uuid4().hex[:8].upper()}"
+    user_email = payload.email.strip().lower()
+    
+    _send_contact_email(
+        name=payload.name.strip(),
+        user_email=user_email,
+        phone=(payload.phone or "").strip(),
+        comment=payload.comment.strip()
+    )
+
+    return {
+        "success": True,
+        "inquiry_id": inquiry_id,
+        "message": "Your message has been submitted directly to the administrative team."
+    }
+
 
 
 

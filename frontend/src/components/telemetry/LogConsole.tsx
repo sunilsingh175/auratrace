@@ -77,22 +77,22 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
   };
 
   return (
-    <div className="panel flex flex-col overflow-hidden">
+    <div className="panel flex flex-col overflow-hidden p-0">
       {/* Console Header / Controls */}
-      <div className="flex flex-col gap-3 border-b border-slate-800/80 p-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-red-600">
             <Terminal className="h-4.5 w-4.5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-white">Realtime Telemetry Console</h2>
-              <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-300">
-                <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
+              <h2 className="text-sm font-bold text-slate-900 font-heading">Realtime Telemetry Console</h2>
+              <span className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
+                <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
                 {isConnected ? "Live (Redis/WS)" : "Offline"}
               </span>
             </div>
-            <p className="text-[10px] text-slate-500">
+            <p className="text-[10px] text-slate-400">
               Streaming distributed JSON telemetry logs & anomaly traces
             </p>
           </div>
@@ -101,7 +101,7 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Level Switcher */}
-          <div className="flex rounded-xl border border-slate-800 bg-slate-950 p-1">
+          <div className="flex rounded-xl border border-slate-200 bg-[#f1f4f9] p-1">
             {(["ALL", "INFO", "WARN", "ERROR"] as const).map((lvl) => (
               <button
                 key={lvl}
@@ -113,8 +113,8 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
                       ? "bg-rose-600 text-white"
                       : lvl === "WARN"
                       ? "bg-amber-600 text-white"
-                      : "bg-slate-800 text-white"
-                    : "text-slate-400 hover:text-slate-200"
+                      : "bg-[#dc2626] text-white"
+                    : "text-slate-500 hover:text-slate-800"
                 }`}
               >
                 {lvl}
@@ -127,7 +127,7 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
             <select
               value={serviceFilter}
               onChange={(e) => setServiceFilter(e.target.value)}
-              className="rounded-xl border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 outline-none"
+              className="rounded-xl border border-slate-200 bg-[#f1f4f9] px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 outline-none"
             >
               <option value="ALL">All Services</option>
               {uniqueServices.map((svc) => (
@@ -144,8 +144,8 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
             onClick={() => setIsPaused(!isPaused)}
             className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
               isPaused
-                ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
-                : "border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800"
+                ? "border-amber-200 bg-amber-50 text-amber-700"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
             }`}
           >
             {isPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
@@ -156,10 +156,10 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
           <button
             type="button"
             onClick={handleCopyLogs}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 px-2.5 py-1.5 text-xs font-bold text-slate-300 transition hover:bg-slate-800"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
             title="Copy Filtered Logs"
           >
-            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
           </button>
 
           {/* Clear */}
@@ -167,7 +167,7 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
             <button
               type="button"
               onClick={onClear}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 px-2.5 py-1.5 text-xs font-bold text-rose-400 transition hover:bg-rose-500/10"
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
               title="Clear Console"
             >
               <Trash2 className="h-3 w-3" />
@@ -177,21 +177,21 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
       </div>
 
       {/* Search Input Bar */}
-      <div className="border-b border-slate-800/80 bg-slate-950/40 px-4 py-2">
+      <div className="border-b border-slate-100 bg-[#f8fafc] px-4 py-2">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search log messages, traces, exception classes, or correlation IDs..."
-            className="w-full rounded-lg border border-slate-800/60 bg-slate-950/60 py-1.5 pl-9 pr-3 text-xs font-mono text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
+            className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-xs font-mono text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-red-500"
           />
         </div>
       </div>
 
       {/* Console Output Screen */}
-      <div className="h-[460px] overflow-y-auto bg-slate-950/90 p-4 font-mono text-xs leading-relaxed">
+      <div className="h-[460px] overflow-y-auto bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200">
         {filteredLogs.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <Layers className="h-8 w-8 text-slate-700" />
@@ -213,10 +213,10 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
                   key={log.id || index}
                   className={`group flex items-start gap-2.5 rounded-md px-2 py-1 transition ${
                     isErr
-                      ? "bg-rose-950/20 text-rose-300 border-l-2 border-rose-500"
+                      ? "bg-rose-950/40 text-rose-200 border-l-2 border-rose-500"
                       : isWarn
-                      ? "bg-amber-950/20 text-amber-300 border-l-2 border-amber-500"
-                      : "text-slate-300 hover:bg-slate-900/60"
+                      ? "bg-amber-950/40 text-amber-200 border-l-2 border-amber-500"
+                      : "text-slate-300 hover:bg-slate-900/80"
                   }`}
                 >
                   <span className="shrink-0 text-[10px] text-slate-500">
@@ -229,7 +229,7 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
                         ? "bg-rose-500/20 text-rose-400"
                         : isWarn
                         ? "bg-amber-500/20 text-amber-400"
-                        : "bg-blue-500/10 text-cyan-400"
+                        : "bg-red-500/10 text-red-400"
                     }`}
                   >
                     {log.level}
@@ -251,7 +251,7 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
       </div>
 
       {/* Footer Status */}
-      <div className="flex items-center justify-between border-t border-slate-800/80 bg-slate-950 px-4 py-2 text-[10px] font-mono text-slate-500">
+      <div className="flex items-center justify-between border-t border-slate-100 bg-[#f8fafc] px-4 py-2.5 text-[10px] font-mono text-slate-500">
         <div className="flex items-center gap-3">
           <span>Buffered: {logs.length} events</span>
           <span>Showing: {filteredLogs.length} events</span>
@@ -259,7 +259,7 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
         <button
           type="button"
           onClick={handleExportLogs}
-          className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition"
+          className="flex items-center gap-1 text-red-600 font-bold hover:text-red-700 transition"
         >
           <Download className="h-3 w-3" /> Export JSON
         </button>

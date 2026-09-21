@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
 import { AuthProvider } from "@/context/auth-context";
+import { NotificationProvider } from "@/context/notification-context";
 
 export const metadata: Metadata = {
-  title: "Automatic Backend Diagnostics Platform | AI Observability & Crash Diagnostics",
+  title: "Automatic Backend Detection | AI Observability & Crash Diagnostics",
   description:
-    "Automatic Backend Diagnostics Platform - Autonomous telemetry ingestion, unsupervised Isolation Forest anomaly detection, and automated RAG self-healing root-cause diagnostics.",
+    "Automatic Backend Detection - Autonomous telemetry ingestion, unsupervised Isolation Forest anomaly detection, and automated RAG self-healing root-cause diagnostics.",
+  icons: {
+    icon: "/logo-icon.svg",
+    shortcut: "/logo-icon.svg",
+    apple: "/logo-icon.svg",
+  },
 };
-
 
 export default function RootLayout({
   children,
@@ -15,9 +20,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-[#080c14] text-slate-100 font-sans antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
-        <AuthProvider>{children}</AuthProvider>
+    <html lang="en">
+      <body className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans antialiased selection:bg-red-500/20 selection:text-red-900">
+        <AuthProvider>
+          <NotificationProvider>{children}</NotificationProvider>
+        </AuthProvider>
       </body>
     </html>
   );

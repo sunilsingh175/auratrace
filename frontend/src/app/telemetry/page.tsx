@@ -105,26 +105,28 @@ function TelemetryContent() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
                 <Radio className="h-4 w-4 animate-pulse" />
               </span>
-              <span className="label">Live Ingestion Pipeline</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
+                Live Ingestion Pipeline
+              </span>
             </div>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 font-heading md:text-3xl">
               Live Telemetry & Event Inspector
             </h1>
             {requestedService && (
-              <p className="mt-1 font-mono text-xs text-cyan-400">Service: {requestedService}</p>
+              <p className="mt-1 font-mono text-xs text-red-600 font-semibold">Service: {requestedService}</p>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            <span className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold ${isConnected ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}`}>
-              <span className={`h-2 w-2 rounded-full ${isConnected ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
+            <span className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold ${isConnected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+              <span className={`h-2 w-2 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
               {isConnected ? "WebSocket Connected" : "WebSocket Offline"}
             </span>
             <button type="button" onClick={() => void loadTimeseries()} disabled={chartLoading} className="button-secondary">
-              <RefreshCw className={`h-3.5 w-3.5 ${chartLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${chartLoading ? "animate-spin text-slate-600" : ""}`} />
               Refresh
             </button>
           </div>
@@ -133,13 +135,13 @@ function TelemetryContent() {
         <AnomalyAlertBanner alert={currentAlert} onDismiss={() => setCurrentAlert(null)} />
 
         {chartError && (
-          <div className="panel border-amber-500/20 bg-amber-500/5 px-5 py-3 text-xs text-amber-300">
+          <div className="panel border-amber-200 bg-amber-50 px-5 py-3 text-xs text-amber-800">
             Live telemetry metrics are unavailable: {chartError}
           </div>
         )}
 
         {!chartLoading && !chartError && chartData.length === 0 && (
-          <div className="panel px-5 py-3 text-xs text-slate-400">
+          <div className="panel px-5 py-3 text-xs text-slate-500">
             No telemetry points were recorded in the current 5-minute window{requestedService ? ` for ${requestedService}` : ""}.
           </div>
         )}
@@ -158,7 +160,7 @@ function TelemetryContent() {
 
 export default function TelemetryPage() {
   return (
-    <React.Suspense fallback={<div className="panel p-6 text-slate-400">Loading telemetry inspector...</div>}>
+    <React.Suspense fallback={<div className="panel p-6 text-slate-500 font-heading">Loading telemetry inspector...</div>}>
       <TelemetryContent />
     </React.Suspense>
   );

@@ -1,69 +1,91 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,600;1,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
-  --bg-main: #080c14;
-  --bg-card: #0f172a;
-  --border-card: #1e293b;
+  color-scheme: light;
+  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --border-card: #f1f5f9;
 }
 
 body {
-  background-color: #080c14;
-  color: #f1f5f9;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow-x: hidden;
 }
 
-/* Reusable Cyber UI Components */
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: 'Montserrat', sans-serif;
+}
+
+/* Reusable UI Components */
 @layer components {
   .panel {
-    @apply rounded-2xl border border-slate-800/80 bg-slate-900/70 shadow-xl backdrop-blur-xl transition;
+    @apply rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition;
   }
   .panel-header {
-    @apply flex items-center justify-between border-b border-slate-800/80 px-5 py-4;
+    @apply flex items-center justify-between border-b border-slate-100 pb-4 mb-4;
   }
   .label {
-    @apply text-[11px] font-bold uppercase tracking-wider text-slate-400;
+    @apply text-xs font-semibold text-slate-700 block mb-1.5;
   }
   .field {
-    @apply w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3.5 py-2.5 text-xs text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20;
+    @apply w-full rounded-xl border border-slate-200 bg-[#f1f4f9] px-4 py-2.5 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-red-500 focus:bg-white focus:ring-2 focus:ring-red-500/20;
   }
   .button-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-600/20 transition hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 cursor-pointer;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[#dc2626] hover:bg-[#b91c1c] active:bg-[#991b1b] px-4 py-2 text-xs font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer;
   }
   .button-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700/80 bg-slate-900/90 px-3.5 py-2 text-xs font-bold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:opacity-50 cursor-pointer;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 cursor-pointer shadow-sm;
   }
   .status-open {
-    @apply bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/30;
+    @apply bg-amber-50 text-amber-700 border border-amber-200;
   }
   .status-investigating {
-    @apply bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/30;
+    @apply bg-blue-50 text-blue-700 border border-blue-200;
   }
   .status-resolved {
-    @apply bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/30;
+    @apply bg-emerald-50 text-emerald-700 border border-emerald-200;
   }
 }
 
-/* Custom modern scrollbar */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #080c14;
+  background: #f8fafc;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #94a3b8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scaleUp {
+  animation: scaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

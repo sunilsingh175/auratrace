@@ -134,21 +134,17 @@ async def test_registration_otp_activates_pending_user(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_login_requires_otp_for_active_user(monkeypatch):
-    issued = []
-
-    async def fake_issue_otp(email, purpose):
-        issued.append((email, purpose))
-        return "123456", False
-
-    async def fake_connect():
-        return None
-
+async def test_login_direct_for_active_user(monkeypatch):
     password_hash, password_salt = auth._hash_password("correct-password")
     user = {
+        "id": uuid.uuid4(),
+        "name": "Dev User",
+        "email": "dev@example.com",
+        "role": "Developer",
         "password_hash": password_hash,
         "password_salt": password_salt,
         "status": "Active",
+        "created_at": None,
     }
 
     class LoginConn(FakeConn):
@@ -160,15 +156,47 @@ async def test_login_requires_otp_for_active_user(monkeypatch):
             return FakeConnectContext(LoginConn(user))
 
     monkeypatch.setattr(auth, "_engine", LoginEngine())
-    monkeypatch.setattr(auth, "_issue_otp", fake_issue_otp)
 
     result = await auth.login(
         auth.LoginPayload(email="dev@example.com", password="correct-password")
     )
 
+    assert "access_token" in result
+    assert result["user"]["email"] == "dev@example.com"
+    assert result["user"]["role"] == "Developer"
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_issues_otp(monkeypatch):
+    issued = []
+
+    async def fake_issue_otp(email, purpose):
+        issued.append((email, purpose))
+        return "654321", False
+
+    user = {
+        "id": uuid.uuid4(),
+        "status": "Active",
+    }
+
+    class ForgotConn(FakeConn):
+        async def execute(self, statement, params=None):
+            return FakeResult(user)
+
+    class ForgotEngine:
+        def begin(self):
+            return FakeConnectContext(ForgotConn(user))
+
+    monkeypatch.setattr(auth, "_engine", ForgotEngine())
+    monkeypatch.setattr(auth, "_issue_otp", fake_issue_otp)
+
+    result = await auth.forgot_password(
+        auth.ForgotPasswordPayload(email="dev@example.com")
+    )
+
     assert result["otp_required"] is True
-    assert result["purpose"] == "login"
-    assert issued == [("dev@example.com", "login")]
+    assert result["purpose"] == "reset_password"
+    assert issued == [("dev@example.com", "reset_password")]
 
 
 @pytest.mark.asyncio
@@ -375,3 +403,34 @@ async def test_admin_cannot_delete_self():
             {"id": admin_id, "role": "Admin", "status": "Active"},
         )
     assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_contact_inquiry_dispatches_cleanly(monkeypatch):
+    sent_emails = []
+
+    def fake_send_email(name, user_email, phone, comment):
+        sent_emails.append({
+            "name": name,
+            "email": user_email,
+            "phone": phone,
+            "comment": comment
+        })
+        return True
+
+    monkeypatch.setattr(auth, "_send_contact_email", fake_send_email)
+
+    payload = auth.ContactInquiryPayload(
+        name="Alex River",
+        email="alex@company.com",
+        phone="+1234567890",
+        comment="Inquiry regarding enterprise SLA and telemetry limits."
+    )
+
+    res = await auth.handle_contact_inquiry(payload)
+    assert res["success"] is True
+    assert res["inquiry_id"].startswith("INQ-")
+    assert "administrative team" in res["message"]
+    assert len(sent_emails) == 1
+    assert sent_emails[0]["email"] == "alex@company.com"
+

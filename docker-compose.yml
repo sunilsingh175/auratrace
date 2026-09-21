@@ -89,6 +89,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-startuphub695@gmail.com}
 
       INGESTION_SERVICE_PORT: ${INGESTION_SERVICE_PORT}
 

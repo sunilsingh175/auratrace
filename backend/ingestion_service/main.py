@@ -167,10 +167,17 @@ Autonomous telemetry ingestion pipeline, real-time Isolation Forest anomaly dete
     ],
 )
 
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(auth_router)
+
 @app.on_event("startup")
 async def startup_event():
     global pubsub_task
     pubsub_task = asyncio.create_task(redis_pubsub_bridge())
+    try:
+        await init_auth_table()
+    except Exception as exc:
+        logger.warning(f"Auth table init warning: {exc}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -2140,4 +2147,27 @@ async def health_check():
                 )
             postgres_status = "healthy"
         except Exception as exc:
+            postgres_status = "offline"
+            logger.warning("Health check PostgreSQL probe failed: %s", exc)
 
+    latency_ms = round((time.perf_counter() - started) * 1000, 2)
+    return {
+        "status": "online" if redis_status == "healthy" else "degraded",
+        "service": "ingestion-service",
+        "version": "1.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "latency_ms": latency_ms,
+        "components": {
+            "redis": {
+                "status": redis_status,
+                "stream_key": STREAM_KEY,
+                "stream_length": redis_stream_length,
+                "memory_used": redis_memory_used,
+            },
+            "postgres": {
+                "status": postgres_status,
+                "active_connections": postgres_connections,
+                "vector_indexes": postgres_vector_indexes,
+            },
+        },
+    }

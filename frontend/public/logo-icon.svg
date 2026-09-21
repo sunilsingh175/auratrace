@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 68 72" fill="none">
+  <!-- Outer Shield Frame -->
+  <path d="M34 3 L62 13 C62 47 43 64 34 70 C25 64 6 47 6 13 Z" fill="#0f172a" stroke="#1e293b" stroke-width="2.5" stroke-linejoin="round"/>
+  
+  <!-- Inner Shield Red Fill -->
+  <path d="M34 7 L58 16 C58 44 41 59 34 65 C27 59 10 44 10 16 Z" fill="#dc2626"/>
+  
+  <!-- Top Telemetry Matrix dashes -->
+  <g opacity="0.9" stroke="#ffffff" stroke-width="2" stroke-linecap="round">
+    <line x1="20" y1="23" x2="25" y2="23"/>
+    <line x1="28" y1="23" x2="40" y2="23"/>
+    <line x1="43" y1="23" x2="48" y2="23"/>
+    
+    <line x1="22" y1="28" x2="30" y2="28"/>
+    <line x1="34" y1="28" x2="46" y2="28"/>
+  </g>
+  
+  <!-- White Waveform Pulse Line -->
+  <path d="M10 38 L22 38 L26 46 L32 24 L38 51 L42 35 L46 38 L58 38" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

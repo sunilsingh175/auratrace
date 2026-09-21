@@ -30,7 +30,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        heading: ["Montserrat", "sans-serif"],
+        sans: ["Lato", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        body: ["Lato", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
         mono: ["JetBrains Mono", "Fira Code", "Courier New", "monospace"],
       },
       animation: {

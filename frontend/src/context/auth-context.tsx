@@ -18,8 +18,10 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: { email: string; password: string }) => Promise<AuthResult>;
   register: (credentials: { name: string; email: string; password: string; role: Role; adminRegistrationKey?: string }) => Promise<AuthResult>;
-  verifyOtp: (credentials: { email: string; otp: string; purpose: "login" | "register" }) => Promise<AuthResult>;
-  resendOtp: (credentials: { email: string; purpose: "login" | "register" }) => Promise<AuthResult>;
+  verifyOtp: (credentials: { email: string; otp: string; purpose: "login" | "register" | "reset_password" }) => Promise<AuthResult>;
+  resendOtp: (credentials: { email: string; purpose: "login" | "register" | "reset_password" }) => Promise<AuthResult>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; error?: string; message?: string }>;
+  resetPassword: (credentials: { email: string; otp: string; newPassword: string }) => Promise<{ success: boolean; error?: string; message?: string }>;
   updateProfile: (name: string) => Promise<{ success: boolean; error?: string }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
@@ -139,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const verifyOtp = async ({ email, otp, purpose }: { email: string; otp: string; purpose: "login" | "register" }): Promise<AuthResult> => {
+  const verifyOtp = async ({ email, otp, purpose }: { email: string; otp: string; purpose: "login" | "register" | "reset_password" }): Promise<AuthResult> => {
     try {
       const data = await authRequest("verify-otp", { email, otp, purpose });
       persistAuth(data);
@@ -149,12 +151,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const resendOtp = async ({ email, purpose }: { email: string; purpose: "login" | "register" }): Promise<AuthResult> => {
+  const resendOtp = async ({ email, purpose }: { email: string; purpose: "login" | "register" | "reset_password" }): Promise<AuthResult> => {
     try {
       await authRequest("resend-otp", { email, purpose });
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : "Failed to resend verification code." };
+    }
+  };
+
+  const forgotPassword = async (email: string): Promise<{ success: boolean; error?: string; message?: string }> => {
+    try {
+      const data = await authRequest("forgot-password", { email });
+      return { success: true, message: data.message };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Failed to initiate password reset." };
+    }
+  };
+
+  const resetPassword = async ({ email, otp, newPassword }: { email: string; otp: string; newPassword: string }): Promise<{ success: boolean; error?: string; message?: string }> => {
+    try {
+      const data = await authRequest("reset-password", { email, otp, new_password: newPassword });
+      return { success: true, message: data.message };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Failed to reset password." };
     }
   };
 
@@ -220,6 +240,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         verifyOtp,
         resendOtp,
+        forgotPassword,
+        resetPassword,
         updateProfile,
         changePassword,
         logout,
@@ -228,7 +250,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-
 }
 
 export function useAuth() {
