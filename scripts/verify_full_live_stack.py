@@ -67,6 +67,36 @@ def make_jwt(user_id: str, role: str) -> str:
     signature = hmac.new(AUTH_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
     return f"{body}.{signature}"
 
+def http_get(url, **kwargs):
+    kwargs.setdefault("timeout", 10)
+    for attempt in range(3):
+        try:
+            return requests.get(url, **kwargs)
+        except requests.exceptions.RequestException:
+            if attempt == 2:
+                raise
+            time.sleep(0.5)
+
+def http_post(url, **kwargs):
+    kwargs.setdefault("timeout", 10)
+    for attempt in range(3):
+        try:
+            return requests.post(url, **kwargs)
+        except requests.exceptions.RequestException:
+            if attempt == 2:
+                raise
+            time.sleep(0.5)
+
+def http_delete(url, **kwargs):
+    kwargs.setdefault("timeout", 10)
+    for attempt in range(3):
+        try:
+            return requests.delete(url, **kwargs)
+        except requests.exceptions.RequestException:
+            if attempt == 2:
+                raise
+            time.sleep(0.5)
+
 def run_tests():
     print("=" * 70)
     print("   AURATRACE COMPREHENSIVE LIVE RUNTIME & PIPELINE VERIFICATION")
@@ -99,7 +129,7 @@ def run_tests():
         admin_token = make_jwt(test_admin_id, "Admin")
 
         # Test GET /api/v1/auth/me for Developer
-        me_dev_res = requests.get(f"{BASE_API}/auth/me", headers={"Authorization": f"Bearer {dev_token}"})
+        me_dev_res = http_get(f"{BASE_API}/auth/me", headers={"Authorization": f"Bearer {dev_token}"})
         print(f"  GET /auth/me (Developer): HTTP {me_dev_res.status_code}")
         assert me_dev_res.status_code == 200, f"Failed /auth/me with {me_dev_res.status_code}: {me_dev_res.text}"
         dev_info = me_dev_res.json().get("user", {})
@@ -108,7 +138,7 @@ def run_tests():
         assert dev_info.get("id") == test_dev_id
 
         # Test GET /api/v1/auth/me for Admin
-        me_admin_res = requests.get(f"{BASE_API}/auth/me", headers={"Authorization": f"Bearer {admin_token}"})
+        me_admin_res = http_get(f"{BASE_API}/auth/me", headers={"Authorization": f"Bearer {admin_token}"})
         print(f"  GET /auth/me (Admin): HTTP {me_admin_res.status_code}")
         assert me_admin_res.status_code == 200, f"Failed /auth/me with {me_admin_res.status_code}: {me_admin_res.text}"
         admin_info = me_admin_res.json().get("user", {})
@@ -117,7 +147,7 @@ def run_tests():
 
         # 2. RBAC & Service CRUD with SHA-256 Hashed One-Time API Key
         print("\n--- STEP 2: Testing RBAC & Service CRUD + One-Time API Key ---")
-        create_srv_res = requests.post(
+        create_srv_res = http_post(
             f"{BASE_API}/services",
             json={"name": srv_name, "environment": "production", "description": "Payment Microservice for live testing"},
             headers={"Authorization": f"Bearer {dev_token}"}
@@ -141,7 +171,7 @@ def run_tests():
         assert db_stored_hash == expected_hash, f"Expected DB hash {expected_hash}, found {db_stored_hash}"
 
         # Verify List Services excludes raw API key
-        list_res = requests.get(
+        list_res = http_get(
             f"{BASE_API}/services",
             headers={"Authorization": f"Bearer {dev_token}", "X-API-Key": MASTER_KEY}
         )
@@ -163,7 +193,7 @@ def run_tests():
             "level": "INFO",
             "metadata": {"test": True}
         }
-        ingest_normal = requests.post(
+        ingest_normal = http_post(
             f"{BASE_API}/telemetry",
             json=normal_telemetry,
             headers={"X-API-Key": api_key}
@@ -191,7 +221,7 @@ def run_tests():
         }
         
         for _ in range(5):
-            requests.post(
+            http_post(
                 f"{BASE_API}/telemetry",
                 json=crash_payload,
                 headers={"X-API-Key": api_key}
@@ -204,7 +234,7 @@ def run_tests():
 
         # 4. Incident & RAG AI Diagnosis Validation
         print("\n--- STEP 4: Incident Query & RAG AI Diagnosis Verification ---")
-        incidents_res = requests.get(
+        incidents_res = http_get(
             f"{BASE_API}/incidents",
             headers={"Authorization": f"Bearer {dev_token}", "X-API-Key": MASTER_KEY}
         )
@@ -231,7 +261,7 @@ def run_tests():
 
         # 5. Check Service Deletion with Admin privileges
         print("\n--- STEP 5: Testing Admin Service Management & Deletion ---")
-        del_res = requests.delete(
+        del_res = http_delete(
             f"{BASE_API}/services/{srv_name}",
             headers={"Authorization": f"Bearer {admin_token}"}
         )
