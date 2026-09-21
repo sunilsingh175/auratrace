@@ -31,7 +31,7 @@ except ImportError:
 class EmbeddingService:
 
     def __init__(self):
-        model_name = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+        model_name = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 
         if SentenceTransformer:
             logger.info(
