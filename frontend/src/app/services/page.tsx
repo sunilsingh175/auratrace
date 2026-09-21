@@ -12,12 +12,12 @@ import {
   X,
   Activity,
   Trash2,
-  LogIn,
+  Pencil,
   AlertTriangle,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/context/auth-context";
-import { fetchServices, registerService, deleteService } from "@/lib/api-client";
+import { fetchServices, registerService, updateService, deleteService } from "@/lib/api-client";
 import { Service } from "@/types";
 
 function formatMetric(value: number, suffix = "") {
@@ -31,6 +31,8 @@ export default function ServicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Register Modal State
   const [showModal, setShowModal] = useState(false);
   const [newServiceId, setNewServiceId] = useState("");
   const [newServiceName, setNewServiceName] = useState("");
@@ -38,6 +40,15 @@ export default function ServicesPage() {
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit Modal State
+  const [serviceToEdit, setServiceToEdit] = useState<Service | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEnv, setEditEnv] = useState("production");
+  const [editStatus, setEditStatus] = useState("ACTIVE");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  // Delete Modal State
   const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -81,6 +92,51 @@ export default function ServicesPage() {
       setError("Service registration failed. Check the backend API and try again.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEditModal = (svc: Service) => {
+    setServiceToEdit(svc);
+    setEditName(svc.name);
+    setEditEnv(svc.environment || "production");
+    setEditStatus((svc.status || "ACTIVE").toUpperCase());
+  };
+
+  const handleUpdateService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serviceToEdit || !editName.trim()) return;
+
+    setEditSubmitting(true);
+    setError(null);
+
+    try {
+      const updated = await updateService(serviceToEdit.id, {
+        name: editName.trim(),
+        environment: editEnv,
+        status: editStatus,
+      });
+
+      setServices((prev) =>
+        prev.map((s) =>
+          s.id === serviceToEdit.id
+            ? {
+                ...s,
+                name: updated.name || editName.trim(),
+                environment: updated.environment || editEnv,
+                status: (updated.status || editStatus).toLowerCase() as any,
+              }
+            : s
+        )
+      );
+
+      setActionSuccess(`Service "${editName.trim()}" updated successfully.`);
+      setTimeout(() => setActionSuccess(null), 4000);
+      setServiceToEdit(null);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to update service. You may only modify services you own.");
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -161,7 +217,7 @@ export default function ServicesPage() {
               />
             </div>
 
-            {canRegister ? (
+            {canRegister && (
               <button
                 type="button"
                 onClick={() => {
@@ -177,14 +233,6 @@ export default function ServicesPage() {
                 <Plus className="h-4 w-4" />
                 <span>Register Service</span>
               </button>
-            ) : (
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 font-heading"
-              >
-                <LogIn className="h-3.5 w-3.5 text-slate-500" />
-                <span>Sign In to Register</span>
-              </Link>
             )}
           </div>
         </div>
@@ -272,14 +320,24 @@ export default function ServicesPage() {
                       </span>
 
                       {hasManagePermission && (
-                        <button
-                          type="button"
-                          onClick={() => setServiceToDelete(svc)}
-                          title="Delete Service"
-                          className="rounded-lg p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(svc)}
+                            title="Edit Service"
+                            className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setServiceToDelete(svc)}
+                            title="Delete Service"
+                            className="rounded-lg p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -347,7 +405,7 @@ export default function ServicesPage() {
           </div>
         )}
 
-        {/* REGISTRATION MODAL */}
+        {/* REGISTER MODAL */}
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
             <div className="panel w-full max-w-md border-slate-200 p-6 shadow-2xl">
@@ -452,6 +510,87 @@ export default function ServicesPage() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* EDIT MODAL */}
+        {serviceToEdit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+            <div className="panel w-full max-w-md border-slate-200 p-6 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                    <Pencil className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 font-heading">Edit Microservice</h2>
+                    <p className="text-[10px] text-slate-400 font-mono">ID: {serviceToEdit.id}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setServiceToEdit(null)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateService} className="mt-4 space-y-4">
+                <div>
+                  <label className="label font-heading">Display Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="field mt-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="label font-heading">Deployment Environment</label>
+                  <select
+                    value={editEnv}
+                    onChange={(e) => setEditEnv(e.target.value)}
+                    className="field mt-1.5"
+                  >
+                    <option value="production">Production</option>
+                    <option value="staging">Staging</option>
+                    <option value="development">Development</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label font-heading">Service Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="field mt-1.5"
+                  >
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="INACTIVE">INACTIVE</option>
+                    <option value="DEGRADED">DEGRADED</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    disabled={editSubmitting}
+                    onClick={() => setServiceToEdit(null)}
+                    className="button-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editSubmitting}
+                    className="button-primary"
+                  >
+                    {editSubmitting ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

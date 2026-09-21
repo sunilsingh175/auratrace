@@ -92,6 +92,20 @@ VALUES
     'Hadoop Distributed File System Master NameNode coordinator.',
     'production',
     'ACTIVE'
+),
+(
+    '00000000-0000-0000-0000-000000000080',
+    'payment-service',
+    'High-throughput credit card processing and checkout transactions service.',
+    'production',
+    'ACTIVE'
+),
+(
+    '00000000-0000-0000-0000-000000000090',
+    'gateway-service',
+    'Central API Gateway and SSL edge termination router.',
+    'production',
+    'ACTIVE'
 )
 ON CONFLICT (id) DO NOTHING;
 
