@@ -37,10 +37,7 @@ export default function AdminMonitoringPage() {
 
   return (
     <ProtectedRoute role="Admin">
-      <AppShell
-        title="Core Infrastructure Telemetry"
-        subtitle="Deep hardware & engine performance for Redis, PostgreSQL pgvector, and ML Isolation Forest"
-      >
+      <AppShell hideHeaderTitle>
         <div className="space-y-6">
           {/* Header */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

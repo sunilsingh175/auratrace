@@ -225,10 +225,7 @@ export default function IncidentDetailsPage() {
 
   return (
     <ProtectedRoute>
-      <AppShell
-        title={`Incident: ${incidentId.slice(0, 8)}...`}
-        subtitle="Detailed automated root-cause analysis, system telemetry & AI remediation"
-      >
+      <AppShell hideHeaderTitle>
         <div className="space-y-6">
           {/* TOP BAR / BACK NAVIGATION */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -162,10 +162,7 @@ export default function AdminUsersServicesPage() {
 
   return (
     <ProtectedRoute role="Admin">
-      <AppShell
-        title="Team & Global Services Administration"
-        subtitle="Manage user accounts, privileges, access control, and registered microservices"
-      >
+      <AppShell hideHeaderTitle>
         <div className="space-y-6">
           {/* Top Header */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

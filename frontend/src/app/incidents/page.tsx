@@ -39,10 +39,7 @@ export default function IncidentsPage() {
   ).length;
 
   return (
-    <AppShell
-      title="Incident Intelligence Hub"
-      subtitle="Automated anomaly diagnostics, pgvector RAG matching and AI triage"
-    >
+    <AppShell hideHeaderTitle>
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

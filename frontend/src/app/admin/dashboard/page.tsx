@@ -65,10 +65,7 @@ export default function AdminDashboardPage() {
 
   return (
     <ProtectedRoute role="Admin">
-      <AppShell
-        title="Admin Executive Command Center"
-        subtitle="Cluster infrastructure health matrix, anomaly heatmaps and operational oversight"
-      >
+      <AppShell hideHeaderTitle>
         <div className="space-y-6">
           {/* Header Bar */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

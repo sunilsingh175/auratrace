@@ -97,10 +97,7 @@ function TelemetryContent() {
   }, [alertLog, logs, requestedService]);
 
   return (
-    <AppShell
-      title="Live Telemetry Inspector"
-      subtitle={requestedService ? `Real-time telemetry stream for ${requestedService}` : "Real-time distributed telemetry and anomaly stream"}
-    >
+    <AppShell hideHeaderTitle>
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
