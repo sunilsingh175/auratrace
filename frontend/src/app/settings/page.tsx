@@ -128,14 +128,6 @@ function ProfileSettingsContent() {
       subtitle="Manage your personal account credentials, profile details, and security configuration."
     >
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 font-heading">Profile &amp; Security Settings</h1>
-          <p className="text-gray-500 mt-1 font-sans">
-            Manage your personal account credentials, profile details, and security configuration.
-          </p>
-        </div>
-
         {/* Profile Banner */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl p-6 text-white shadow-sm flex flex-col md:flex-row justify-between items-center md:items-start gap-4">
           <div className="flex items-center gap-4">
