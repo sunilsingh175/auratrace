@@ -2,7 +2,7 @@
  * Trace Node.js SDK
  */
 
-import { BatchTransporter, type TransporterConfig, type TelemetryPayload } from "./transporter.ts";
+import { BatchTransporter, type TransporterConfig, type TelemetryPayload } from "./transporter.js";
 
 export class Trace {
   private transporter: BatchTransporter;

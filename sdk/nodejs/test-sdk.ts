@@ -1,4 +1,4 @@
-import { Trace } from './index.ts';
+import { Trace } from './index.js';
 
 const tracer = new Trace({
   apiKey: process.env.AURA_MASTER_API_KEY || process.env.AURA_API_KEY || '',
