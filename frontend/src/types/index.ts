@@ -16,9 +16,13 @@ export interface Service {
   latency_ms: number;
   incident_count: number;
   last_activity?: string;
-  api_key?: string;
   created_at?: string;
   owner_id?: string;
+}
+
+export interface ServiceRegistrationResponse extends Service {
+  api_key: string;
+  message?: string;
 }
 
 export interface SystemMetrics {

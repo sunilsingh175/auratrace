@@ -148,7 +148,10 @@ async def send_burst(
 
 async def run(args: argparse.Namespace) -> int:
     headers = {"Content-Type": "application/json"}
-    api_key = os.getenv("AURA_MASTER_API_KEY") or os.getenv("AURA_API_KEY") or "aura_secret_key_123"
+    api_key = getattr(args, "api_key", None) or os.getenv("AURA_MASTER_API_KEY") or os.getenv("AURA_API_KEY")
+    if args.auth and not api_key:
+        print("ERROR: --auth was supplied but no API key was provided via --api-key or environment variable (AURA_MASTER_API_KEY / AURA_API_KEY).")
+        return 2
     if api_key:
         headers["X-API-Key"] = api_key
 
@@ -230,6 +233,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--requests", type=int, default=DEFAULT_REQUESTS, help="Total telemetry requests to send.")
     parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY, help="Number of concurrent HTTP workers.")
     parser.add_argument("--auth", action="store_true", help="Send X-API-Key using AURA_MASTER_API_KEY.")
+    parser.add_argument("--api-key", type=str, default="", help="Custom API key to pass in X-API-Key header.")
     args = parser.parse_args()
     if args.requests <= 0 or args.concurrency <= 0:
         parser.error("--requests and --concurrency must be positive")

@@ -1,8 +1,8 @@
 import { Trace } from './index.ts';
 
 const tracer = new Trace({
-  apiKey: 'aura_secret_key_123',
-  endpoint: 'http://localhost:8000',
+  apiKey: process.env.AURA_MASTER_API_KEY || process.env.AURA_API_KEY || '',
+  endpoint: process.env.AURA_GATEWAY_URL || 'http://localhost:8000',
   serviceId: 'test-node-service'
 });
 

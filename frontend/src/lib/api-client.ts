@@ -1,6 +1,7 @@
 import {
   Incident,
   Service,
+  ServiceRegistrationResponse,
   SystemStats,
   InfrastructureStatus,
   UserAccount,
@@ -139,7 +140,7 @@ export async function fetchServices(): Promise<Service[]> {
   }));
 }
 
-export async function registerService(data: { id: string; name: string; environment: string }): Promise<Service> {
+export async function registerService(data: { id: string; name: string; environment: string }): Promise<ServiceRegistrationResponse> {
   const path = "services";
   const res = await request(path, { method: "POST", body: JSON.stringify(data) });
   ensureOk(res, path);
@@ -154,7 +155,8 @@ export async function registerService(data: { id: string; name: string; environm
     latency_ms: Number(created.latency_ms ?? 0),
     incident_count: Number(created.incident_count ?? 0),
     last_activity: created.last_activity || undefined,
-    api_key: created.api_key,
+    api_key: created.api_key || "",
+    message: created.message,
     created_at: created.created_at,
     owner_id: created.owner_id || undefined,
   };
