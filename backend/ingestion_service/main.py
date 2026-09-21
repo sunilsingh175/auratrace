@@ -236,18 +236,41 @@ API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 async def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)):
     """
-    Validates incoming requests against master API key.
-    When ENABLE_API_AUTH=true, enforces strict master API key verification.
+    Validates incoming requests against master API key or registered microservice API keys.
+    When ENABLE_API_AUTH=true, enforces strict API key verification.
     When ENABLE_API_AUTH=false (default development mode), permits requests with guest context.
     """
-    if api_key and api_key == MASTER_API_KEY:
+    if not api_key:
+        if ENABLE_API_AUTH:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing X-API-Key header. Access denied.",
+            )
+        return "guest"
+
+    if MASTER_API_KEY and api_key == MASTER_API_KEY:
         return api_key
+
+    # Check per-service registered API key in PostgreSQL database
+    if db_engine:
+        try:
+            async with db_engine.connect() as conn:
+                res = await conn.execute(
+                    text("SELECT id, name, status FROM services WHERE api_key_hash = :key LIMIT 1"),
+                    {"key": api_key},
+                )
+                svc = res.mappings().first()
+                if svc:
+                    return api_key
+        except Exception as e:
+            logger.warning(f"Error validating service API key against database: {e}")
+
     if ENABLE_API_AUTH:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-API-Key header. Access denied.",
         )
-    return api_key or "guest"
+    return api_key
 
 # ============================================================
 # Pydantic Schemas
