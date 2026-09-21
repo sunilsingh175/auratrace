@@ -26,8 +26,26 @@ import sys
 import time
 from datetime import datetime, timezone
 from typing import Any
-
 import httpx
+
+def _load_env():
+    candidates = [
+        ".env",
+        os.path.join(os.path.dirname(__file__), "..", ".env"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            with open(candidate, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k not in os.environ:
+                            os.environ[k] = v
+
+_load_env()
 
 GATEWAY_URL = os.getenv("AURA_GATEWAY_URL", "http://localhost:8000/api/v1/telemetry")
 STATS_URL = os.getenv("AURA_STATS_URL", "http://localhost:8000/api/v1/stats")

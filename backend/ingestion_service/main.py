@@ -9,6 +9,8 @@ import uuid
 import logging
 import asyncio
 import time
+import hashlib
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -251,13 +253,14 @@ async def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)):
     if MASTER_API_KEY and api_key == MASTER_API_KEY:
         return api_key
 
-    # Check per-service registered API key in PostgreSQL database
+    # Validate per-service registered API key by hashing the incoming key with SHA-256
     if db_engine:
         try:
+            incoming_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
             async with db_engine.connect() as conn:
                 res = await conn.execute(
-                    text("SELECT id, name, status FROM services WHERE api_key_hash = :key LIMIT 1"),
-                    {"key": api_key},
+                    text("SELECT id, name, status FROM services WHERE api_key_hash = :hash AND status = 'ACTIVE' LIMIT 1"),
+                    {"hash": incoming_hash},
                 )
                 svc = res.mappings().first()
                 if svc:
@@ -1977,7 +1980,8 @@ async def create_service(
     current_user: dict = Depends(get_current_user),
 ):
     service_name = payload.id or payload.name
-    new_key = f"at_live_{uuid.uuid4().hex[:16]}"
+    new_key = f"at_live_{secrets.token_hex(16)}"
+    key_hash = hashlib.sha256(new_key.encode("utf-8")).hexdigest()
 
     if not db_engine:
         raise HTTPException(status_code=503, detail="Database unavailable.")
@@ -1987,11 +1991,11 @@ async def create_service(
             res = await conn.execute(
                 text("""
                     INSERT INTO services (name, description, environment, status, api_key_hash, owner_id)
-                    VALUES (:name, :desc, :env, 'ACTIVE', :key, :owner_id)
+                    VALUES (:name, :desc, :env, 'ACTIVE', :key_hash, :owner_id)
                     RETURNING id, name, environment, status, created_at, owner_id
                 """),
                 {"name": service_name, "desc": payload.description or f"Microservice {service_name}",
-                 "env": payload.environment, "key": new_key, "owner_id": current_user["id"]},
+                 "env": payload.environment, "key_hash": key_hash, "owner_id": current_user["id"]},
             )
             row = res.mappings().first()
             if row:
