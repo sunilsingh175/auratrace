@@ -110,7 +110,7 @@ class LLMDoctor:
         )
 
         prompt = f"""
-You are AuraTrace AI Doctor, an expert software observability and incident-response assistant.
+You are Trace AI Doctor, an expert software observability and incident-response assistant.
 
 Your task is to diagnose the incident using ONLY the information provided below.
 

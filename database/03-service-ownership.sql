@@ -1,4 +1,4 @@
--- AuraTrace service ownership migration
+-- Trace service ownership migration
 ALTER TABLE services
     ADD COLUMN IF NOT EXISTS owner_id UUID;
 

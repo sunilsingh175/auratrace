@@ -15,7 +15,7 @@ class AnomalyDetector:
         higher value  = more normal
         lower value   = more anomalous
 
-    AuraTrace converts this into:
+    Trace converts this into:
         0.0 = normal
         1.0 = highly anomalous
     """
@@ -151,7 +151,7 @@ class AnomalyDetector:
             # IsolationForest produces a decision
             # score where higher values are more normal.
             #
-            # Convert it to an AuraTrace anomaly score.
+            # Convert it to a Trace anomaly score.
             anomaly_score = (
                 0.5 - decision_score
             )
@@ -183,7 +183,7 @@ class AnomalyDetector:
         features,
     ) -> bool:
         """
-        Return True when the AuraTrace anomaly
+        Return True when the Trace anomaly
         score crosses the configured threshold.
         """
 
@@ -208,7 +208,7 @@ class AnomalyDetector:
         Return the anomaly score and classification.
 
         The same score is used for both values so that
-        AuraTrace has one consistent anomaly decision.
+        Trace has one consistent anomaly decision.
         """
 
         anomaly_score = (

@@ -1,5 +1,5 @@
 """
-AuraTrace Pipeline Integration Test Suite
+Trace Pipeline Integration Test Suite
 Validates backend components:
 1. Multi-service ML Log Buffer feature isolation
 2. Isolation Forest model scoring
@@ -25,7 +25,7 @@ embeddings_mod = importlib.import_module("backend.rag-diagnostic-service.embeddi
 embedder = embeddings_mod.embedder
 
 
-class TestAuraTracePipeline(unittest.TestCase):
+class TestTracePipeline(unittest.TestCase):
 
     def test_01_service_log_buffer_isolation(self):
         """Verify that telemetry from different services is strictly isolated."""

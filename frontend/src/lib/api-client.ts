@@ -27,7 +27,7 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 function ensureOk(response: Response, path: string) {
-  if (!response.ok) throw new Error(`AuraTrace API ${response.status} for ${path}`);
+  if (!response.ok) throw new Error(`Trace API ${response.status} for ${path}`);
 }
 
 export async function fetchIncidents(params?: {
@@ -293,4 +293,4 @@ export async function changeUserPassword(data: { current_password: string; new_p
     throw new Error(errData?.detail || `Failed to change password (${res.status})`);
   }
   return await res.json();
-}
+}

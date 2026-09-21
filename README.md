@@ -1,6 +1,6 @@
-# AuraTrace: AI-Powered Application Observability & Crash Diagnostics Platform
+# Trace: AI-Powered Application Observability & Crash Diagnostics Platform
 
-AuraTrace is a decoupled, event-driven observability and automated root-cause analysis platform. It ingests continuous telemetry streams, detects system anomalies using unsupervised machine learning (Isolation Forest), and generates step-by-step diagnostic and recovery reports using Retrieval-Augmented Generation (RAG) and an LLM.
+Trace is a decoupled, event-driven observability and automated root-cause analysis platform. It ingests continuous telemetry streams, detects system anomalies using unsupervised machine learning (Isolation Forest), and generates step-by-step diagnostic and recovery reports using Retrieval-Augmented Generation (RAG) and an LLM.
 
 ---
 
@@ -52,7 +52,7 @@ Telemetry persistence is performed by the backend worker pipeline into PostgreSQ
 
 ## Machine Learning Architecture & Benchmark Validation
 
-AuraTrace implements two complementary Isolation Forest workflows:
+Trace implements two complementary Isolation Forest workflows:
 
 1. **Online Production Anomaly Detection:**
    * Operates on **8 operational telemetry features** (error_count, request_count, error_rate, avg_latency_ms, max_latency_ms, p95_latency_ms, status_5xx_rate, unique_error_types) aggregated over 5-minute per-service sliding windows.

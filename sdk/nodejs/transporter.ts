@@ -1,5 +1,5 @@
 /**
- * AuraTrace Batch Transporter
+ * Trace Batch Transporter
  */
 
 export interface TelemetryPayload {
@@ -50,7 +50,7 @@ export class BatchTransporter {
 
       return await response.json();
     } catch (error) {
-      console.error("AuraTrace Transporter Error:", error);
+      console.error("Trace Transporter Error:", error);
       throw error;
     }
   }

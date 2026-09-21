@@ -71,7 +71,7 @@ export function LogConsole({ logs, onClear, isConnected = true }: LogConsoleProp
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `auratrace-logs-${Date.now()}.json`;
+    a.download = `trace-logs-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };

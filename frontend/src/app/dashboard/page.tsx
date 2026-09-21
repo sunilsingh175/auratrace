@@ -68,7 +68,7 @@ export default function DashboardPage() {
   // Listen to live WebSocket events to update dashboard in real-time
   const handleRealtimeAlert = useCallback(
     (alert: AnomalyAlertEvent) => {
-      console.log("[AuraTrace Dashboard] Real-time anomaly received:", alert);
+      console.log("[Trace Dashboard] Real-time anomaly received:", alert);
       void loadDashboardData();
     },
     [loadDashboardData]

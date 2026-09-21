@@ -1,5 +1,5 @@
 """
-AuraTrace High-Concurrency Ingestion Gateway Benchmark
+Trace High-Concurrency Ingestion Gateway Benchmark
 Evaluates req/sec throughput and latency percentiles under concurrent load.
 """
 
@@ -49,7 +49,7 @@ async def worker(worker_id: int, request_count: int, latencies: list, client: ht
 
 async def run_benchmark():
     print("=" * 65)
-    print(" 🚀 AuraTrace Ingestion Throughput & Latency Benchmark")
+    print(" 🚀 Trace Ingestion Throughput & Latency Benchmark")
     print(f" Target: {GATEWAY_URL}")
     print(f" Total Requests: {TOTAL_REQUESTS} | Concurrency: {CONCURRENCY} workers")
     print("=" * 65)

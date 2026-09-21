@@ -38,7 +38,7 @@ def generate_normal_training_data(
     n_samples: int = N_SAMPLES,
 ) -> np.ndarray:
     """
-    Generate synthetic normal AuraTrace telemetry windows.
+    Generate synthetic normal Trace telemetry windows.
 
     The project can later replace this with real historical
     telemetry data. For the initial demo, we train on realistic
@@ -183,7 +183,7 @@ def generate_demo_anomalies() -> np.ndarray:
 def train_model() -> IsolationForest:
 
     logger.info(
-        "Starting AuraTrace Isolation Forest training"
+        "Starting Trace Isolation Forest training"
     )
 
     logger.info(
@@ -270,7 +270,7 @@ def validate_model(
 def main():
 
     logger.info(
-        "AuraTrace feature schema:"
+        "Trace feature schema:"
     )
 
     for index, name in enumerate(

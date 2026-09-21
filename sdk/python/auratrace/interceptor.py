@@ -1,5 +1,5 @@
 """
-AuraTrace Middleware Interceptors for FastAPI / Starlette / Flask
+Trace Middleware Interceptors for FastAPI / Starlette / Flask
 """
 
 import time
@@ -9,16 +9,16 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from .client import AuraTrace
+from .client import Trace, AuraTrace
 
 
-class AuraTraceMiddleware(BaseHTTPMiddleware):
+class TraceMiddleware(BaseHTTPMiddleware):
     """
     FastAPI / Starlette middleware that times requests, captures latency metrics,
-    and reports unhandled 500 exceptions directly to AuraTrace.
+    and reports unhandled 500 exceptions directly to Trace.
     """
 
-    def __init__(self, app, client: AuraTrace):
+    def __init__(self, app, client: Trace):
         super().__init__(app)
         self.client = client
 
@@ -56,3 +56,7 @@ class AuraTraceMiddleware(BaseHTTPMiddleware):
                 method=method,
             )
             raise exc from None
+
+
+# Backward-compatibility alias
+AuraTraceMiddleware = TraceMiddleware

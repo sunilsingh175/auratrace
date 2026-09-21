@@ -1,5 +1,5 @@
 """
-AuraTrace Redis-buffered ingestion burst test.
+Trace Redis-buffered ingestion burst test.
 
 Sends a configurable burst of telemetry to the FastAPI ingestion gateway and
 measures HTTP acceptance latency, throughput, and the change in the Redis
@@ -161,7 +161,7 @@ async def run(args: argparse.Namespace) -> int:
     before_stream = redis_stream_length()
 
     print("=" * 72)
-    print("AuraTrace Phase 6 — Redis-Buffered Ingestion Burst Test")
+    print("Trace Phase 6 — Redis-Buffered Ingestion Burst Test")
     print(f"Gateway:     {GATEWAY_URL}")
     print(f"Requests:    {args.requests}")
     print(f"Concurrency: {args.concurrency}")
@@ -229,7 +229,7 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Stress-test AuraTrace ingestion and Redis buffering.")
+    parser = argparse.ArgumentParser(description="Stress-test Trace ingestion and Redis buffering.")
     parser.add_argument("--requests", type=int, default=DEFAULT_REQUESTS, help="Total telemetry requests to send.")
     parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY, help="Number of concurrent HTTP workers.")
     parser.add_argument("--auth", action="store_true", help="Send X-API-Key using AURA_MASTER_API_KEY.")

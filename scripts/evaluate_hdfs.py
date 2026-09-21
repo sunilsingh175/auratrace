@@ -1,5 +1,5 @@
 """
-AuraTrace HDFS Log Anomaly Detection Benchmark Evaluation
+Trace HDFS Log Anomaly Detection Benchmark Evaluation
 Evaluates unsupervised Isolation Forest on the LogHub HDFS_v1 dataset.
 
 Dataset Reference:
@@ -86,7 +86,7 @@ def run_evaluation(
     5. Evaluates out-of-sample generalization on Held-out Test set.
     """
     print("=" * 72)
-    print(" 🌲 AuraTrace ML Benchmark: Isolation Forest on LogHub HDFS_v1")
+    print(" 🌲 Trace ML Benchmark: Isolation Forest on LogHub HDFS_v1")
     print(f" Dataset Path: {DATASET_PATH}")
     print("=" * 72)
 

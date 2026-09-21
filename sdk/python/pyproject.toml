@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "auratrace"
 version = "1.0.0"
 authors = [{ name="Sunil Singh", email="sunilsinghrajput192@gmail.com" }]
-description = "Official Python Telemetry & Crash Reporting SDK for AuraTrace"
+description = "Official Python Telemetry & Crash Reporting SDK for Trace"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

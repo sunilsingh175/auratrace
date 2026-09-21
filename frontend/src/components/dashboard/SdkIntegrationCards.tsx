@@ -7,15 +7,15 @@ export function SdkIntegrationCards() {
   const [copiedPython, setCopiedPython] = useState(false);
   const [copiedNode, setCopiedNode] = useState(false);
 
-  const pythonCode = `from auratrace import AuraClient
+  const pythonCode = `from trace_sdk import TraceClient
 
-aura = AuraClient(service_name="payment-api")
-aura.capture_exception(e, request_context=ctx)`;
+trace = TraceClient(service_name="payment-api")
+trace.capture_exception(e, request_context=ctx)`;
 
-  const nodeCode = `import { AuraTrace } from '@auratrace/node';
+  const nodeCode = `import { Trace } from '@trace/node';
 
-AuraTrace.init({ serviceId: 'order-service' });
-app.use(AuraTrace.expressMiddleware());`;
+Trace.init({ serviceId: 'order-service' });
+app.use(Trace.expressMiddleware());`;
 
   const copyToClipboard = (text: string, isPython: boolean) => {
     navigator.clipboard.writeText(text);
@@ -43,7 +43,7 @@ app.use(AuraTrace.expressMiddleware());`;
               </h3>
             </div>
             <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600 font-heading">
-              pip install auratrace
+              pip install trace-sdk
             </span>
           </div>
 
@@ -62,11 +62,11 @@ app.use(AuraTrace.expressMiddleware());`;
             </button>
             <pre>
               <code>
-                <span className="text-purple-400">from</span> <span className="text-blue-300">auratrace</span> <span className="text-purple-400">import</span> <span className="text-amber-300">AuraClient</span>
+                <span className="text-purple-400">from</span> <span className="text-blue-300">trace_sdk</span> <span className="text-purple-400">import</span> <span className="text-amber-300">TraceClient</span>
                 {"\n\n"}
-                <span className="text-slate-300">aura = </span><span className="text-amber-300">AuraClient</span>(service_name=<span className="text-emerald-300">&quot;payment-api&quot;</span>)
+                <span className="text-slate-300">trace = </span><span className="text-amber-300">TraceClient</span>(service_name=<span className="text-emerald-300">&quot;payment-api&quot;</span>)
                 {"\n"}
-                <span className="text-slate-300">aura.</span><span className="text-blue-400">capture_exception</span>(e, request_context=ctx)
+                <span className="text-slate-300">trace.</span><span className="text-blue-400">capture_exception</span>(e, request_context=ctx)
               </code>
             </pre>
           </div>
@@ -97,7 +97,7 @@ app.use(AuraTrace.expressMiddleware());`;
               </h3>
             </div>
             <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600 font-heading">
-              npm i @auratrace/node
+              npm i @trace/node
             </span>
           </div>
 
@@ -116,11 +116,11 @@ app.use(AuraTrace.expressMiddleware());`;
             </button>
             <pre>
               <code>
-                <span className="text-purple-400">import</span> &#123; <span className="text-amber-300">AuraTrace</span> &#125; <span className="text-purple-400">from</span> <span className="text-emerald-300">&apos;@auratrace/node&apos;</span>;
+                <span className="text-purple-400">import</span> &#123; <span className="text-amber-300">Trace</span> &#125; <span className="text-purple-400">from</span> <span className="text-emerald-300">&apos;@trace/node&apos;</span>;
                 {"\n\n"}
-                <span className="text-amber-300">AuraTrace</span>.<span className="text-blue-400">init</span>(&#123; serviceId: <span className="text-emerald-300">&apos;order-service&apos;</span> &#125;);
+                <span className="text-amber-300">Trace</span>.<span className="text-blue-400">init</span>(&#123; serviceId: <span className="text-emerald-300">&apos;order-service&apos;</span> &#125;);
                 {"\n"}
-                <span className="text-slate-300">app.</span><span className="text-blue-400">use</span>(<span className="text-amber-300">AuraTrace</span>.<span className="text-blue-400">expressMiddleware</span>());
+                <span className="text-slate-300">app.</span><span className="text-blue-400">use</span>(<span className="text-amber-300">Trace</span>.<span className="text-blue-400">expressMiddleware</span>());
               </code>
             </pre>
           </div>

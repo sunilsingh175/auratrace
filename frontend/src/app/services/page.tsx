@@ -41,7 +41,7 @@ export default function ServicesPage() {
       setServices(await fetchServices());
     } catch (err) {
       console.error(err);
-      setError("Unable to load services from the AuraTrace API.");
+      setError("Unable to load services from the Trace API.");
     } finally {
       setLoading(false);
     }
@@ -69,7 +69,7 @@ export default function ServicesPage() {
       setCreatedKey(res.api_key_hash || null);
     } catch (err) {
       console.error(err);
-      setError("Service registration failed. Check the AuraTrace API and try again.");
+      setError("Service registration failed. Check the Trace API and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -162,7 +162,7 @@ export default function ServicesPage() {
             <p className="mt-3 text-sm font-bold text-slate-700 font-heading">No microservices found</p>
             <p className="text-xs text-slate-400">
               {services.length === 0
-                ? "No services are currently registered in the AuraTrace backend."
+                ? "No services are currently registered in the Trace backend."
                 : "Try adjusting your search query."}
             </p>
           </div>
@@ -292,7 +292,7 @@ export default function ServicesPage() {
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-slate-900 font-heading">Register Microservice</h2>
-                    <p className="text-[10px] text-slate-400">Add service to the AuraTrace telemetry stream</p>
+                    <p className="text-[10px] text-slate-400">Add service to the Trace telemetry stream</p>
                   </div>
                 </div>
                 <button
@@ -360,7 +360,7 @@ export default function ServicesPage() {
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-[#f8fafc] p-3">
-                    <span className="label font-heading">AuraTrace Ingestion Credential</span>
+                    <span className="label font-heading">Trace Ingestion Credential</span>
                     <div className="mt-1.5 flex items-center justify-between font-mono text-xs text-slate-800">
                       <span className="truncate">{createdKey}</span>
                       <button

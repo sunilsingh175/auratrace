@@ -2,7 +2,7 @@
   "name": "@auratrace/node",
   "version": "1.0.0",
   "type": "module",
-  "description": "Official Node.js Telemetry & Crash Diagnostic SDK for AuraTrace",
+  "description": "Official Node.js Telemetry & Crash Diagnostic SDK for Trace",
   "main": "index.ts",
   "types": "index.ts",
   "scripts": {

@@ -90,7 +90,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       ws.onopen = () => {
         setIsConnected(true);
-        console.log("[AuraTrace] Real-time notification socket connected.");
+        console.log("[Trace] Real-time notification socket connected.");
       };
 
       ws.onmessage = (event) => {

@@ -19,7 +19,7 @@ export default function IncidentsPage() {
 
   const handleRealtimeAlert = useCallback(
     (alert: AnomalyAlertEvent) => {
-      console.log("[AuraTrace] Realtime incident event:", alert);
+      console.log("[Trace] Realtime incident event:", alert);
 
       // Refresh the incident list immediately when ML/RAG
       // publishes a realtime event.

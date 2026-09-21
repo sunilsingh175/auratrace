@@ -1,5 +1,5 @@
 """
-AuraTrace Ingestion Gateway Service
+Trace Ingestion Gateway Service
 High-throughput telemetry ingestion pipeline, real-time WebSocket broadcaster, and custom Swagger UI portal.
 """
 
@@ -262,7 +262,7 @@ class CrashSimulationPayload(BaseModel):
 # ============================================================
 
 SWAGGER_CUSTOM_CSS = """
-/* AuraTrace Custom Futuristic Dark Theme for Swagger UI */
+/* Trace Custom Futuristic Dark Theme for Swagger UI */
 :root {
   --bg-primary: #080c14;
   --bg-secondary: #0c1220;
@@ -644,7 +644,7 @@ async def custom_swagger_ui_html():
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AuraTrace Ingestion Gateway | API Documentation</title>
+    <title>Trace Ingestion Gateway | API Documentation</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="https://raw.githubusercontent.com/sunilsingh175/auratrace/complete-aura-trace/frontend/public/favicon.ico">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
@@ -687,7 +687,7 @@ async def custom_redoc_html():
     """Serves clean Redoc documentation."""
     return get_redoc_html(
         openapi_url=app.openapi_url,
-        title="AuraTrace Telemetry Specs | ReDoc",
+        title="Trace Telemetry Specs | ReDoc",
         redoc_favicon_url="https://raw.githubusercontent.com/sunilsingh175/auratrace/complete-aura-trace/frontend/public/favicon.ico",
     )
 
@@ -698,7 +698,7 @@ async def scalar_docs():
 <!doctype html>
 <html>
   <head>
-    <title>AuraTrace API Reference | Scalar</title>
+    <title>Trace API Reference | Scalar</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" href="https://raw.githubusercontent.com/sunilsingh175/auratrace/complete-aura-trace/frontend/public/favicon.ico" />

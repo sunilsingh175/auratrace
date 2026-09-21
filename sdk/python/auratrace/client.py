@@ -1,5 +1,5 @@
 """
-AuraTrace Python Telemetry Client
+Trace Python Telemetry Client
 Provides non-blocking async batching, structured logging, and unhandled exception capture.
 """
 
@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any
 import httpx
 
 
-class AuraTrace:
+class Trace:
     def __init__(
         self,
         service_id: str,
@@ -118,7 +118,7 @@ class AuraTrace:
         sys.excepthook = unhandled_handler
 
     def _flusher_loop(self):
-        """Background daemon sending buffered logs to AuraTrace Ingestion Gateway."""
+        """Background daemon sending buffered logs to Trace Ingestion Gateway."""
         client = httpx.Client(timeout=5.0)
         url = f"{self.endpoint}/api/v1/telemetry/batch"
         headers = {
@@ -147,3 +147,7 @@ class AuraTrace:
         self._is_running = False
         if self._worker_thread.is_alive():
             self._worker_thread.join(timeout=1.0)
+
+
+# Backward-compatibility alias
+AuraTrace = Trace

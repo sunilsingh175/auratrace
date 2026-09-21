@@ -1,5 +1,5 @@
 """
-AuraTrace HDFS Anomaly Detection Benchmark Evaluator
+Trace HDFS Anomaly Detection Benchmark Evaluator
 Performs offline benchmark evaluation of the Isolation Forest algorithm
 against the standardized LogHub HDFS_v1 dataset.
 
@@ -88,7 +88,7 @@ def evaluate_hdfs_benchmark(
     5. Evaluates out-of-sample generalization on Held-out Test set.
     """
     print("=" * 72)
-    print(" 🌲 AuraTrace ML Benchmark: Isolation Forest on LogHub HDFS_v1")
+    print(" 🌲 Trace ML Benchmark: Isolation Forest on LogHub HDFS_v1")
     print(f" Dataset Location: {DATASET_PATH}")
     print("=" * 72)
 

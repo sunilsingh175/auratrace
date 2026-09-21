@@ -48,7 +48,7 @@ export function useWebSocket(onAnomalyAlert?: (alert: AnomalyAlertEvent) => void
 
       socket.onopen = () => {
         setIsConnected(true);
-        console.log("Connected to AuraTrace Live WebSocket Stream.");
+        console.log("Connected to Trace Live WebSocket Stream.");
       };
 
       socket.onmessage = (event) => {

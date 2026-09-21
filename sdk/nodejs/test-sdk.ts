@@ -1,6 +1,6 @@
-import { AuraTrace } from './index.ts';
+import { Trace } from './index.ts';
 
-const tracer = new AuraTrace({
+const tracer = new Trace({
   apiKey: 'aura_secret_key_123',
   endpoint: 'http://localhost:8000',
   serviceId: 'test-node-service'

@@ -1,6 +1,6 @@
 -- ==============================================================================
--- AuraTrace Historical Knowledge Base
--- OpenStack Historical Incident Dataset
+-- Trace Historical Knowledge Base
+-- Seed data for pgvector RAG matching and simulated incidents
 -- ==============================================================================
 
 

@@ -6,7 +6,7 @@ import numpy as np
 
 
 # ============================================================
-# AuraTrace ML Feature Definition
+# Trace ML Feature Definition
 # ============================================================
 #
 # The Isolation Forest model must be trained using these

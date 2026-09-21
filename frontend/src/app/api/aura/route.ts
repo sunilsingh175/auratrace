@@ -64,7 +64,7 @@ async function proxy(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       {
-        detail: "AuraTrace backend is unavailable",
+        detail: "Trace backend is unavailable",
         error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 502 }

@@ -1,10 +1,10 @@
 /**
- * AuraTrace Node.js SDK
+ * Trace Node.js SDK
  */
 
 import { BatchTransporter, type TransporterConfig, type TelemetryPayload } from "./transporter.ts";
 
-export class AuraTrace {
+export class Trace {
   private transporter: BatchTransporter;
 
   constructor(config: TransporterConfig) {
@@ -31,5 +31,8 @@ export class AuraTrace {
     });
   }
 }
+
+// Backward-compatibility alias
+export const AuraTrace = Trace;
 
 export { BatchTransporter, type TransporterConfig, type TelemetryPayload };

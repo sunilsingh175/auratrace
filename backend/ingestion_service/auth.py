@@ -1,4 +1,4 @@
-"""AuraTrace account authentication with password + email OTP verification."""
+"""Trace account authentication with password + email OTP verification."""
 
 import base64
 import hashlib
@@ -160,9 +160,9 @@ async def init_auth_table() -> None:
 
 
 def _send_otp_email(email: str, otp: str, purpose: str) -> None:
-    print(f"[AuraTrace OTP Email] Sending {purpose.upper()} code {otp} to {email}")
+    print(f"[Trace OTP Email] Sending {purpose.upper()} code {otp} to {email}")
     if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
-        print(f"[AuraTrace OTP Email] SMTP not configured. OTP logged to console: {otp}")
+        print(f"[Trace OTP Email] SMTP not configured. OTP logged to console: {otp}")
         return
 
     msg = EmailMessage()
@@ -233,7 +233,7 @@ def _send_otp_email(email: str, otp: str, purpose: str) -> None:
         smtp.starttls()
         smtp.login(SMTP_USER, SMTP_PASSWORD)
         smtp.send_message(msg)
-    print(f"[AuraTrace OTP Email] Dispatched email successfully to {email}")
+    print(f"[Trace OTP Email] Dispatched email successfully to {email}")
 
 
 
@@ -254,9 +254,9 @@ async def _issue_otp(email: str, purpose: str) -> tuple[str, bool]:
         _send_otp_email(email, otp, purpose)
     except Exception as exc:
         email_delivered = False
-        print(f"[AuraTrace SMTP Delivery Error] {exc}")
+        print(f"[Trace SMTP Delivery Error] {exc}")
         print("=" * 60)
-        print(f" [AuraTrace Verification Code] {purpose.upper()} for {email}: {otp}")
+        print(f" [Trace Verification Code] {purpose.upper()} for {email}: {otp}")
         print("=" * 60)
     return otp, email_delivered
 
@@ -634,7 +634,7 @@ class ContactInquiryPayload(BaseModel):
 def _send_contact_email(name: str, user_email: str, phone: str, comment: str) -> bool:
     target_admin = ADMIN_EMAIL or "startuphub695@gmail.com"
     if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
-        print(f"[AuraTrace Contact Ingestion] SMTP not configured. Inquiry for {target_admin} from {user_email}: {comment}")
+        print(f"[Trace Contact Ingestion] SMTP not configured. Inquiry for {target_admin} from {user_email}: {comment}")
         return False
 
     msg = EmailMessage()
@@ -707,10 +707,10 @@ Message:
             smtp.starttls()
             smtp.login(SMTP_USER, SMTP_PASSWORD)
             smtp.send_message(msg)
-        print(f"[AuraTrace Contact Email] Dispatched contact message to admin ({target_admin}) from {user_email}")
+        print(f"[Trace Contact Email] Dispatched contact message to admin ({target_admin}) from {user_email}")
         return True
     except Exception as exc:
-        print(f"[AuraTrace Contact SMTP Delivery Error] {exc}")
+        print(f"[Trace Contact SMTP Delivery Error] {exc}")
         return False
 
 

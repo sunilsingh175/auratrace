@@ -1,9 +1,9 @@
 """
-AuraTrace Python Telemetry & Crash Reporting SDK
+Trace Python Telemetry & Crash Reporting SDK
 """
 
-from .client import AuraTrace
-from .interceptor import AuraTraceMiddleware
+from .client import Trace, AuraTrace
+from .interceptor import TraceMiddleware, AuraTraceMiddleware
 
-__all__ = ["AuraTrace", "AuraTraceMiddleware"]
+__all__ = ["Trace", "TraceMiddleware", "AuraTrace", "AuraTraceMiddleware"]
 __version__ = "1.0.0"
