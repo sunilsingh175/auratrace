@@ -1,4 +1,4 @@
-export type Role = "user" | "admin";
+export type Role = "Developer" | "Admin" | "Viewer";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 
