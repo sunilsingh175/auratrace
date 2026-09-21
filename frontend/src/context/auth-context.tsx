@@ -2,9 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { UserAccount } from "@/types";
-
-type Role = "Developer" | "Admin";
+import { UserAccount, Role } from "@/types";
 
 interface AuthResult {
   success: boolean;

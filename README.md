@@ -121,6 +121,32 @@ These measurements demonstrate asynchronous Redis buffering and eventual persist
 
 ---
 
+## 2-Minute Live Demo & Verification Sequence
+
+1. **Start the Platform:**
+   ```bash
+   docker compose up -d
+   ```
+2. **Access Web Portal & Authenticate:**
+   * Open `http://localhost:3000` (Dashboard).
+   * Register or log in via `http://localhost:3000/login` as **Developer** or **Admin**.
+3. **Provision a Microservice & Receive One-Time API Key:**
+   * Navigate to `/services` and click **Register Service**.
+   * Copy the returned one-time API key (`at_live_...`).
+4. **Simulate Live Telemetry & Crash Burst:**
+   ```bash
+   python scripts/simulate_crash.py
+   ```
+5. **Observe Real-Time Anomaly Detection & AI Diagnosis:**
+   * Watch the **Live Telemetry** stream at `/telemetry`.
+   * Open `/incidents` to inspect the newly opened incident, anomaly confidence score, and AI root-cause analysis with suggested code patch.
+6. **Run Automated Full Stack Verification:**
+   ```bash
+   python scripts/verify_full_live_stack.py
+   ```
+
+---
+
 ## Repository Structure
 
 ```text
@@ -130,7 +156,8 @@ auratrace/
 ├── README.md
 ├── database/
 │   ├── 01-init.sql
-│   └── 02-seed.sql
+│   ├── 02-seed.sql
+│   └── 03-service-ownership.sql
 ├── backend/
 │   ├── ingestion_service/
 │   ├── ml_anomaly_service/
@@ -138,7 +165,14 @@ auratrace/
 │   └── shared/
 ├── frontend/
 ├── sdk/
+│   └── nodejs/
 └── scripts/
+    ├── benchmark_ingestion.py
+    ├── evaluate_hdfs.py
+    ├── simulate_crash.py
+    ├── stress_test.py
+    ├── test_pipeline_integration.py
+    └── verify_full_live_stack.py
 ```
 
 ---
