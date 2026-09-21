@@ -47,7 +47,6 @@ export function HorizontalNavbar() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
-  const [activeInterval, setActiveInterval] = useState("5m");
 
   useEffect(() => {
     let mounted = true;
@@ -334,26 +333,6 @@ export function HorizontalNavbar() {
               )}
             </div>
 
-            {/* Time Interval Selector (5m, 15m, 1h) */}
-            <div className="hidden sm:flex items-center gap-1 bg-slate-50 border border-slate-200/80 p-1 rounded-xl">
-              {["5m", "15m", "1h"].map((range) => {
-                const isSelected = activeInterval === range;
-                return (
-                  <button
-                    key={range}
-                    type="button"
-                    onClick={() => setActiveInterval(range)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-bold transition font-heading cursor-pointer ${
-                      isSelected
-                        ? "bg-white text-[#dc2626] shadow-xs border border-slate-100"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    {range}
-                  </button>
-                );
-              })}
-            </div>
 
             {/* User Profile / Sign In Pill */}
             {user ? (
