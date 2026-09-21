@@ -134,8 +134,8 @@ export async function fetchServices(): Promise<Service[]> {
     latency_ms: Number(s.latency_ms ?? 0),
     incident_count: Number(s.incident_count ?? 0),
     last_activity: s.last_activity || undefined,
-    api_key_hash: s.api_key,
     created_at: s.created_at,
+    owner_id: s.owner_id || undefined,
   }));
 }
 
@@ -156,7 +156,25 @@ export async function registerService(data: { id: string; name: string; environm
     last_activity: created.last_activity || undefined,
     api_key_hash: created.api_key,
     created_at: created.created_at,
+    owner_id: created.owner_id || undefined,
   };
+}
+
+export async function updateService(
+  serviceId: string,
+  data: { name?: string; description?: string; environment?: string; status?: string }
+): Promise<Service> {
+  const path = `services/${encodeURIComponent(serviceId)}`;
+  const res = await request(path, { method: "PATCH", body: JSON.stringify(data) });
+  ensureOk(res, path);
+  return res.json();
+}
+
+export async function deleteService(serviceId: string): Promise<{ success: boolean; message: string }> {
+  const path = `services/${encodeURIComponent(serviceId)}`;
+  const res = await request(path, { method: "DELETE" });
+  ensureOk(res, path);
+  return res.json();
 }
 
 export async function simulateCrash(

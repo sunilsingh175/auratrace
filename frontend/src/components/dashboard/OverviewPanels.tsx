@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Package, Clock, AlertTriangle, ChevronRight } from "lucide-react";
+import { Package, Clock, AlertTriangle, ChevronRight, CheckCircle2 } from "lucide-react";
 import { Service, Incident } from "@/types";
 
 interface OverviewPanelsProps {
@@ -10,108 +10,26 @@ interface OverviewPanelsProps {
   incidents?: Incident[];
 }
 
-export function OverviewPanels({ services, incidents }: OverviewPanelsProps) {
-  // Default fallback services if backend services are initializing
-  const defaultServices = [
-    { name: "auth-service", status: "Healthy", rps: "12.4 rps", error: "0.1%", latency: "98 ms" },
-    { name: "payment-service", status: "Healthy", rps: "8.7 rps", error: "0.3%", latency: "145 ms" },
-    { name: "user-service", status: "Degraded", rps: "6.2 rps", error: "1.8%", latency: "220 ms" },
-    { name: "notification-service", status: "Healthy", rps: "3.1 rps", error: "0.2%", latency: "110 ms" },
-    { name: "catalog-service", status: "Down", rps: "0.0 rps", error: "0.0%", latency: "-" },
-  ];
+export function OverviewPanels({ services = [], incidents = [] }: OverviewPanelsProps) {
+  const activeServices = (services || []).slice(0, 5);
+  const activeIncidents = (incidents || []).slice(0, 5);
 
-  const defaultTimeline = [
-    {
-      time: "12:42",
-      title: "Increased error rate detected",
-      meta: "user-service · Anomaly score: 0.82",
-      tone: "red",
-    },
-    {
-      time: "12:37",
-      title: "Latency spike detected",
-      meta: "payment-service · Anomaly score: 0.76",
-      tone: "yellow",
-    },
-    {
-      time: "12:21",
-      title: "Normalized",
-      meta: "auth-service · Anomaly score: 0.34",
-      tone: "green",
-    },
-    {
-      time: "11:58",
-      title: "Increased error rate detected",
-      meta: "notification-service · Anomaly score: 0.71",
-      tone: "yellow",
-    },
-    {
-      time: "11:34",
-      title: "Normalized",
-      meta: "catalog-service · Anomaly score: 0.29",
-      tone: "green",
-    },
-  ];
+  const timelineItems = (incidents || []).slice(0, 5).map((inc) => {
+    const time = inc.created_at
+      ? new Date(inc.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : "Just now";
+    const isCrit = inc.severity === "critical" || (inc.anomaly_score && inc.anomaly_score >= 0.85);
+    const isWarn = inc.severity === "high" || inc.severity === "medium";
 
-  const defaultIncidents = [
-    {
-      id: "INC-00124",
-      service: "user-service",
-      severity: "High",
-      status: "Open",
-      time: "12:42",
-    },
-    {
-      id: "INC-00123",
-      service: "payment-service",
-      severity: "Medium",
-      status: "Investigating",
-      time: "12:37",
-    },
-    {
-      id: "INC-00122",
-      service: "catalog-service",
-      severity: "Critical",
-      status: "Open",
-      time: "11:58",
-    },
-    {
-      id: "INC-00121",
-      service: "notification-service",
-      severity: "Low",
-      status: "Resolved",
-      time: "10:24",
-    },
-    {
-      id: "INC-00120",
-      service: "auth-service",
-      severity: "Medium",
-      status: "Resolved",
-      time: "09:17",
-    },
-  ];
-
-  const activeServices =
-    services && services.length > 0
-      ? services.slice(0, 5).map((s) => ({
-          name: s.name,
-          status: s.status === "healthy" ? "Healthy" : s.status === "critical" ? "Down" : "Degraded",
-          rps: `${(Math.random() * 10 + 2).toFixed(1)} rps`,
-          error: `${s.error_rate ?? 0}%`,
-          latency: `${s.latency_ms ?? 0} ms`,
-        }))
-      : defaultServices;
-
-  const activeIncidents =
-    incidents && incidents.length > 0
-      ? incidents.slice(0, 5).map((inc) => ({
-          id: inc.id,
-          service: inc.service_id ? inc.service_id.split("-")[0] + "-service" : "api-gateway",
-          severity: inc.severity,
-          status: inc.status,
-          time: new Date(inc.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        }))
-      : defaultIncidents;
+    return {
+      id: inc.id,
+      time,
+      title: inc.title || inc.error_type || "Anomaly Detected",
+      meta: `${inc.service_id} · Score: ${(inc.anomaly_score ?? 0).toFixed(2)}`,
+      tone: isCrit ? "red" : isWarn ? "yellow" : "green",
+      status: inc.status,
+    };
+  });
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -133,51 +51,72 @@ export function OverviewPanels({ services, incidents }: OverviewPanelsProps) {
             </Link>
           </div>
 
-          <div className="divide-y divide-slate-50">
-            {activeServices.map((srv, idx) => (
-              <div
-                key={idx}
-                className="py-3 flex items-center justify-between text-xs hover:bg-slate-50/60 px-1 rounded-xl transition"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${
-                      srv.status === "Healthy"
-                        ? "bg-emerald-500"
-                        : srv.status === "Degraded"
-                        ? "bg-amber-500"
-                        : "bg-red-500"
-                    }`}
-                  />
-                  <div>
-                    <span className="font-bold text-slate-900 block truncate">
-                      {srv.name}
-                    </span>
-                    <span
-                      className={`text-[11px] font-medium ${
-                        srv.status === "Healthy"
-                          ? "text-slate-400"
-                          : srv.status === "Degraded"
-                          ? "text-amber-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {srv.status}
-                    </span>
-                  </div>
-                </div>
+          {activeServices.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-400 font-sans">
+              <Package className="mx-auto h-7 w-7 text-slate-300 mb-2" />
+              <p className="font-medium text-slate-600">No active microservices</p>
+              <Link href="/services" className="text-red-600 font-bold hover:underline mt-1 block">
+                Register a microservice →
+              </Link>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {activeServices.map((srv) => {
+                const isHealthy = srv.status === "healthy";
+                const isCrit = srv.status === "critical";
 
-                <div className="flex items-center gap-3.5 text-[11px] text-slate-500 font-mono">
-                  <span className="hidden sm:inline">{srv.rps}</span>
-                  <span>{srv.error}</span>
-                  <span className="w-14 text-right">{srv.latency}</span>
-                  <Link href="/services" className="text-slate-400 hover:text-slate-700">
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
+                return (
+                  <div
+                    key={srv.id}
+                    className="py-3 flex items-center justify-between text-xs hover:bg-slate-50/60 px-1 rounded-xl transition"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                          isHealthy
+                            ? "bg-emerald-500"
+                            : isCrit
+                            ? "bg-red-500"
+                            : "bg-amber-500"
+                        }`}
+                      />
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-900 block truncate">
+                          {srv.name}
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono capitalize ${
+                            isHealthy
+                              ? "text-slate-400"
+                              : isCrit
+                              ? "text-red-600"
+                              : "text-amber-600"
+                          }`}
+                        >
+                          {srv.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3.5 text-[11px] text-slate-500 font-mono">
+                      <span className="hidden sm:inline">
+                        {srv.requests > 0 ? `${(srv.requests / 300).toFixed(1)} rps` : "0 rps"}
+                      </span>
+                      <span className={srv.error_rate > 3 ? "text-rose-600 font-bold" : ""}>
+                        {srv.error_rate ? `${srv.error_rate.toFixed(1)}%` : "0%"}
+                      </span>
+                      <span className="w-14 text-right">
+                        {srv.latency_ms > 0 ? `${srv.latency_ms.toFixed(0)} ms` : "—"}
+                      </span>
+                      <Link href={`/telemetry?service=${encodeURIComponent(srv.id)}`} className="text-slate-400 hover:text-slate-700">
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -199,35 +138,43 @@ export function OverviewPanels({ services, incidents }: OverviewPanelsProps) {
             </Link>
           </div>
 
-          <div className="divide-y divide-slate-50">
-            {defaultTimeline.map((item, idx) => (
-              <div
-                key={idx}
-                className="py-3 flex items-start gap-3 text-xs hover:bg-slate-50/60 px-1 rounded-xl transition"
-              >
-                <span
-                  className={`w-2 h-2 rounded-full mt-1 shrink-0 ${
-                    item.tone === "red"
-                      ? "bg-red-500"
-                      : item.tone === "yellow"
-                      ? "bg-amber-500"
-                      : "bg-emerald-500"
-                  }`}
-                />
-                <span className="text-slate-400 font-mono text-[11px] w-10 shrink-0">
-                  {item.time}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-slate-900 text-xs truncate">
-                    {item.title}
-                  </p>
-                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                    {item.meta}
-                  </p>
+          {timelineItems.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-400 font-sans">
+              <CheckCircle2 className="mx-auto h-7 w-7 text-emerald-400 mb-2" />
+              <p className="font-medium text-slate-600">All systems normal</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">No anomaly triggers in recent events</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {timelineItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="py-3 flex items-start gap-3 text-xs hover:bg-slate-50/60 px-1 rounded-xl transition"
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full mt-1 shrink-0 ${
+                      item.tone === "red"
+                        ? "bg-red-500"
+                        : item.tone === "yellow"
+                        ? "bg-amber-500"
+                        : "bg-emerald-500"
+                    }`}
+                  />
+                  <span className="text-slate-400 font-mono text-[11px] w-12 shrink-0">
+                    {item.time}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-slate-900 text-xs truncate">
+                      {item.title}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                      {item.meta}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -249,57 +196,68 @@ export function OverviewPanels({ services, incidents }: OverviewPanelsProps) {
             </Link>
           </div>
 
-          <div className="divide-y divide-slate-50 text-xs">
-            {activeIncidents.map((inc, idx) => (
-              <div
-                key={idx}
-                className="py-2.5 flex items-center justify-between hover:bg-slate-50/60 px-1 rounded-xl transition"
-              >
-                <div className="min-w-0 pr-2">
-                  <span className="font-mono text-[11px] text-slate-400 block">
-                    {inc.id}
-                  </span>
-                  <span className="font-bold text-slate-900 block truncate text-xs">
-                    {inc.service}
-                  </span>
-                </div>
+          {activeIncidents.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-400 font-sans">
+              <CheckCircle2 className="mx-auto h-7 w-7 text-emerald-500 mb-2" />
+              <p className="font-medium text-slate-700 font-heading">Zero open incidents</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Microservice anomaly detector is idle</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50 text-xs">
+              {activeIncidents.map((inc) => {
+                const isCrit = inc.severity === "critical" || (inc.anomaly_score && inc.anomaly_score >= 0.85);
+                const isWarn = inc.severity === "high" || inc.severity === "medium";
+                const isResolved = inc.status === "RESOLVED";
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {/* Severity Badge */}
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      inc.severity === "Critical"
-                        ? "bg-red-50 text-red-700 border border-red-200"
-                        : inc.severity === "High"
-                        ? "bg-amber-50 text-amber-700 border border-amber-200"
-                        : inc.severity === "Medium"
-                        ? "bg-yellow-50 text-yellow-800 border border-yellow-200"
-                        : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    }`}
+                return (
+                  <Link
+                    key={inc.id}
+                    href={`/incidents/${encodeURIComponent(inc.id)}`}
+                    className="py-2.5 flex items-center justify-between hover:bg-slate-50/60 px-1 rounded-xl transition block"
                   >
-                    {inc.severity}
-                  </span>
+                    <div className="min-w-0 pr-2">
+                      <span className="font-mono text-[10px] text-slate-400 block truncate">
+                        {inc.id.slice(0, 12)}
+                      </span>
+                      <span className="font-bold text-slate-900 block truncate text-xs">
+                        {inc.title || inc.error_type || inc.service_id}
+                      </span>
+                    </div>
 
-                  {/* Status Badge */}
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      inc.status === "Open"
-                        ? "bg-orange-50 text-orange-700 border border-orange-200"
-                        : inc.status === "Investigating"
-                        ? "bg-blue-50 text-blue-700 border border-blue-200"
-                        : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    }`}
-                  >
-                    {inc.status}
-                  </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          isCrit
+                            ? "bg-red-50 text-red-700 border border-red-200"
+                            : isWarn
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        }`}
+                      >
+                        {inc.severity || "Anomaly"}
+                      </span>
 
-                  <span className="font-mono text-[11px] text-slate-400 w-10 text-right">
-                    {inc.time}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          isResolved
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-blue-50 text-blue-700 border border-blue-200"
+                        }`}
+                      >
+                        {inc.status}
+                      </span>
+
+                      <span className="font-mono text-[10px] text-slate-400 w-12 text-right">
+                        {inc.created_at
+                          ? new Date(inc.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                          : "—"}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

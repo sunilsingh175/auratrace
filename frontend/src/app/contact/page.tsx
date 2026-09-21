@@ -232,7 +232,7 @@ export default function ContactPage() {
                 </button>
 
                 <span className="text-xs text-slate-400 font-sans">
-                  Direct communication encrypted with hardware enclaves.
+                  Direct communication protected with TLS encryption.
                 </span>
               </div>
             </form>

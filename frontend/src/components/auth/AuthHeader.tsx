@@ -14,7 +14,7 @@ export function AuthHeader() {
         href="/security"
         className="flex items-center gap-2 text-xs md:text-sm text-slate-500 hover:text-slate-900 transition-colors group"
       >
-        <span className="hidden sm:inline font-medium">Protected by hardware enclave</span>
+        <span className="hidden sm:inline font-medium">Secure OTP authentication</span>
         <Shield className="w-4 h-4 text-[#dc2626] group-hover:scale-110 transition-transform stroke-[2]" />
       </Link>
     </header>

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND_URL = process.env.AURA_BACKEND_URL || process.env.AURA_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const MASTER_API_KEY = process.env.AURA_MASTER_API_KEY || "aura_secret_key_123";
+const MASTER_API_KEY = process.env.AURA_MASTER_API_KEY || "";
 
 async function handler(request: NextRequest, context: { params: { path: string[] } }) {
   if (!MASTER_API_KEY) {
-    return NextResponse.json({ detail: "Trace server API key is not configured." }, { status: 500 });
+    return NextResponse.json({ detail: "Automatic Backend Detection server API key is not configured." }, { status: 500 });
   }
 
   const targetPath = `/${context.params.path.join("/")}`;

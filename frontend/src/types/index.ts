@@ -18,6 +18,7 @@ export interface Service {
   last_activity?: string;
   api_key_hash?: string;
   created_at?: string;
+  owner_id?: string;
 }
 
 export interface SystemMetrics {

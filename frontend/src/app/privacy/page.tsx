@@ -48,7 +48,7 @@ export default function PrivacyPolicyPage() {
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl">
-            Automatic Backend Detection Inc. is engineered from the ground up with zero-knowledge telemetry principles, hardware enclave confidentiality, and rigorous global data compliance.
+            Automatic Backend Detection Inc. is engineered from the ground up with zero-knowledge telemetry principles, robust cryptographic controls, and rigorous data protection standards.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-6 pt-6 border-t border-slate-100 text-xs text-slate-500">
@@ -62,7 +62,7 @@ export default function PrivacyPolicyPage() {
             </div>
             <div className="flex items-center gap-1.5">
               <Lock className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="text-emerald-700 font-medium">Hardware Enclave Isolation Active</span>
+              <span className="text-emerald-700 font-medium">End-to-End Cryptographic Transport</span>
             </div>
           </div>
         </div>
@@ -145,15 +145,15 @@ export default function PrivacyPolicyPage() {
           <section className="space-y-3">
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2.5">
               <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-slate-100 text-slate-800 text-xs font-bold">3</span>
-              <span>Hardware Enclave & Confidential Computing Architecture</span>
+              <span>End-to-End Encryption & Telemetry Protection</span>
             </h2>
             <p>
-              As indicated throughout our infrastructure, telemetry processing and anomaly classification are performed within <strong>Hardware Security Enclaves</strong> (AMD SEV-SNP and AWS Nitro Enclaves). This provides cryptographically enforced memory encryption:
+              Telemetry processing and anomaly classification are performed within isolated container workloads with cryptographically enforced controls:
             </p>
             <ul className="list-disc list-inside space-y-1 text-slate-600 pl-2">
-              <li>Data in memory remains encrypted with hardware-bound AES-128/256 keys.</li>
-              <li>Even root administrators or host hypervisors cannot read unencrypted telemetry payloads during live execution.</li>
-              <li>Cryptographic attestation verifies platform integrity prior to decrypting telemetry streams.</li>
+              <li>Data in transit is protected with TLS 1.3 encryption and constant-time API token authorization.</li>
+              <li>Passwords and sensitive tokens are salted and hashed using PBKDF2 with 310,000 iterations.</li>
+              <li>Authentication operations enforce mandatory 6-digit Email OTP verification with Redis-backed rate limiting.</li>
             </ul>
           </section>
 

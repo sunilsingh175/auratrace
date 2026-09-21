@@ -19,6 +19,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./database/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - ./database/02-seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+      - ./database/03-service-ownership.sql:/docker-entrypoint-initdb.d/03-service-ownership.sql:ro
 
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
@@ -82,7 +83,7 @@ services:
       AURA_MASTER_API_KEY: ${AURA_MASTER_API_KEY}
       AURA_AUTH_SECRET: ${AURA_AUTH_SECRET}
       AURA_ADMIN_REGISTRATION_KEY: ${AURA_ADMIN_REGISTRATION_KEY}
-      ENABLE_API_AUTH: ${ENABLE_API_AUTH:-false}
+      ENABLE_API_AUTH: ${ENABLE_API_AUTH:-true}
 
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}

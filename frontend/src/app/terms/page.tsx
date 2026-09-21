@@ -61,7 +61,7 @@ export default function TermsOfServicePage() {
             </div>
             <div className="flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="text-emerald-700 font-medium">Hardware Enclave Assured</span>
+              <span className="text-emerald-700 font-medium">Encrypted Telemetry Assured</span>
             </div>
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function TermsOfServicePage() {
             </p>
             <ul className="list-disc list-inside space-y-1 text-slate-600 pl-2">
               <li>Transmit unmasked plaintext credit card numbers, government IDs, or raw patient records through diagnostic telemetry payloads.</li>
-              <li>Attempt to reverse-engineer the underlying Hardware Enclave confidential computing environment.</li>
+              <li>Attempt to reverse-engineer or circumvent platform security, authentication tokens, or rate-limiting systems.</li>
               <li>Launch denial-of-service or volumetric attacks against the telemetry ingestion cluster.</li>
               <li>Use the Platform to monitor unauthorized infrastructure without appropriate legal ownership.</li>
             </ul>

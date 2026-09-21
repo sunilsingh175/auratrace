@@ -3,6 +3,7 @@ Trace High-Concurrency Ingestion Gateway Benchmark
 Evaluates req/sec throughput and latency percentiles under concurrent load.
 """
 
+import os
 import time
 import asyncio
 import sys
@@ -16,8 +17,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
-GATEWAY_URL = "http://localhost:8000/api/v1/telemetry"
-API_KEY = "aura_secret_key_123"
+GATEWAY_URL = os.getenv("GATEWAY_URL", "http://localhost:8000/api/v1/telemetry")
+API_KEY = os.getenv("AURA_MASTER_API_KEY", "")
 TOTAL_REQUESTS = 500
 CONCURRENCY = 25
 

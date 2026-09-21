@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/context/auth-context";
 import {
   Activity,
@@ -224,39 +223,38 @@ export default function IncidentDetailsPage() {
   const errorsPerMinute = systemMetrics?.errors_per_minute ?? null;
 
   return (
-    <ProtectedRoute>
-      <AppShell hideHeaderTitle>
-        <div className="space-y-6">
-          {/* TOP BAR / BACK NAVIGATION */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <Link
-              href="/incidents"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to incidents
-            </Link>
+    <AppShell hideHeaderTitle>
+      <div className="space-y-6">
+        {/* TOP BAR / BACK NAVIGATION */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <Link
+            href="/incidents"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to incidents
+          </Link>
 
-            <div className="flex items-center gap-3">
-              {user && (
-                <button
-                  type="button"
-                  onClick={handleRegenerate}
-                  disabled={regenerating}
-                  className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-100 transition-all font-heading disabled:opacity-50"
-                >
-                  <RefreshCw
-                    className={`h-4 w-4 ${
-                      regenerating ? "animate-spin text-red-600" : ""
-                    }`}
-                  />
-                  <span>
-                    {regenerating ? "Regenerating..." : "Regenerate AI Diagnosis"}
-                  </span>
-                </button>
-              )}
-            </div>
+          <div className="flex items-center gap-3">
+            {user?.role === "Admin" && (
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-100 transition-all font-heading disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${
+                    regenerating ? "animate-spin text-red-600" : ""
+                  }`}
+                />
+                <span>
+                  {regenerating ? "Regenerating..." : "Regenerate AI Diagnosis"}
+                </span>
+              </button>
+            )}
           </div>
+        </div>
 
           {error && (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 font-sans">
@@ -338,7 +336,7 @@ export default function IncidentDetailsPage() {
                     </div>
                   </div>
 
-                  {user && (
+                  {user?.role === "Admin" && (
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
@@ -587,12 +585,11 @@ export default function IncidentDetailsPage() {
 
               {/* TIMESTAMPS FOOTER */}
               <div className="text-center text-xs text-slate-400 font-sans pb-4">
-                Telemetry recorded at {formatTime(data?.created_at)} • Trace Autonomous AI Engine
+                Telemetry recorded at {formatTime(data?.created_at)} • Automatic Backend Detection Engine
               </div>
             </>
           )}
         </div>
       </AppShell>
-    </ProtectedRoute>
   );
 }

@@ -178,6 +178,32 @@ async def startup_event():
         await init_auth_table()
     except Exception as exc:
         logger.warning(f"Auth table init warning: {exc}")
+    
+    if db_engine:
+        try:
+            async with db_engine.begin() as conn:
+                await conn.execute(text("""
+                    ALTER TABLE services ADD COLUMN IF NOT EXISTS owner_id UUID;
+                """))
+                await conn.execute(text("""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_constraint WHERE conname = 'services_owner_fk'
+                        ) THEN
+                            ALTER TABLE services
+                                ADD CONSTRAINT services_owner_fk
+                                FOREIGN KEY (owner_id) REFERENCES users(id)
+                                ON DELETE SET NULL;
+                        END IF;
+                    END $$;
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS services_owner_idx ON services (owner_id);
+                """))
+            logger.info("Verified service ownership database schema.")
+        except Exception as exc:
+            logger.warning(f"Service ownership migration warning: {exc}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -189,8 +215,15 @@ async def shutdown_event():
         except asyncio.CancelledError:
             pass
 
-# Configurable CORS Middleware (defaults to all origins for local dev)
-ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
+# Configurable CORS Middleware (defaults to frontend web origin)
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://frontend:3000",
+    ).split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS if "*" not in ALLOWED_ORIGINS else ["*"],
@@ -1899,7 +1932,6 @@ async def list_services(api_key: str = Depends(verify_api_key)):
                             if metric[3]
                             else None
                         ),
-                        "api_key_hash": row[4],
                         "created_at": row[5].isoformat() if row[5] else None,
                         "owner_id": str(row[7]) if row[7] else None,
                     })

@@ -5,16 +5,19 @@ import Link from "next/link";
 import {
   Server,
   Plus,
-  Key,
   Copy,
   Check,
   Search,
   Radio,
   X,
   Activity,
+  Trash2,
+  LogIn,
+  AlertTriangle,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { fetchServices, registerService } from "@/lib/api-client";
+import { useAuth } from "@/context/auth-context";
+import { fetchServices, registerService, deleteService } from "@/lib/api-client";
 import { Service } from "@/types";
 
 function formatMetric(value: number, suffix = "") {
@@ -22,9 +25,11 @@ function formatMetric(value: number, suffix = "") {
 }
 
 export default function ServicesPage() {
+  const { user } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [newServiceId, setNewServiceId] = useState("");
@@ -33,6 +38,8 @@ export default function ServicesPage() {
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadServices = async () => {
     setLoading(true);
@@ -41,7 +48,7 @@ export default function ServicesPage() {
       setServices(await fetchServices());
     } catch (err) {
       console.error(err);
-      setError("Unable to load services from the Trace API.");
+      setError("Unable to load services from the backend API.");
     } finally {
       setLoading(false);
     }
@@ -67,11 +74,31 @@ export default function ServicesPage() {
 
       setServices((prev) => [res, ...prev.filter((service) => service.id !== res.id)]);
       setCreatedKey(res.api_key_hash || null);
+      setActionSuccess(`Microservice "${res.name}" registered successfully.`);
+      setTimeout(() => setActionSuccess(null), 5000);
     } catch (err) {
       console.error(err);
-      setError("Service registration failed. Check the Trace API and try again.");
+      setError("Service registration failed. Check the backend API and try again.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeleteService = async () => {
+    if (!serviceToDelete) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteService(serviceToDelete.id);
+      setServices((prev) => prev.filter((s) => s.id !== serviceToDelete.id));
+      setActionSuccess(`Service "${serviceToDelete.name}" was deleted.`);
+      setTimeout(() => setActionSuccess(null), 4000);
+      setServiceToDelete(null);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to delete service. You may only delete services you own.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -94,6 +121,15 @@ export default function ServicesPage() {
       s.environment.toLowerCase().includes(q)
     );
   });
+
+  const canRegister = Boolean(user && (user.role === "Admin" || user.role === "Developer"));
+
+  const canManageService = (svc: Service) => {
+    if (!user) return false;
+    if (user.role === "Admin") return true;
+    if (user.role === "Developer" && svc.owner_id && svc.owner_id === user.id) return true;
+    return false;
+  };
 
   return (
     <AppShell hideHeaderTitle>
@@ -125,23 +161,42 @@ export default function ServicesPage() {
               />
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setCreatedKey(null);
-                setNewServiceId("");
-                setNewServiceName("");
-                setNewServiceEnv("production");
-                setError(null);
-                setShowModal(true);
-              }}
-              className="button-primary"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Register Service</span>
-            </button>
+            {canRegister ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatedKey(null);
+                  setNewServiceId("");
+                  setNewServiceName("");
+                  setNewServiceEnv("production");
+                  setError(null);
+                  setShowModal(true);
+                }}
+                className="button-primary"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Register Service</span>
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 font-heading"
+              >
+                <LogIn className="h-3.5 w-3.5 text-slate-500" />
+                <span>Sign In to Register</span>
+              </Link>
+            )}
           </div>
         </div>
+
+        {actionSuccess && (
+          <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800 font-sans">
+            <div className="flex items-center gap-2">
+              <Check className="h-4 w-4 text-emerald-600" />
+              <span>{actionSuccess}</span>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
@@ -162,7 +217,7 @@ export default function ServicesPage() {
             <p className="mt-3 text-sm font-bold text-slate-700 font-heading">No microservices found</p>
             <p className="text-xs text-slate-400">
               {services.length === 0
-                ? "No services are currently registered in the Trace backend."
+                ? "No services are currently registered in Automatic Backend Detection."
                 : "Try adjusting your search query."}
             </p>
           </div>
@@ -172,6 +227,8 @@ export default function ServicesPage() {
               const isCrit = svc.status === "critical";
               const isWarn = svc.status === "warning";
               const hasTelemetry = svc.requests > 0 || svc.latency_ms > 0 || svc.error_rate > 0;
+              const hasManagePermission = canManageService(svc);
+              const isOwner = Boolean(user && svc.owner_id === user.id);
 
               return (
                 <div
@@ -185,28 +242,46 @@ export default function ServicesPage() {
                         <span className="rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-600">
                           {svc.environment}
                         </span>
+                        {isOwner && (
+                          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 border border-blue-200">
+                            Owned
+                          </span>
+                        )}
                       </div>
                       <h3 className="mt-1 truncate text-sm font-bold text-slate-900 font-heading transition group-hover:text-red-600">
                         {svc.name}
                       </h3>
                     </div>
 
-                    <span
-                      className={`ml-3 flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                        isCrit
-                          ? "bg-rose-50 text-rose-700 border border-rose-200"
-                          : isWarn
-                          ? "bg-amber-50 text-amber-700 border border-amber-200"
-                          : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      }`}
-                    >
+                    <div className="flex items-center gap-2">
                       <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          isCrit ? "bg-rose-500" : isWarn ? "bg-amber-500" : "animate-pulse bg-emerald-500"
+                        className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                          isCrit
+                            ? "bg-rose-50 text-rose-700 border border-rose-200"
+                            : isWarn
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                         }`}
-                      />
-                      <span>{svc.status}</span>
-                    </span>
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            isCrit ? "bg-rose-500" : isWarn ? "bg-amber-500" : "animate-pulse bg-emerald-500"
+                          }`}
+                        />
+                        <span>{svc.status}</span>
+                      </span>
+
+                      {hasManagePermission && (
+                        <button
+                          type="button"
+                          onClick={() => setServiceToDelete(svc)}
+                          title="Delete Service"
+                          className="rounded-lg p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-5 grid grid-cols-3 gap-2 rounded-xl border border-slate-100 bg-[#f8fafc] p-3 text-center">
@@ -238,27 +313,17 @@ export default function ServicesPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-400">
-                    <Activity className="h-3 w-3" />
-                    <span>{hasTelemetry ? "Recent telemetry available" : "No recent telemetry"}</span>
-                  </div>
-
-                  {svc.api_key_hash && (
-                    <div className="mt-4 flex items-center justify-between rounded-lg border border-slate-200 bg-[#f1f4f9] px-3 py-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Key className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                        <span className="truncate font-mono text-[10px] text-slate-600">Credential available</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => copyKey(svc.api_key_hash!)}
-                        className="ml-2 shrink-0 text-slate-400 transition hover:text-slate-800"
-                        title="Copy credential"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
+                  <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400">
+                    <div className="flex items-center gap-1.5">
+                      <Activity className="h-3 w-3" />
+                      <span>{hasTelemetry ? "Active telemetry stream" : "No recent telemetry"}</span>
                     </div>
-                  )}
+                    {svc.owner_id && (
+                      <span className="text-[9px] text-slate-400 font-mono">
+                        Owner: {isOwner ? "You" : user?.role === "Admin" ? svc.owner_id.slice(0, 8) : "Registered"}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px]">
                     <span className="text-slate-500">
@@ -282,6 +347,7 @@ export default function ServicesPage() {
           </div>
         )}
 
+        {/* REGISTRATION MODAL */}
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
             <div className="panel w-full max-w-md border-slate-200 p-6 shadow-2xl">
@@ -292,7 +358,7 @@ export default function ServicesPage() {
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-slate-900 font-heading">Register Microservice</h2>
-                    <p className="text-[10px] text-slate-400">Add service to the Trace telemetry stream</p>
+                    <p className="text-[10px] text-slate-400">Add service to Automatic Backend Detection</p>
                   </div>
                 </div>
                 <button
@@ -353,21 +419,21 @@ export default function ServicesPage() {
                 <div className="mt-5 space-y-4">
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
                     <Check className="mx-auto h-8 w-8 text-emerald-600" />
-                    <h3 className="mt-2 text-sm font-bold text-slate-900 font-heading">Service Registered</h3>
-                    <p className="mt-1 text-xs text-slate-600">
-                      Store this credential securely. It is shown here only because the registration response supplied it.
+                    <h3 className="mt-2 text-sm font-bold text-slate-900 font-heading">Service Registered Successfully</h3>
+                    <p className="mt-1 text-xs text-amber-800 font-medium bg-amber-50 p-2 rounded-lg border border-amber-200">
+                      ⚠️ <strong>Important:</strong> Copy this API key now. For platform security, it will not be displayed again.
                     </p>
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-[#f8fafc] p-3">
-                    <span className="label font-heading">Trace Ingestion Credential</span>
-                    <div className="mt-1.5 flex items-center justify-between font-mono text-xs text-slate-800">
-                      <span className="truncate">{createdKey}</span>
+                    <span className="label font-heading">Generated Ingestion API Key</span>
+                    <div className="mt-1.5 flex items-center justify-between font-mono text-xs text-slate-800 bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="truncate select-all">{createdKey}</span>
                       <button
                         type="button"
                         onClick={() => copyKey(createdKey)}
-                        className="ml-2 shrink-0 rounded-lg p-1 text-slate-400 hover:text-slate-800"
-                        title="Copy credential"
+                        className="ml-2 shrink-0 rounded-lg p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                        title="Copy API key"
                       >
                         {copiedKey ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
                       </button>
@@ -382,10 +448,50 @@ export default function ServicesPage() {
                     }}
                     className="button-primary w-full"
                   >
-                    Done
+                    I Have Saved My API Key
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* DELETE CONFIRMATION MODAL */}
+        {serviceToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+            <div className="panel w-full max-w-sm border-slate-200 p-6 shadow-2xl space-y-4">
+              <div className="flex items-center gap-3 text-rose-600">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 font-heading">Delete Microservice</h3>
+                  <p className="text-xs text-slate-500">This action cannot be undone.</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Are you sure you want to delete service <strong className="text-slate-900">{serviceToDelete.name}</strong> (<code className="font-mono text-red-600">{serviceToDelete.id}</code>)?
+              </p>
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => setServiceToDelete(null)}
+                  className="button-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={handleDeleteService}
+                  className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50 font-heading"
+                >
+                  {deleting ? "Deleting..." : "Delete Service"}
+                </button>
+              </div>
             </div>
           </div>
         )}

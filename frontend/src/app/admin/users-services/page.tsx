@@ -455,7 +455,7 @@ export default function AdminUsersServicesPage() {
                         <th className="px-5 py-3.5">Health</th>
                         <th className="px-5 py-3.5">Error Rate</th>
                         <th className="px-5 py-3.5">Open Incidents</th>
-                        <th className="px-5 py-3.5">API Key Hash</th>
+                        <th className="px-5 py-3.5">Created Date</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -493,23 +493,8 @@ export default function AdminUsersServicesPage() {
                               <span className="text-slate-400">0</span>
                             )}
                           </td>
-                          <td className="px-5 py-4">
-                            {s.api_key_hash && (
-                              <div className="flex max-w-xs items-center justify-between rounded-lg border border-slate-200 bg-[#f1f4f9] px-2.5 py-1 font-mono text-[10px]">
-                                <span className="truncate text-slate-600">{s.api_key_hash}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => copyKey(s.api_key_hash!)}
-                                  className="ml-2 text-slate-400 hover:text-slate-800"
-                                >
-                                  {copiedKey === s.api_key_hash ? (
-                                    <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="h-3.5 w-3.5" />
-                                  )}
-                                </button>
-                              </div>
-                            )}
+                          <td className="px-5 py-4 font-mono text-slate-500 text-[11px]">
+                            {s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}
                           </td>
                         </tr>
                       ))}

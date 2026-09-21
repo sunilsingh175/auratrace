@@ -42,25 +42,25 @@ export default function SecurityArchitecturePage() {
         <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] mb-8">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-xs font-semibold text-[#b91c1c] mb-4">
             <Shield className="w-3.5 h-3.5 text-[#c51f33]" />
-            <span>Hardware-Enforced Security Model</span>
+            <span>Cryptographic Security & Verification Model</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-            Security Architecture & Hardware Enclaves
+            Security Architecture & Cryptographic Transport
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl">
-            Automatic Backend Detection leverages Confidential Computing, AMD SEV-SNP hardware enclaves, end-to-end cryptographic transport, and multi-factor authentication to protect enterprise telemetry.
+            Automatic Backend Detection leverages End-to-End Cryptographic Transport, multi-factor OTP authentication, PBKDF2 password hashing, and token authorization to protect enterprise telemetry.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-4 pt-6 border-t border-slate-100 text-xs">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span className="font-semibold">All Enclaves Active & Attested</span>
+              <span className="font-semibold">Secure OTP Multi-Factor Authentication</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 text-slate-700 border border-slate-200">
               <Lock className="w-4 h-4 text-slate-500" />
-              <span>TLS 1.3 + AES-256-GCM + PBKDF2</span>
+              <span>TLS 1.3 + AES-256 + PBKDF2</span>
             </div>
           </div>
         </div>
@@ -74,15 +74,15 @@ export default function SecurityArchitecturePage() {
                 <Cpu className="w-6 h-6 stroke-[2]" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Hardware Enclave (Confidential Computing)
+                Encrypted Ingestion & Transport Layer
               </h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Telemetry ingestion pipelines and anomaly classification run inside <strong>Hardware Security Enclaves</strong> (AMD SEV-SNP / AWS Nitro). Memory pages are encrypted by physical CPU silicon, preventing even host hypervisors or container root users from snooping active workloads.
+                Telemetry ingestion pipelines and anomaly classifications enforce strict <strong>TLS 1.3 Encryption</strong> and constant-time API token validation. Traces are parsed and buffered in high-throughput in-memory Redis streams without unencrypted external routing.
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-semibold text-[#b91c1c]">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Silicon-Level Memory Encryption</span>
+              <span>End-to-End Encrypted Transport</span>
             </div>
           </div>
 
@@ -166,9 +166,9 @@ export default function SecurityArchitecturePage() {
                   <td className="py-3 px-4 text-emerald-700 font-medium">Gateway & Ingress</td>
                 </tr>
                 <tr>
-                  <td className="py-3 px-4 font-semibold text-slate-900">Memory Protection</td>
-                  <td className="py-3 px-4 text-slate-600">AMD SEV-SNP Hardware Enclave</td>
-                  <td className="py-3 px-4 text-emerald-700 font-medium">Processor Hardware</td>
+                  <td className="py-3 px-4 font-semibold text-slate-900">Payload Encryption</td>
+                  <td className="py-3 px-4 text-slate-600">AES-256-GCM / TLS In-Transit</td>
+                  <td className="py-3 px-4 text-emerald-700 font-medium">Network & Broker</td>
                 </tr>
                 <tr>
                   <td className="py-3 px-4 font-semibold text-slate-900">Password Hashing</td>
