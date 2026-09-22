@@ -95,6 +95,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       ws.onmessage = (event) => {
         try {
+          if (event.data === "pong") return;
           const raw = JSON.parse(event.data);
           const data = raw.data || raw;
           const eventType = raw.type || raw.event;

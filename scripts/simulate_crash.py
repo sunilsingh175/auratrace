@@ -17,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASET_PATH = os.path.join(BASE_DIR, "datasets", "HDFS_v1", "HDFS.log")
 INGESTION_URL = os.getenv("INGESTION_URL", "http://127.0.0.1:8000/api/v1/telemetry")
-API_KEY = os.getenv("AURA_MASTER_API_KEY") or os.getenv("AURA_API_KEY") or "aura_secret_key_123"
+API_KEY = os.getenv("AURA_MASTER_API_KEY") or os.getenv("AURA_API_KEY") or ""
 
 SERVICES = [
     "payment-service",
@@ -101,9 +101,16 @@ def generate_synthetic_telemetry(idx: int):
 
 
 def stream_logs(max_lines=150):
-    headers = {"Content-Type": "application/json"}
-    if API_KEY:
-        headers["X-API-Key"] = API_KEY
+    if not API_KEY:
+        print("[!] ERROR: No API key provided.")
+        print("[!] Please configure AURA_MASTER_API_KEY or AURA_API_KEY environment variable before running.")
+        print("[!] Example: export AURA_MASTER_API_KEY=\"your_key_here\" (or in PowerShell: $env:AURA_MASTER_API_KEY=\"your_key_here\")")
+        sys.exit(1)
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-API-Key": API_KEY,
+    }
 
     use_file = os.path.exists(DATASET_PATH)
     print(f"[*] Starting Automatic Backend Detection telemetry stream to {INGESTION_URL}")

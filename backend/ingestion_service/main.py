@@ -904,6 +904,39 @@ async def ingest_batch_telemetry(
     }
 
 
+@app.get(
+    "/api/v1/telemetry/recent",
+    tags=["Telemetry Ingestion"],
+    summary="Fetch recent telemetry events from stream",
+    description="Retrieves the most recent telemetry log events from Redis Stream for live UI console initialization.",
+)
+async def get_recent_telemetry(
+    limit: int = Query(50, ge=1, le=200),
+    service_id: Optional[str] = Query(None),
+    api_key: str = Depends(verify_api_key),
+):
+    events = []
+    try:
+        raw_entries = await redis_client.xrevrange(STREAM_KEY, "+", "-", count=limit * 2)
+        for msg_id, data in raw_entries:
+            payload_str = data.get("payload") or data.get(b"payload")
+            if isinstance(payload_str, bytes):
+                payload_str = payload_str.decode("utf-8")
+            if payload_str:
+                try:
+                    parsed = json.loads(payload_str)
+                    if not service_id or parsed.get("service_id") == service_id:
+                        events.append(parsed)
+                        if len(events) >= limit:
+                            break
+                except Exception:
+                    continue
+    except Exception as exc:
+        logger.warning(f"Error fetching recent telemetry from stream: {exc}")
+
+    return events
+
+
 # 2. Cluster Statistics
 @app.get(
     "/api/v1/stats",
