@@ -257,6 +257,7 @@ export async function fetchAdminInfrastructure(): Promise<InfrastructureStatus> 
     embedding_latency_ms: data.embedding_latency_ms,
     llm_latency_ms: data.llm_latency_ms,
     active_ws_clients: data.active_ws_clients,
+    indexed_embeddings_count: data.indexed_embeddings_count,
     anomaly_threshold: data.anomaly_threshold,
     anomaly_window_seconds: data.anomaly_window_seconds,
     embedding_model: data.embedding_model,

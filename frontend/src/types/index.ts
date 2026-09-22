@@ -94,6 +94,7 @@ export interface InfrastructureStatus {
   embedding_latency_ms?: number;
   llm_latency_ms?: number;
   active_ws_clients?: number;
+  indexed_embeddings_count?: number;
   anomaly_threshold?: number;
   anomaly_window_seconds?: number;
   embedding_model?: string;

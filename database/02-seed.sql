@@ -245,7 +245,7 @@ sqlalchemy.exc.TimeoutError: QueuePool limit of size 10 overflow 10 reached, con
 
     'Configure granular connection and read timeouts with a circuit breaker pattern.',
 
---- a/gateway/payment.py
+    '--- a/gateway/payment.py
 +++ b/gateway/payment.py
 @@ -45,2 +45,3 @@
 -res = httpx.post(WEBHOOK_URL, json=payload)

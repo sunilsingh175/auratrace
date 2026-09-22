@@ -261,9 +261,19 @@ export function Navbar() {
             {/* 2. Right Controls */}
             <div className="flex items-center gap-3">
               {/* Live WebSocket Status Indicator */}
-              <div className="hidden lg:flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full font-heading">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{isConnected ? "Real-Time Live" : "Connecting..."}</span>
+              <div
+                className={`hidden lg:flex items-center gap-2 text-xs font-bold px-3 py-1 rounded-full font-heading border transition-colors ${
+                  isConnected
+                    ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                    : "text-slate-600 bg-slate-50 border-slate-200"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                  }`}
+                />
+                <span>{isConnected ? "Real-Time Live" : "Offline"}</span>
               </div>
 
               {/* Real-time Notification Bell */}
