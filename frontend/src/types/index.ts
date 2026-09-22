@@ -83,18 +83,21 @@ export interface InfrastructureStatus {
   api_latency_ms?: number;
   redis_status: "healthy" | "degraded" | "offline" | "unknown";
   redis_stream_length?: number;
-  redis_memory_used?: string;
+  redis_memory_used?: string | null;
   postgres_status: "healthy" | "degraded" | "offline" | "unknown";
   postgres_connections?: number;
-  postgres_vector_indexes?: number;
+  // Three distinct pgvector concepts:
+  embedding_dimension?: number;        // model constant (384 for bge-small-en-v1.5)
+  vector_index_count?: number;         // actual IVFFlat/HNSW indexes in pg_indexes
+  indexed_knowledge_records?: number;  // rows in historical_fixes with embeddings
   ml_worker_status: "healthy" | "degraded" | "offline" | "unknown";
-  ml_queue_rate?: number;
+  ml_entries_processed?: number;       // cumulative stream entries read by consumer group
   ml_contamination?: number;
   rag_doctor_status: "healthy" | "degraded" | "offline" | "unknown";
-  embedding_latency_ms?: number;
-  llm_latency_ms?: number;
+  // These are not measured at health-check time; backend returns null
+  embedding_latency_ms?: number | null;
+  llm_latency_ms?: number | null;
   active_ws_clients?: number;
-  indexed_embeddings_count?: number;
   anomaly_threshold?: number;
   anomaly_window_seconds?: number;
   embedding_model?: string;

@@ -2208,9 +2208,9 @@ async def health_check():
     started = time.perf_counter()
     redis_status = "healthy"
     redis_stream_length = 0
-    redis_memory_used = "1.2M"
+    redis_memory_used = None
     ml_worker_status = "healthy"
-    ml_queue_rate = 0
+    ml_entries_processed = 0
     rag_doctor_status = "healthy"
 
     try:
@@ -2227,13 +2227,13 @@ async def health_check():
                 entries_read = int(ml_group.get("entries-read", 0))
                 ml_worker_status = "healthy" if consumers > 0 else "degraded"
                 # Calculate real queue throughput from entries read over window
-                ml_queue_rate = max(1, min(entries_read, 500))
+                ml_entries_processed = entries_read
             else:
                 ml_worker_status = "healthy"
-                ml_queue_rate = 1
+                ml_entries_processed = 0
         except Exception:
             ml_worker_status = "healthy"
-            ml_queue_rate = 1
+            ml_entries_processed = 0
 
         # Dynamic probe for RAG Diagnostic Service PubSub Subscriber
         try:
@@ -2290,6 +2290,10 @@ async def health_check():
     embedding_model = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
     llm_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
+    # embedding_dimension is a static property of the BAAI/bge-small-en-v1.5 model;
+    # 384 is the correct constant but it is a model spec, not a runtime measurement.
+    embedding_dimension = 384
+
     return {
         "status": "online" if redis_status == "healthy" and postgres_status == "healthy" else "degraded",
         "api_status": "healthy",
@@ -2303,19 +2307,22 @@ async def health_check():
         "redis_memory_used": redis_memory_used,
         "postgres_status": postgres_status,
         "postgres_connections": postgres_connections,
-        "postgres_vector_indexes": 384,
-        "postgres_vector_index_count": vector_idx_count,
-        "indexed_embeddings_count": indexed_embeddings_count,
+        # Three distinct pgvector concepts — do not conflate these:
+        "embedding_dimension": embedding_dimension,       # model constant (384-dim vectors)
+        "vector_index_count": vector_idx_count,           # actual IVFFlat/HNSW indexes in pg_indexes
+        "indexed_knowledge_records": indexed_embeddings_count,  # rows in historical_fixes with embeddings
         "ml_worker_status": ml_worker_status,
-        "ml_queue_rate": ml_queue_rate,
+        "ml_entries_processed": ml_entries_processed,     # cumulative stream entries read by this consumer group
         "ml_contamination": ml_contamination,
         "anomaly_threshold": anomaly_threshold,
         "anomaly_window_seconds": anomaly_window_seconds,
         "rag_doctor_status": rag_doctor_status,
         "embedding_model": embedding_model,
-        "embedding_latency_ms": 18.4,
+        # embedding_latency_ms and llm_latency_ms are not measured at health-check time;
+        # returning null so the UI shows "Unavailable" rather than a fake number.
+        "embedding_latency_ms": None,
+        "llm_latency_ms": None,
         "llm_model": llm_model,
-        "llm_latency_ms": 285.0,
         "active_ws_clients": len(manager.active_connections),
         "components": {
             "redis": {
@@ -2327,7 +2334,9 @@ async def health_check():
             "postgres": {
                 "status": postgres_status,
                 "active_connections": postgres_connections,
-                "vector_indexes": 384,
+                "vector_index_count": vector_idx_count,
+                "embedding_dimension": embedding_dimension,
+                "indexed_knowledge_records": indexed_embeddings_count,
             },
         },
     }

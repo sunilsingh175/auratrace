@@ -105,13 +105,19 @@ export default function AdminMonitoringPage() {
               </div>
               <div className="mt-4">
                 <span className="font-mono text-2xl font-bold text-slate-900">
-                  {infra?.postgres_vector_indexes != null ? infra.postgres_vector_indexes.toLocaleString() : "—"}
+                  {infra?.embedding_dimension != null ? infra.embedding_dimension.toLocaleString() : "—"}
                 </span>
-                <span className="ml-1 text-xs text-slate-400">dim IVFFlat</span>
+                <span className="ml-1 text-xs text-slate-400">dim (model spec)</span>
               </div>
-              <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] font-mono text-slate-500">
-                <span>Active Connection Pool</span>
-                <span className="text-red-600 font-bold">{infra?.postgres_connections != null ? infra.postgres_connections : "—"}</span>
+              <div className="mt-3 space-y-1 border-t border-slate-100 pt-2 text-[11px] font-mono text-slate-500">
+                <div className="flex items-center justify-between">
+                  <span>Vector Indexes</span>
+                  <span className="text-emerald-600 font-bold">{infra?.vector_index_count != null ? infra.vector_index_count : "—"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Active Connection Pool</span>
+                  <span className="text-red-600 font-bold">{infra?.postgres_connections != null ? infra.postgres_connections : "—"}</span>
+                </div>
               </div>
             </div>
 
@@ -125,9 +131,9 @@ export default function AdminMonitoringPage() {
               </div>
               <div className="mt-4">
                 <span className="font-mono text-2xl font-bold text-slate-900">
-                  {infra?.ml_queue_rate != null ? infra.ml_queue_rate : "—"}
+                  {infra?.ml_entries_processed != null ? infra.ml_entries_processed.toLocaleString() : "—"}
                 </span>
-                <span className="ml-1 text-xs text-slate-400">infer/sec</span>
+                <span className="ml-1 text-xs text-slate-400">entries processed</span>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] font-mono text-slate-500">
                 <span>Contamination Factor</span>
@@ -145,9 +151,9 @@ export default function AdminMonitoringPage() {
               </div>
               <div className="mt-4">
                 <span className="font-mono text-2xl font-bold text-slate-900">
-                  {infra?.llm_latency_ms != null ? infra.llm_latency_ms : "—"}
+                  {infra?.rag_doctor_status === "healthy" ? "Active" : infra?.rag_doctor_status ?? "—"}
                 </span>
-                <span className="ml-1 text-xs text-slate-400">ms P95</span>
+                <span className="ml-1 text-xs text-slate-400">LLM status</span>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] font-mono text-slate-500">
                 <span>Embedding Model</span>
@@ -212,25 +218,43 @@ export default function AdminMonitoringPage() {
 
               <div className="space-y-3 font-mono text-xs">
                 <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
-                  <span className="text-slate-600">Indexed Incident Embeddings</span>
+                  <span className="text-slate-600">Embedding Dimension</span>
                   <span className="font-bold text-slate-900">
-                    {infra?.indexed_embeddings_count != null
-                      ? `${infra.indexed_embeddings_count} knowledge records`
+                    {infra?.embedding_dimension != null
+                      ? `${infra.embedding_dimension}-dim vectors`
+                      : "—"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
+                  <span className="text-slate-600">Vector Index Count</span>
+                  <span className="font-bold text-slate-900">
+                    {infra?.vector_index_count != null
+                      ? `${infra.vector_index_count} IVFFlat index${infra.vector_index_count !== 1 ? "es" : ""}`
+                      : "—"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
+                  <span className="text-slate-600">Indexed Knowledge Records</span>
+                  <span className="font-bold text-slate-900">
+                    {infra?.indexed_knowledge_records != null
+                      ? `${infra.indexed_knowledge_records} knowledge records`
                       : "—"}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
                   <span className="text-slate-600">Embedding Computation</span>
-                  <span className="font-bold text-red-600">
-                    {infra?.embedding_latency_ms != null ? `${infra.embedding_latency_ms}ms` : "—"}
+                  <span className="font-bold text-slate-500">
+                    Unavailable
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
                   <span className="text-slate-600">LLM Generation Latency</span>
-                  <span className="font-bold text-slate-800">
-                    {infra?.llm_latency_ms != null ? `${infra.llm_latency_ms}ms per diagnosis` : "—"}
+                  <span className="font-bold text-slate-500">
+                    Unavailable
                   </span>
                 </div>
 
