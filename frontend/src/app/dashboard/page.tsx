@@ -82,22 +82,67 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [loadDashboardData]);
 
-  // Compute metrics from actual backend values
-  const ingestionRps = stats?.ingestion_rate_per_sec !== undefined
-    ? Math.round(stats.ingestion_rate_per_sec)
-    : 0;
+  // Compute metrics from backend stats with graceful service aggregation consistency
+  const totalServiceRequests = services.reduce(
+    (acc, s) => acc + (typeof s.requests === "number" ? s.requests : 0),
+    0
+  );
+  const aggregateErrorRate =
+    totalServiceRequests > 0
+      ? services.reduce(
+          (acc, s) =>
+            acc +
+            (typeof s.requests === "number" ? s.requests : 0) *
+              (typeof s.error_rate === "number" ? s.error_rate : 0),
+          0
+        ) / totalServiceRequests
+      : null;
+  const aggregateLatency =
+    totalServiceRequests > 0
+      ? services.reduce(
+          (acc, s) =>
+            acc +
+            (typeof s.requests === "number" ? s.requests : 0) *
+              (typeof s.latency_ms === "number" ? s.latency_ms : 0),
+          0
+        ) / totalServiceRequests
+      : null;
 
-  const p95Latency = stats?.p95_latency_ms !== undefined
-    ? Math.round(stats.p95_latency_ms)
-    : 0;
+  // 1. Ingestion Velocity: active rps, or 0 if buffered/idle, or Unavailable
+  const ingestionRpsValue =
+    stats?.ingestion_rate_per_sec !== undefined && stats.ingestion_rate_per_sec > 0
+      ? Math.round(stats.ingestion_rate_per_sec)
+      : (stats?.total_logs_ingested && stats.total_logs_ingested > 0) || totalServiceRequests > 0
+      ? 0
+      : "Unavailable";
 
-  const errorRate = stats?.error_rate_percent !== undefined
-    ? `${stats.error_rate_percent.toFixed(1)}%`
-    : "0.0%";
+  // 2. P95 Cluster Latency: live stats p95, or service aggregate weighted latency, or Unavailable
+  const rawP95 =
+    stats?.p95_latency_ms !== undefined && stats.p95_latency_ms > 0
+      ? stats.p95_latency_ms
+      : aggregateLatency !== null && aggregateLatency > 0
+      ? aggregateLatency
+      : null;
+  const p95LatencyValue =
+    rawP95 !== null ? Math.round(rawP95) : "Unavailable";
 
-  const activeIncidents = stats?.open_incidents_count !== undefined
-    ? stats.open_incidents_count
-    : incidents.filter((i) => i.status === "OPEN").length;
+  // 3. Global Error Rate: live stats error rate, or service aggregate error rate, or 0.0% if services healthy, or Unavailable
+  const rawError =
+    stats?.error_rate_percent !== undefined && stats.error_rate_percent > 0
+      ? stats.error_rate_percent
+      : aggregateErrorRate !== null
+      ? aggregateErrorRate
+      : totalServiceRequests > 0
+      ? 0.0
+      : null;
+  const errorRateValue =
+    rawError !== null ? `${rawError.toFixed(1)}%` : "Unavailable";
+
+  // 4. Active Incidents
+  const activeIncidents =
+    stats?.open_incidents_count !== undefined
+      ? stats.open_incidents_count
+      : incidents.filter((i) => i.status === "OPEN" || i.status === "INVESTIGATING").length;
 
   return (
     <AppShell
@@ -112,8 +157,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <SummaryMetricCard
             title="Ingestion Velocity"
-            value={ingestionRps}
-            unit="events/s"
+            value={ingestionRpsValue}
+            unit={typeof ingestionRpsValue === "number" ? "events/s" : undefined}
             description="Redis Stream buffer active"
             badge="Live API"
             icon={Activity}
@@ -122,9 +167,9 @@ export default function DashboardPage() {
 
           <SummaryMetricCard
             title="P95 Cluster Latency"
-            value={p95Latency}
-            unit="ms"
-            description="Current backend aggregate"
+            value={p95LatencyValue}
+            unit={typeof p95LatencyValue === "number" ? "ms" : undefined}
+            description="Cluster P95 latency aggregate"
             badge="Live API"
             icon={Clock}
             tone="slate"
@@ -132,8 +177,8 @@ export default function DashboardPage() {
 
           <SummaryMetricCard
             title="Global Error Rate"
-            value={errorRate}
-            description="Current backend aggregate"
+            value={errorRateValue}
+            description="Cluster telemetry error ratio"
             badge="Live API"
             icon={Percent}
             tone="slate"

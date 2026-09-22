@@ -935,6 +935,39 @@ async def get_recent_telemetry(
     except Exception as exc:
         logger.warning(f"Error fetching recent telemetry from stream: {exc}")
 
+    # If stream has fewer items than requested, fetch recent entries from PostgreSQL database
+    if len(events) < limit and db_engine:
+        try:
+            async with db_engine.connect() as conn:
+                service_clause = "WHERE service_id = :service_id" if service_id else ""
+                params: Dict[str, Any] = {"limit": limit - len(events)}
+                if service_id:
+                    params["service_id"] = service_id
+                db_res = await conn.execute(text(f"""
+                    SELECT id, service_id, timestamp, level, message, latency_ms, status_code, endpoint, error_type, stack_trace
+                    FROM telemetry_logs
+                    {service_clause}
+                    ORDER BY timestamp DESC
+                    LIMIT :limit
+                """), params)
+                for row in db_res.fetchall():
+                    events.append({
+                        "id": str(row[0]),
+                        "service_id": row[1],
+                        "timestamp": row[2].isoformat() if row[2] else datetime.now(timezone.utc).isoformat(),
+                        "level": row[3] or "INFO",
+                        "message": row[4] or "",
+                        "log_message": row[4] or "",
+                        "latency_ms": float(row[5] or 0),
+                        "status_code": int(row[6] or 200),
+                        "endpoint": row[7] or "",
+                        "error_type": row[8],
+                        "stack_trace": row[9],
+                        "raw_stack_trace": row[9],
+                    })
+        except Exception as exc:
+            logger.warning(f"Error fetching fallback telemetry from database: {exc}")
+
     return events
 
 
@@ -997,11 +1030,39 @@ async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
             p95_latency = float(row[1] or 0)
             error_count = int(row[2] or 0)
 
-            error_rate = (
-                (error_count / total_events) * 100
-                if total_events
-                else 0
-            )
+            # If no events occurred in the last 5-minute sliding window,
+            # calculate cluster metrics from all available telemetry logs for consistency with the services fleet
+            if total_events == 0:
+                all_time_metrics = await conn.execute(text("""
+                    SELECT
+                        COUNT(*) AS total_events,
+                        COALESCE(
+                            PERCENTILE_CONT(0.95)
+                            WITHIN GROUP (ORDER BY latency_ms),
+                            0
+                        ) AS p95_latency_ms,
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN status_code >= 400
+                                    OR level IN ('ERROR', 'CRITICAL')
+                                    THEN 1 ELSE 0
+                                END
+                            ),
+                            0
+                        ) AS error_count
+                    FROM telemetry_logs
+                """))
+                at_row = all_time_metrics.first()
+                if at_row and at_row[0]:
+                    at_total = int(at_row[0] or 0)
+                    p95_latency = float(at_row[1] or 0)
+                    error_count = int(at_row[2] or 0)
+                    error_rate = ((error_count / at_total) * 100) if at_total else 0
+                else:
+                    error_rate = 0
+            else:
+                error_rate = ((error_count / total_events) * 100) if total_events else 0
 
             incidents = await conn.execute(text("""
                 SELECT COUNT(*)
@@ -1133,6 +1194,58 @@ async def get_stats_timeseries(
                     "errors": errs,
                     "error_rate": round((errs / reqs * 100.0) if reqs > 0 else 0.0, 2),
                 })
+
+            if not points:
+                # If no points in current sliding window, fallback to latest recorded telemetry window
+                latest_ts_res = await conn.execute(text(f"""
+                    SELECT MAX(timestamp) FROM telemetry_logs WHERE 1=1 {service_filter_sql}
+                """), params)
+                latest_ts = latest_ts_res.scalar()
+                if latest_ts:
+                    fallback_stmt = text(f"""
+                        SELECT
+                            to_timestamp(floor(extract(epoch FROM timestamp) / {bucket_seconds}) * {bucket_seconds}) AT TIME ZONE 'UTC' AS bucket,
+                            COUNT(id) AS requests,
+                            COALESCE(AVG(latency_ms), 0) AS avg_latency,
+                            COALESCE(
+                                PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms),
+                                0
+                            ) AS p95_latency,
+                            COALESCE(
+                                SUM(
+                                    CASE
+                                        WHEN status_code >= 400
+                                        OR level IN ('ERROR', 'CRITICAL')
+                                        OR error_type IS NOT NULL
+                                        THEN 1 ELSE 0
+                                    END
+                                ),
+                                0
+                            ) AS errors
+                        FROM telemetry_logs
+                        WHERE timestamp >= :latest_ts - INTERVAL '{window_seconds} seconds'
+                          AND timestamp <= :latest_ts + INTERVAL '1 second'
+                        {service_filter_sql}
+                        GROUP BY 1
+                        ORDER BY 1 ASC
+                    """)
+                    fallback_params = {**params, "latest_ts": latest_ts}
+                    fb_result = await conn.execute(fallback_stmt, fallback_params)
+                    for row in fb_result.fetchall():
+                        reqs = int(row[1] or 0)
+                        errs = int(row[4] or 0)
+                        points.append({
+                            "time": (
+                                row[0].replace(tzinfo=timezone.utc).isoformat()
+                                if hasattr(row[0], "replace")
+                                else str(row[0])
+                            ),
+                            "requests": reqs,
+                            "latency": round(float(row[2] or 0), 2),
+                            "p95_latency": round(float(row[3] or 0), 2),
+                            "errors": errs,
+                            "error_rate": round((errs / reqs * 100.0) if reqs > 0 else 0.0, 2),
+                        })
 
             return {
                 "window_seconds": window_seconds,
