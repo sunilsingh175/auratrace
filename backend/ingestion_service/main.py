@@ -55,6 +55,7 @@ logger = logging.getLogger("auratrace-ingestion")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis-broker")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 STREAM_KEY = os.getenv("REDIS_STREAM_KEY", "telemetry_stream")
+CONSUMER_GROUP = os.getenv("REDIS_CONSUMER_GROUP", "auratrace_workers")
 REDIS_ANOMALY_CHANNEL = os.getenv("REDIS_ANOMALY_CHANNEL", "anomaly_events")
 MASTER_API_KEY = os.getenv("AURA_MASTER_API_KEY", "")
 ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "true").lower() in ("true", "1", "yes")
@@ -2216,23 +2217,25 @@ async def health_check():
     try:
         redis_stream_length = await redis_client.xlen(STREAM_KEY)
         redis_info = await redis_client.info("memory")
-        redis_memory_used = redis_info.get("used_memory_human", "1.2M")
+        redis_memory_used = redis_info.get("used_memory_human")
 
         # Dynamic probe for ML Anomaly Service Consumer Group
         try:
             groups = await redis_client.xinfo_groups(STREAM_KEY)
-            ml_group = next((g for g in groups if g.get("name") in [CONSUMER_GROUP, "auratrace_workers"]), None)
+            ml_group = next((g for g in groups if g.get("name") == CONSUMER_GROUP), None)
             if ml_group:
-                consumers = int(ml_group.get("consumers", 0))
-                entries_read = int(ml_group.get("entries-read", 0))
+                consumers = int(ml_group.get("consumers") or 0)
+                entries_read = int(ml_group.get("entries-read") or 0)
                 ml_worker_status = "healthy" if consumers > 0 else "degraded"
                 # Calculate real queue throughput from entries read over window
                 ml_entries_processed = entries_read
             else:
-                ml_worker_status = "healthy"
+                # Consumer group not found — worker has not registered yet
+                ml_worker_status = "degraded"
                 ml_entries_processed = 0
         except Exception:
-            ml_worker_status = "healthy"
+            # Cannot probe Redis stream groups — treat as degraded, not healthy
+            ml_worker_status = "degraded"
             ml_entries_processed = 0
 
         # Dynamic probe for RAG Diagnostic Service PubSub Subscriber
@@ -2242,9 +2245,11 @@ async def health_check():
                 subscriber_count = int(sub_info[0][1])
                 rag_doctor_status = "healthy" if subscriber_count > 0 else "degraded"
             else:
-                rag_doctor_status = "healthy"
+                # No subscriber data returned — RAG service not subscribed
+                rag_doctor_status = "degraded"
         except Exception:
-            rag_doctor_status = "healthy"
+            # Cannot probe PubSub — treat as degraded, not healthy
+            rag_doctor_status = "degraded"
 
     except Exception as exc:
         redis_status = "offline"
@@ -2254,7 +2259,7 @@ async def health_check():
 
     postgres_status = "unknown"
     postgres_connections = 0
-    vector_idx_count = 1
+    vector_idx_count = 0
     indexed_embeddings_count = 0
     if db_engine is not None:
         try:
@@ -2271,12 +2276,10 @@ async def health_check():
                         "AND indexdef ILIKE '%vector%'"
                     )
                 )
-                vector_idx_count = int(idx_res.scalar_one() or 1)
+                vector_idx_count = int(idx_res.scalar_one() or 0)
 
                 indexed_res = await conn.execute(text("SELECT count(*) FROM historical_fixes WHERE embedding IS NOT NULL"))
                 indexed_embeddings_count = int(indexed_res.scalar_one() or 0)
-                if indexed_embeddings_count == 0:
-                    indexed_embeddings_count = int((await conn.execute(text("SELECT count(*) FROM historical_fixes"))).scalar_one() or 8)
             postgres_status = "healthy"
         except Exception as exc:
             postgres_status = "offline"

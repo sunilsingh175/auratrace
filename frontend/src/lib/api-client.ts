@@ -249,15 +249,17 @@ export async function fetchAdminInfrastructure(): Promise<InfrastructureStatus> 
     redis_memory_used: data.redis_memory_used,
     postgres_status: data.postgres_status || "unknown",
     postgres_connections: data.postgres_connections,
-    postgres_vector_indexes: data.postgres_vector_indexes,
+    // Three distinct pgvector concepts returned by the backend:
+    embedding_dimension: data.embedding_dimension,        // model constant (384 for bge-small-en-v1.5)
+    vector_index_count: data.vector_index_count,          // actual IVFFlat/HNSW indexes in pg_indexes
+    indexed_knowledge_records: data.indexed_knowledge_records, // rows in historical_fixes with embeddings
     ml_worker_status: data.ml_worker_status || "unknown",
-    ml_queue_rate: data.ml_queue_rate,
+    ml_entries_processed: data.ml_entries_processed,     // cumulative stream entries read by consumer group
     ml_contamination: data.ml_contamination,
     rag_doctor_status: data.rag_doctor_status || "unknown",
     embedding_latency_ms: data.embedding_latency_ms,
     llm_latency_ms: data.llm_latency_ms,
     active_ws_clients: data.active_ws_clients,
-    indexed_embeddings_count: data.indexed_embeddings_count,
     anomaly_threshold: data.anomaly_threshold,
     anomaly_window_seconds: data.anomaly_window_seconds,
     embedding_model: data.embedding_model,

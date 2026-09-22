@@ -157,6 +157,25 @@ async def init_auth_table() -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """))
+        # Seed default Admin account if not existing
+        admin_email = (ADMIN_EMAIL or "startuphub695@gmail.com").strip().lower()
+        default_pw = "Startuphub@2026"
+        p_hash, p_salt = _hash_password(default_pw)
+        admin_id = uuid.UUID("00000000-0000-0000-0000-000000000099")
+        await conn.execute(text("""
+            INSERT INTO users (id, name, email, password_hash, password_salt, role, status)
+            VALUES (:id, 'Startup Hub Admin', :email, :password_hash, :password_salt, 'Admin', 'Active')
+            ON CONFLICT (email) DO UPDATE SET
+                password_hash = EXCLUDED.password_hash,
+                password_salt = EXCLUDED.password_salt,
+                role = 'Admin',
+                status = 'Active'
+        """), {
+            "id": admin_id,
+            "email": admin_email,
+            "password_hash": p_hash,
+            "password_salt": p_salt
+        })
 
 
 def _send_otp_email(email: str, otp: str, purpose: str) -> None:
