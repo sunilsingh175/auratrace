@@ -31,8 +31,8 @@ SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "startuphub695@gmail.com").strip()
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").strip()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 _engine = create_async_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
@@ -157,25 +157,26 @@ async def init_auth_table() -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """))
-        # Seed default Admin account if not existing
-        admin_email = (ADMIN_EMAIL or "startuphub695@gmail.com").strip().lower()
-        default_pw = "Startuphub@2026"
-        p_hash, p_salt = _hash_password(default_pw)
-        admin_id = uuid.UUID("00000000-0000-0000-0000-000000000099")
-        await conn.execute(text("""
-            INSERT INTO users (id, name, email, password_hash, password_salt, role, status)
-            VALUES (:id, 'Startup Hub Admin', :email, :password_hash, :password_salt, 'Admin', 'Active')
-            ON CONFLICT (email) DO UPDATE SET
-                password_hash = EXCLUDED.password_hash,
-                password_salt = EXCLUDED.password_salt,
-                role = 'Admin',
-                status = 'Active'
-        """), {
-            "id": admin_id,
-            "email": admin_email,
-            "password_hash": p_hash,
-            "password_salt": p_salt
-        })
+        # Auto-seed default Admin account from environment configuration if provided
+        admin_email = ADMIN_EMAIL.strip().lower() if ADMIN_EMAIL else ""
+        admin_pw = ADMIN_PASSWORD.strip() if ADMIN_PASSWORD else ""
+        if admin_email and admin_pw:
+            p_hash, p_salt = _hash_password(admin_pw)
+            admin_id = uuid.UUID("00000000-0000-0000-0000-000000000099")
+            await conn.execute(text("""
+                INSERT INTO users (id, name, email, password_hash, password_salt, role, status)
+                VALUES (:id, 'Administrator', :email, :password_hash, :password_salt, 'Admin', 'Active')
+                ON CONFLICT (email) DO UPDATE SET
+                    password_hash = EXCLUDED.password_hash,
+                    password_salt = EXCLUDED.password_salt,
+                    role = 'Admin',
+                    status = 'Active'
+            """), {
+                "id": admin_id,
+                "email": admin_email,
+                "password_hash": p_hash,
+                "password_salt": p_salt
+            })
 
 
 def _send_otp_email(email: str, otp: str, purpose: str) -> None:
@@ -651,9 +652,9 @@ class ContactInquiryPayload(BaseModel):
 
 
 def _send_contact_email(name: str, user_email: str, phone: str, comment: str) -> bool:
-    target_admin = ADMIN_EMAIL or "startuphub695@gmail.com"
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
-        print(f"[Trace Contact Ingestion] SMTP not configured. Inquiry for {target_admin} from {user_email}: {comment}")
+    target_admin = ADMIN_EMAIL or SMTP_USER
+    if not target_admin or not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
+        print(f"[Trace Contact Ingestion] SMTP not configured. Inquiry from {user_email}: {comment}")
         return False
 
     msg = EmailMessage()
