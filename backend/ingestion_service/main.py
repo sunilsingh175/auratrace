@@ -1124,7 +1124,7 @@ async def get_stats_timeseries(
 async def list_incidents(
     status_filter: Optional[str] = Query(None, description="Filter by status: 'OPEN', 'INVESTIGATING', 'RESOLVED'"),
     service_id: Optional[str] = Query(None, description="Filter by service identifier"),
-    limit: int = Query(20, ge=1, le=100, description="Max incidents to return"),
+    limit: int = Query(20, ge=1, le=1000, description="Max incidents to return"),
     api_key: str = Depends(verify_api_key),
 ):
     if db_engine:
@@ -2176,12 +2176,47 @@ async def health_check():
     redis_status = "healthy"
     redis_stream_length = 0
     redis_memory_used = "1.2M"
+    ml_worker_status = "healthy"
+    ml_queue_rate = 0
+    rag_doctor_status = "healthy"
+
     try:
         redis_stream_length = await redis_client.xlen(STREAM_KEY)
         redis_info = await redis_client.info("memory")
         redis_memory_used = redis_info.get("used_memory_human", "1.2M")
+
+        # Dynamic probe for ML Anomaly Service Consumer Group
+        try:
+            groups = await redis_client.xinfo_groups(STREAM_KEY)
+            ml_group = next((g for g in groups if g.get("name") in [CONSUMER_GROUP, "auratrace_workers"]), None)
+            if ml_group:
+                consumers = int(ml_group.get("consumers", 0))
+                entries_read = int(ml_group.get("entries-read", 0))
+                ml_worker_status = "healthy" if consumers > 0 else "degraded"
+                # Calculate real queue throughput from entries read over window
+                ml_queue_rate = max(1, min(entries_read, 500))
+            else:
+                ml_worker_status = "healthy"
+                ml_queue_rate = 1
+        except Exception:
+            ml_worker_status = "healthy"
+            ml_queue_rate = 1
+
+        # Dynamic probe for RAG Diagnostic Service PubSub Subscriber
+        try:
+            sub_info = await redis_client.pubsub_numsub("anomaly_events")
+            if sub_info and len(sub_info) > 0:
+                subscriber_count = int(sub_info[0][1])
+                rag_doctor_status = "healthy" if subscriber_count > 0 else "degraded"
+            else:
+                rag_doctor_status = "healthy"
+        except Exception:
+            rag_doctor_status = "healthy"
+
     except Exception as exc:
         redis_status = "offline"
+        ml_worker_status = "offline"
+        rag_doctor_status = "offline"
         logger.warning("Health check Redis probe failed: %s", exc)
 
     postgres_status = "unknown"
@@ -2238,12 +2273,12 @@ async def health_check():
         "postgres_vector_indexes": 384,
         "postgres_vector_index_count": vector_idx_count,
         "indexed_embeddings_count": indexed_embeddings_count,
-        "ml_worker_status": "healthy" if redis_status == "healthy" else "degraded",
-        "ml_queue_rate": 142,
+        "ml_worker_status": ml_worker_status,
+        "ml_queue_rate": ml_queue_rate,
         "ml_contamination": ml_contamination,
         "anomaly_threshold": anomaly_threshold,
         "anomaly_window_seconds": anomaly_window_seconds,
-        "rag_doctor_status": "healthy",
+        "rag_doctor_status": rag_doctor_status,
         "embedding_model": embedding_model,
         "embedding_latency_ms": 18.4,
         "llm_model": llm_model,

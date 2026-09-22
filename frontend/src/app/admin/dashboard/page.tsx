@@ -35,15 +35,20 @@ export default function AdminDashboardPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [infraData, statsData, incidentData] = await Promise.all([
-      fetchAdminInfrastructure(),
-      fetchSystemStats(),
-      fetchIncidents({ limit: 500 }),
-    ]);
-    setInfra(infraData);
-    setStats(statsData);
-    setIncidents(incidentData);
-    setLoading(false);
+    try {
+      const [infraRes, statsRes, incidentRes] = await Promise.allSettled([
+        fetchAdminInfrastructure(),
+        fetchSystemStats(),
+        fetchIncidents({ limit: 100 }),
+      ]);
+      if (infraRes.status === "fulfilled") setInfra(infraRes.value);
+      if (statsRes.status === "fulfilled") setStats(statsRes.value);
+      if (incidentRes.status === "fulfilled") setIncidents(incidentRes.value);
+    } catch (err) {
+      console.error("Failed to load admin dashboard data:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -111,7 +116,9 @@ export default function AdminDashboardPage() {
                   Distributed Subsystem Health & Latency
                 </h3>
               </div>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 font-mono text-[10px] font-bold text-emerald-700 border border-emerald-200">
+              <span className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-bold border ${
+                infra ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
+              }`}>
                 {infra ? "Live subsystem status" : "Awaiting health probes"}
               </span>
             </div>
@@ -120,40 +127,40 @@ export default function AdminDashboardPage() {
               <SystemHealthCard
                 name="FastAPI Ingestion Gateway"
                 role="REST & WebSocket Broker"
-                status={infra?.api_status || "healthy"}
-                latency={infra?.api_latency_ms != null ? `${infra.api_latency_ms}ms` : "1.2ms"}
+                status={infra?.api_status === "healthy" ? "healthy" : (infra ? "offline" : "unknown")}
+                latency={infra?.api_latency_ms != null ? `${infra.api_latency_ms}ms` : undefined}
                 metricLabel="Clients"
-                metricValue={infra?.active_ws_clients != null ? `${infra.active_ws_clients} live` : "1 live"}
+                metricValue={infra?.active_ws_clients != null ? `${infra.active_ws_clients} live` : undefined}
                 icon={Radio}
               />
 
               <SystemHealthCard
                 name="Redis Stream Engine"
                 role="Event Pipeline Broker"
-                status={infra?.redis_status || "healthy"}
-                latency="0.4ms"
+                status={infra?.redis_status === "healthy" ? "healthy" : (infra ? "offline" : "unknown")}
+                latency={infra?.redis_status === "healthy" ? "< 1ms" : undefined}
                 metricLabel="Buffer"
-                metricValue={infra?.redis_stream_length != null ? `${infra.redis_stream_length.toLocaleString()} msgs` : "0 msgs"}
+                metricValue={infra?.redis_stream_length != null ? `${infra.redis_stream_length.toLocaleString()} msgs` : undefined}
                 icon={Zap}
               />
 
               <SystemHealthCard
                 name="PostgreSQL pgvector"
                 role="Hybrid Storage & Vector DB"
-                status={infra?.postgres_status || "healthy"}
-                latency="1.1ms"
+                status={infra?.postgres_status === "healthy" ? "healthy" : (infra ? "offline" : "unknown")}
+                latency={infra?.postgres_status === "healthy" ? "< 2ms" : undefined}
                 metricLabel="Pool"
-                metricValue={infra?.postgres_connections != null ? `${infra.postgres_connections}` : "10"}
+                metricValue={infra?.postgres_connections != null ? `${infra.postgres_connections} conns` : undefined}
                 icon={Database}
               />
 
               <SystemHealthCard
                 name="RAG Doctor LLM"
                 role={infra?.llm_model || "gemini-3.6-flash"}
-                status={infra?.rag_doctor_status || "healthy"}
-                latency={infra?.llm_latency_ms != null ? `${infra.llm_latency_ms}ms` : "285ms"}
+                status={infra?.rag_doctor_status === "healthy" ? "healthy" : (infra ? "offline" : "unknown")}
+                latency={infra?.llm_latency_ms != null ? `${infra.llm_latency_ms}ms` : undefined}
                 metricLabel="Embed"
-                metricValue={infra?.embedding_latency_ms != null ? `${infra.embedding_latency_ms}ms` : "18.4ms"}
+                metricValue={infra?.embedding_latency_ms != null ? `${infra.embedding_latency_ms}ms` : undefined}
                 icon={Sparkles}
               />
             </div>
