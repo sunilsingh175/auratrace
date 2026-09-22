@@ -210,57 +210,48 @@ export default function AdminMonitoringPage() {
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-red-600" />
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-heading">
-                    RAG Knowledge Base & pgvector Index
+                    RAG Knowledge Base &amp; pgvector Index
                   </h3>
                 </div>
-                <span className="font-mono text-[10px] text-emerald-600 font-bold">{infra?.embedding_model || "—"}</span>
               </div>
 
-              <div className="space-y-3 font-mono text-xs">
+              <div className="space-y-2 font-mono text-xs">
+                {/* Embedding Model */}
                 <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
-                  <span className="text-slate-600">Embedding Dimension</span>
+                  <span className="text-slate-500 font-heading font-bold uppercase text-[10px] tracking-wider">Embedding Model</span>
+                  <span className="font-bold text-emerald-700">
+                    {infra?.embedding_model || "—"}
+                  </span>
+                </div>
+
+                {/* Embedding Dimension */}
+                <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
+                  <span className="text-slate-500 font-heading font-bold uppercase text-[10px] tracking-wider">Embedding Dimension</span>
                   <span className="font-bold text-slate-900">
-                    {infra?.embedding_dimension != null
-                      ? `${infra.embedding_dimension}-dim vectors`
-                      : "—"}
+                    {infra?.embedding_dimension != null ? `${infra.embedding_dimension}` : "—"}
                   </span>
                 </div>
 
+                {/* Knowledge Records */}
                 <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
-                  <span className="text-slate-600">Vector Index Count</span>
+                  <span className="text-slate-500 font-heading font-bold uppercase text-[10px] tracking-wider">Knowledge Records</span>
                   <span className="font-bold text-slate-900">
-                    {infra?.vector_index_count != null
-                      ? `${infra.vector_index_count} IVFFlat index${infra.vector_index_count !== 1 ? "es" : ""}`
-                      : "—"}
+                    {infra?.indexed_knowledge_records != null ? infra.indexed_knowledge_records : "—"}
                   </span>
                 </div>
 
+                {/* Vector Indexes */}
                 <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
-                  <span className="text-slate-600">Indexed Knowledge Records</span>
+                  <span className="text-slate-500 font-heading font-bold uppercase text-[10px] tracking-wider">Vector Indexes</span>
                   <span className="font-bold text-slate-900">
-                    {infra?.indexed_knowledge_records != null
-                      ? `${infra.indexed_knowledge_records} knowledge records`
-                      : "—"}
+                    {infra?.vector_index_count != null ? infra.vector_index_count : "—"}
                   </span>
                 </div>
 
+                {/* RAG Retrieval strategy — fixed architectural constant */}
                 <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
-                  <span className="text-slate-600">Embedding Computation</span>
-                  <span className="font-bold text-slate-500">
-                    Unavailable
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
-                  <span className="text-slate-600">LLM Generation Latency</span>
-                  <span className="font-bold text-slate-500">
-                    Unavailable
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-slate-200 p-3">
-                  <span className="text-slate-600">RAG Context Injection</span>
-                  <span className="font-bold text-emerald-600">Top-3 Cosine Candidates</span>
+                  <span className="text-slate-500 font-heading font-bold uppercase text-[10px] tracking-wider">RAG Retrieval</span>
+                  <span className="font-bold text-emerald-600">Top-3 cosine similarity</span>
                 </div>
               </div>
             </div>
