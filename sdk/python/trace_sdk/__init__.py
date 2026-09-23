@@ -1,9 +1,7 @@
 """
-Trace Python Telemetry & Crash Reporting SDK
+Trace SDK backward-compatibility module
 """
 
-from .client import Trace
-from .interceptor import TraceMiddleware
+from auratrace.client import AuraTrace, TraceClient, Trace, AutomaticBackendDetection
 
-__all__ = ["Trace", "TraceMiddleware"]
-__version__ = "1.0.0"
+__all__ = ["AuraTrace", "TraceClient", "Trace", "AutomaticBackendDetection"]

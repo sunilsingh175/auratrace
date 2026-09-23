@@ -61,11 +61,11 @@ class Base(DeclarativeBase):
 
 
 # ============================================================
-# SERVICES
+# PROJECTS
 # ============================================================
 
-class Service(Base):
-    __tablename__ = "services"
+class Project(Base):
+    __tablename__ = "projects"
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
@@ -74,31 +74,17 @@ class Service(Base):
 
     name: Mapped[str] = mapped_column(
         String(255),
-        unique=True,
         nullable=False,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    environment: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        default="production",
-    )
-
-    status: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        default="ACTIVE",
-    )
-
-    api_key_hash: Mapped[Optional[str]] = mapped_column(
+    api_key_hash: Mapped[str] = mapped_column(
         String(128),
-        nullable=True,
         unique=True,
+        nullable=False,
+    )
+
+    owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -112,6 +98,112 @@ class Service(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    services: Mapped[list["Service"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+
+# ============================================================
+# SERVICES
+# ============================================================
+
+class Service(Base):
+    __tablename__ = "services"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey(
+            "projects.id",
+            ondelete="CASCADE",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    service_id: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    runtime: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="node",
+    )
+
+    environment: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="production",
+    )
+
+    version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="1.0.0",
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="ACTIVE",
+    )
+
+    description: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    api_key_hash: Mapped[Optional[str]] = mapped_column(
+        String(128),
+        nullable=True,
+    )
+
+    owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        nullable=True,
+    )
+
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    project: Mapped[Optional["Project"]] = relationship(
+        back_populates="services",
     )
 
     telemetry_logs: Mapped[list["TelemetryLog"]] = relationship(
@@ -139,6 +231,15 @@ class TelemetryLog(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
         default=uuid.uuid4,
+    )
+
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey(
+            "projects.id",
+            ondelete="CASCADE",
+        ),
+        nullable=True,
+        index=True,
     )
 
     service_id: Mapped[uuid.UUID] = mapped_column(
@@ -380,18 +481,25 @@ IncidentReport = Incident
 
 
 # ============================================================
-# SERVICE RESOLUTION HELPER
+# SERVICE RESOLUTION HELPER (SDK Auto-Discovery)
 # ============================================================
 
-async def get_or_create_service_id(session: AsyncSession, identifier: str) -> uuid.UUID:
+async def get_or_create_service_id(
+    session: AsyncSession,
+    identifier: str,
+    project_id: Optional[uuid.UUID] = None,
+    runtime: str = "node",
+    environment: str = "production",
+    version: str = "1.0.0",
+) -> uuid.UUID:
     """
     Resolve a service identifier (UUID or service name slug) to its database UUID.
-    If the service does not exist, it is automatically created.
+    If the service does not exist, it is automatically discovered and created under the project.
     """
     if not identifier:
         identifier = "unknown-service"
 
-    # Try parsing as UUID
+    # 1. Try parsing as UUID
     try:
         service_uuid = uuid.UUID(str(identifier))
         result = await session.execute(
@@ -399,24 +507,62 @@ async def get_or_create_service_id(session: AsyncSession, identifier: str) -> uu
         )
         existing = result.scalar_one_or_none()
         if existing:
+            # Update last_seen_at
+            existing.last_seen_at = datetime.now(timezone.utc)
+            if project_id and not existing.project_id:
+                existing.project_id = project_id
+            await session.commit()
             return existing.id
     except (ValueError, TypeError):
         pass
 
-    # Lookup by name/slug
-    from sqlalchemy import select
+    # 2. Lookup by project_id and service_id / name
+    if project_id:
+        result = await session.execute(
+            select(Service).where(
+                Service.project_id == project_id,
+                (Service.service_id == str(identifier)) | (Service.name == str(identifier))
+            )
+        )
+        service = result.scalar_one_or_none()
+        if service:
+            service.last_seen_at = datetime.now(timezone.utc)
+            if runtime:
+                service.runtime = runtime
+            if version:
+                service.version = version
+            if environment:
+                service.environment = environment
+            await session.commit()
+            return service.id
+
+    # 3. Global lookup by name or service_id
     result = await session.execute(
-        select(Service).where(Service.name == str(identifier))
+        select(Service).where(
+            (Service.name == str(identifier)) | (Service.service_id == str(identifier))
+        )
     )
     service = result.scalar_one_or_none()
     if service:
+        service.last_seen_at = datetime.now(timezone.utc)
+        if project_id and not service.project_id:
+            service.project_id = project_id
+        if runtime:
+            service.runtime = runtime
+        if version:
+            service.version = version
+        await session.commit()
         return service.id
 
-    # Create new service
+    # 4. Automatically discover and create new service
     new_service = Service(
+        project_id=project_id,
+        service_id=str(identifier),
         name=str(identifier),
-        description=f"Auto-registered service for {identifier}",
-        environment="production",
+        description=f"Auto-discovered {runtime} service: {identifier}",
+        runtime=runtime or "node",
+        environment=environment or "production",
+        version=version or "1.0.0",
         status="ACTIVE",
     )
     session.add(new_service)

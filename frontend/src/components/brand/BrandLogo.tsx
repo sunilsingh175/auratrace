@@ -87,16 +87,18 @@ export function BrandLogo({
       {showText && (
         <div className="min-w-0">
           <div className="flex flex-col leading-tight">
-            <span
-              className={`font-heading font-extrabold text-slate-900 ${titleSizes[size]} tracking-tight group-hover:text-red-700 transition-colors block truncate`}
-            >
-              Automatic Backend
-            </span>
-            <span
-              className={`font-heading font-black text-[#dc2626] ${subSizes[size]} tracking-wider uppercase block truncate`}
-            >
-              DETECTION
-            </span>
+            <div className="flex items-baseline">
+              <span
+                className={`font-heading font-extrabold text-slate-900 ${titleSizes[size]} tracking-tight group-hover:text-red-700 transition-colors block truncate`}
+              >
+                Aura
+              </span>
+              <span
+                className={`font-heading font-black text-[#dc2626] ${titleSizes[size]} tracking-tight block truncate`}
+              >
+                Trace
+              </span>
+            </div>
           </div>
 
           {showTagline && (

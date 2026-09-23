@@ -271,6 +271,7 @@ async def persist_telemetry(
                     FROM services
                     WHERE id::text = :identifier
                        OR name = :identifier
+                       OR service_id = :identifier
                     LIMIT 1
                     """
                 ),
@@ -283,36 +284,53 @@ async def persist_telemetry(
 
             if service_row:
                 service_db_id = service_row[0]
+                await conn.execute(
+                    text("UPDATE services SET last_seen_at = CURRENT_TIMESTAMP WHERE id = :id"),
+                    {"id": service_db_id}
+                )
 
             else:
-                # Auto-register unknown services.
+                # Auto-register unknown services with telemetry runtime
+                runtime = telemetry.get("runtime", "node")
+                environment = telemetry.get("environment", "production")
+                version = telemetry.get("version", "1.0.0")
                 create_res = await conn.execute(
                     text(
                         """
                         INSERT INTO services (
+                            project_id,
+                            service_id,
                             name,
                             description,
+                            runtime,
                             environment,
-                            status
+                            version,
+                            status,
+                            first_seen_at,
+                            last_seen_at
                         )
                         VALUES (
+                            '00000000-0000-0000-0000-000000000001',
+                            :service_id,
                             :name,
                             :description,
-                            'production',
-                            'ACTIVE'
+                            :runtime,
+                            :environment,
+                            :version,
+                            'ACTIVE',
+                            CURRENT_TIMESTAMP,
+                            CURRENT_TIMESTAMP
                         )
-                        ON CONFLICT (name)
-                        DO UPDATE SET
-                            updated_at = CURRENT_TIMESTAMP
                         RETURNING id
                         """
                     ),
                     {
+                        "service_id": service_identifier,
                         "name": service_identifier,
-                        "description": (
-                            f"Auto-registered service "
-                            f"for {service_identifier}"
-                        ),
+                        "runtime": runtime,
+                        "environment": environment,
+                        "version": version,
+                        "description": f"Auto-discovered {runtime} service for {service_identifier}",
                     },
                 )
 
@@ -475,13 +493,13 @@ async def create_incident(
             # ------------------------------------------------
             service_db_id = None
 
-            # 1. Try match by UUID or name
+            # 1. Try match by UUID, name, or service_id
             result = await conn.execute(
                 text(
                     """
                     SELECT id
                     FROM services
-                    WHERE id::text = :identifier OR name = :identifier
+                    WHERE id::text = :identifier OR name = :identifier OR service_id = :identifier
                     LIMIT 1
                     """
                 ),
@@ -496,18 +514,30 @@ async def create_incident(
                 service_db_id = service_row[0]
             else:
                 # 2. Auto-create service so incident foreign key constraint always succeeds
+                runtime = telemetry.get("runtime", "node")
+                environment = telemetry.get("environment", "production")
+                version = telemetry.get("version", "1.0.0")
                 create_res = await conn.execute(
                     text(
                         """
-                        INSERT INTO services (name, description, environment, status)
-                        VALUES (:name, :description, 'production', 'ACTIVE')
-                        ON CONFLICT (name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                        INSERT INTO services (
+                            project_id, service_id, name, runtime, environment, version,
+                            description, status, first_seen_at, last_seen_at
+                        )
+                        VALUES (
+                            '00000000-0000-0000-0000-000000000001', :service_id, :name, :runtime,
+                            :environment, :version, :description, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                        )
                         RETURNING id
                         """
                     ),
                     {
+                        "service_id": service_identifier,
                         "name": service_identifier,
-                        "description": f"Auto-registered service for {service_identifier}",
+                        "runtime": runtime,
+                        "environment": environment,
+                        "version": version,
+                        "description": f"Auto-discovered {runtime} service for {service_identifier}",
                     },
                 )
                 created_row = create_res.first()

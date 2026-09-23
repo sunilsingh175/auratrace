@@ -1,8 +1,8 @@
 {
-  "name": "@trace/node",
-  "version": "1.0.0",
+  "name": "@auratrace/node",
+  "version": "2.0.0",
   "type": "module",
-  "description": "Official Node.js Telemetry & Crash Diagnostic SDK for Automatic Backend Detection",
+  "description": "Official Node.js Telemetry & Crash Diagnostic SDK for AuraTrace Autonomous Backend Diagnostics",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -10,12 +10,13 @@
     "test": "tsx test-sdk.ts"
   },
   "keywords": [
+    "auratrace",
     "observability",
     "apm",
     "telemetry",
     "tracing",
-    "trace",
-    "crash-reporting"
+    "anomaly-detection",
+    "ai-diagnostics"
   ],
   "author": "Sunil Singh <sunilsinghrajput192@gmail.com>",
   "license": "MIT",

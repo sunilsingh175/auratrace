@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  FolderKanban,
   Server,
   Activity,
   AlertTriangle,
@@ -56,6 +57,12 @@ export function Sidebar() {
       name: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
+      badge: null,
+    },
+    {
+      name: "Projects & Keys",
+      href: "/projects",
+      icon: FolderKanban,
       badge: null,
     },
     {

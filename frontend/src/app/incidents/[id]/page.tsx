@@ -585,7 +585,7 @@ export default function IncidentDetailsPage() {
 
               {/* TIMESTAMPS FOOTER */}
               <div className="text-center text-xs text-slate-400 font-sans pb-4">
-                Telemetry recorded at {formatTime(data?.created_at)} • Automatic Backend Detection Engine
+                Telemetry recorded at {formatTime(data?.created_at)} • AuraTrace Engine
               </div>
             </>
           )}

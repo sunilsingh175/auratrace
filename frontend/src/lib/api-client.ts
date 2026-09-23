@@ -1,6 +1,7 @@
 import {
   Incident,
   Service,
+  Project,
   ServiceRegistrationResponse,
   SystemStats,
   InfrastructureStatus,
@@ -119,6 +120,35 @@ export async function regenerateIncidentDiagnosis(id: string): Promise<Incident 
   }
 }
 
+export async function fetchProjects(): Promise<Project[]> {
+  const path = "projects";
+  const res = await request(path);
+  ensureOk(res, path);
+  const data = await res.json();
+  if (!Array.isArray(data)) return [];
+  return data.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    api_key: p.api_key,
+    created_at: p.created_at || new Date().toISOString(),
+    service_count: Number(p.service_count ?? 0),
+  }));
+}
+
+export async function createProject(data: { name: string }): Promise<Project> {
+  const path = "projects";
+  const res = await request(path, { method: "POST", body: JSON.stringify(data) });
+  ensureOk(res, path);
+  return res.json();
+}
+
+export async function regenerateProjectKey(projectId: string): Promise<{ id: string; name: string; api_key: string }> {
+  const path = `projects/${encodeURIComponent(projectId)}/regenerate-key`;
+  const res = await request(path, { method: "POST" });
+  ensureOk(res, path);
+  return res.json();
+}
+
 export async function fetchServices(): Promise<Service[]> {
   const path = "services";
   const res = await request(path);
@@ -127,14 +157,20 @@ export async function fetchServices(): Promise<Service[]> {
   if (!Array.isArray(data)) throw new Error("Invalid services response");
   return data.map((s: any) => ({
     id: s.id,
+    project_id: s.project_id || undefined,
+    service_id: s.service_id || s.name || s.id,
     name: s.name || s.id,
+    runtime: s.runtime || "node",
     environment: s.environment || "production",
+    version: s.version || "1.0.0",
     status: s.status || "healthy",
     requests: Number(s.requests ?? 0),
     error_rate: Number(s.error_rate ?? 0),
     latency_ms: Number(s.latency_ms ?? 0),
     incident_count: Number(s.incident_count ?? 0),
-    last_activity: s.last_activity || undefined,
+    first_seen_at: s.first_seen_at || undefined,
+    last_seen_at: s.last_seen_at || s.last_activity || undefined,
+    last_activity: s.last_activity || s.last_seen_at || undefined,
     created_at: s.created_at,
     owner_id: s.owner_id || undefined,
   }));
@@ -147,7 +183,11 @@ export async function registerService(data: { id: string; name: string; environm
   const created = await res.json();
   return {
     id: created.id || data.id,
+    project_id: created.project_id || undefined,
+    service_id: created.service_id || data.id,
     name: created.name || data.name,
+    runtime: created.runtime || "node",
+    version: created.version || "1.0.0",
     environment: created.environment || data.environment,
     status: created.status || "healthy",
     requests: Number(created.requests ?? 0),

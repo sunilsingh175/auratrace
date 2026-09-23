@@ -1,5 +1,5 @@
 -- ==============================================================================
--- Trace Database Initialization
+-- AuraTrace Database Initialization
 -- PostgreSQL + pgvector
 -- ==============================================================================
 
@@ -28,23 +28,49 @@ CREATE TABLE IF NOT EXISTS users (
 
 
 -- ==============================================================================
--- SERVICES
+-- PROJECTS (AuraTrace Project & API Key Management)
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS projects (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    api_key_hash VARCHAR(128) NOT NULL UNIQUE,
+    owner_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- ==============================================================================
+-- SERVICES (Automatically Discovered from Telemetry or Provisioned)
 -- ==============================================================================
 
 CREATE TABLE IF NOT EXISTS services (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
-    name VARCHAR(255) NOT NULL UNIQUE,
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
 
-    description TEXT,
+    service_id VARCHAR(255),
+
+    name VARCHAR(255) NOT NULL,
+
+    runtime VARCHAR(50) NOT NULL DEFAULT 'node',
 
     environment VARCHAR(50) NOT NULL DEFAULT 'production',
 
+    version VARCHAR(50) NOT NULL DEFAULT '1.0.0',
+
     status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+
+    description TEXT,
 
     api_key_hash VARCHAR(128),
 
     owner_id UUID REFERENCES users(id) ON DELETE SET NULL,
+
+    first_seen_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    last_seen_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -64,6 +90,8 @@ CREATE TABLE IF NOT EXISTS services (
 
 CREATE TABLE IF NOT EXISTS telemetry_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
 
     service_id UUID NOT NULL,
 
@@ -184,12 +212,30 @@ CREATE TABLE IF NOT EXISTS historical_fixes (
 -- INDEXES
 -- ==============================================================================
 
+-- Projects
+CREATE INDEX IF NOT EXISTS projects_owner_idx
+    ON projects (owner_id);
+
+CREATE INDEX IF NOT EXISTS projects_api_key_hash_idx
+    ON projects (api_key_hash);
+
 -- Services
 CREATE INDEX IF NOT EXISTS services_status_idx
     ON services (status);
 
+CREATE INDEX IF NOT EXISTS services_project_id_idx
+    ON services (project_id);
+
+CREATE INDEX IF NOT EXISTS services_service_id_idx
+    ON services (service_id);
+
+CREATE INDEX IF NOT EXISTS services_project_service_idx
+    ON services (project_id, service_id);
 
 -- Telemetry
+CREATE INDEX IF NOT EXISTS telemetry_logs_project_idx
+    ON telemetry_logs (project_id);
+
 CREATE INDEX IF NOT EXISTS telemetry_logs_service_idx
     ON telemetry_logs (service_id);
 

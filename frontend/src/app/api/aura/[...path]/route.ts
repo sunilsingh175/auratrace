@@ -5,7 +5,7 @@ const MASTER_API_KEY = process.env.AURA_MASTER_API_KEY || "";
 
 async function handler(request: NextRequest, context: { params: { path: string[] } }) {
   if (!MASTER_API_KEY) {
-    return NextResponse.json({ detail: "Automatic Backend Detection server API key is not configured." }, { status: 500 });
+    return NextResponse.json({ detail: "AuraTrace server API key is not configured." }, { status: 500 });
   }
 
   const targetPath = `/${context.params.path.join("/")}`;
@@ -37,7 +37,7 @@ async function handler(request: NextRequest, context: { params: { path: string[]
     });
   } catch (error) {
     return NextResponse.json(
-      { detail: "Unable to reach Trace backend.", error: error instanceof Error ? error.message : "Unknown error" },
+      { detail: "Unable to reach AuraTrace backend.", error: error instanceof Error ? error.message : "Unknown error" },
       { status: 502 }
     );
   }

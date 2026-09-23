@@ -1,7 +1,25 @@
 -- ==============================================================================
--- Trace Historical Knowledge Base
+-- AuraTrace Historical Knowledge Base
 -- Seed data for pgvector RAG matching and simulated incidents
 -- ==============================================================================
+
+
+-- ==============================================================================
+-- PROJECTS
+-- ==============================================================================
+
+INSERT INTO projects (
+    id,
+    name,
+    api_key_hash
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000001',
+    'AuraTrace Production Platform',
+    -- SHA256 hash for default key
+    '78d3897d266ee7e8a9f6d4d12543e49be96c561bcf7047f3f1e9411dcb144074'
+)
+ON CONFLICT (id) DO NOTHING;
 
 
 -- ==============================================================================
@@ -10,102 +28,158 @@
 
 INSERT INTO services (
     id,
+    project_id,
+    service_id,
     name,
-    description,
+    runtime,
     environment,
-    status
+    version,
+    status,
+    description
 )
 VALUES
 (
     '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
     'nova-compute',
-    'OpenStack compute service responsible for managing virtual machine instances.',
+    'nova-compute',
+    'python',
     'production',
-    'ACTIVE'
+    '2.4.0',
+    'ACTIVE',
+    'OpenStack compute service responsible for managing virtual machine instances.'
 ),
 (
     '00000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001',
     'nova-api',
-    'OpenStack compute API service.',
+    'nova-api',
+    'python',
     'production',
-    'ACTIVE'
+    '2.4.0',
+    'ACTIVE',
+    'OpenStack compute API service.'
 ),
 (
     '00000000-0000-0000-0000-000000000003',
+    '00000000-0000-0000-0000-000000000001',
     'neutron-server',
-    'OpenStack networking service.',
+    'neutron-server',
+    'python',
     'production',
-    'ACTIVE'
+    '2.1.0',
+    'ACTIVE',
+    'OpenStack networking service.'
 ),
 (
     '00000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000001',
     'cinder-volume',
-    'OpenStack block storage volume service.',
+    'cinder-volume',
+    'python',
     'production',
-    'ACTIVE'
+    '1.9.0',
+    'ACTIVE',
+    'OpenStack block storage volume service.'
 ),
 (
     '00000000-0000-0000-0000-000000000010',
+    '00000000-0000-0000-0000-000000000001',
     'payment-api',
-    'High-throughput credit card processing and checkout transactions API.',
+    'payment-api',
+    'node',
     'production',
-    'ACTIVE'
+    '1.4.2',
+    'ACTIVE',
+    'High-throughput credit card processing and checkout transactions API.'
 ),
 (
     '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000001',
     'auth-service',
-    'User authentication, OAuth2 tokens, and role-based access control.',
+    'auth-service',
+    'node',
     'production',
-    'ACTIVE'
+    '2.0.1',
+    'ACTIVE',
+    'User authentication, OAuth2 tokens, and role-based access control.'
 ),
 (
     '00000000-0000-0000-0000-000000000030',
+    '00000000-0000-0000-0000-000000000001',
     'notification-worker',
-    'Async worker sending transactional emails and push notifications.',
+    'notification-worker',
+    'python',
     'production',
-    'ACTIVE'
+    '1.1.0',
+    'ACTIVE',
+    'Async worker sending transactional emails and push notifications.'
 ),
 (
     '00000000-0000-0000-0000-000000000040',
+    '00000000-0000-0000-0000-000000000001',
     'order-service',
-    'Order management and inventory reservation microservice.',
+    'order-service',
+    'node',
     'production',
-    'ACTIVE'
+    '1.3.0',
+    'ACTIVE',
+    'Order management and inventory reservation microservice.'
 ),
 (
     '00000000-0000-0000-0000-000000000050',
+    '00000000-0000-0000-0000-000000000001',
     'inventory-service',
-    'Warehouse catalog and stock synchronization service.',
+    'inventory-service',
+    'node',
     'staging',
-    'ACTIVE'
+    '1.0.4',
+    'ACTIVE',
+    'Warehouse catalog and stock synchronization service.'
 ),
 (
     '00000000-0000-0000-0000-000000000060',
+    '00000000-0000-0000-0000-000000000001',
     'hdfs-datanode',
-    'Hadoop Distributed File System DataNode worker node.',
+    'hdfs-datanode',
+    'java',
     'production',
-    'ACTIVE'
+    '3.3.0',
+    'ACTIVE',
+    'Hadoop Distributed File System DataNode worker node.'
 ),
 (
     '00000000-0000-0000-0000-000000000070',
+    '00000000-0000-0000-0000-000000000001',
     'hdfs-namenode',
-    'Hadoop Distributed File System Master NameNode coordinator.',
+    'hdfs-namenode',
+    'java',
     'production',
-    'ACTIVE'
+    '3.3.0',
+    'ACTIVE',
+    'Hadoop Distributed File System Master NameNode coordinator.'
 ),
 (
     '00000000-0000-0000-0000-000000000080',
+    '00000000-0000-0000-0000-000000000001',
     'payment-service',
-    'High-throughput credit card processing and checkout transactions service.',
+    'payment-service',
+    'python',
     'production',
-    'ACTIVE'
+    '1.2.0',
+    'ACTIVE',
+    'High-throughput credit card processing and checkout transactions service.'
 ),
 (
     '00000000-0000-0000-0000-000000000090',
+    '00000000-0000-0000-0000-000000000001',
     'gateway-service',
-    'Central API Gateway and SSL edge termination router.',
+    'gateway-service',
+    'node',
     'production',
-    'ACTIVE'
+    '3.0.0',
+    'ACTIVE',
+    'Central API Gateway and SSL edge termination router.'
 )
 ON CONFLICT (id) DO NOTHING;
 

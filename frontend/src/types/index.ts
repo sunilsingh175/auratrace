@@ -6,15 +6,29 @@ export type IncidentStatus = "OPEN" | "INVESTIGATING" | "RESOLVED";
 
 export type ServiceStatus = "healthy" | "warning" | "critical" | "active" | "inactive" | "degraded";
 
-export interface Service {
+export interface Project {
   id: string;
   name: string;
+  api_key?: string;
+  created_at: string;
+  service_count?: number;
+}
+
+export interface Service {
+  id: string;
+  project_id?: string;
+  service_id?: string;
+  name: string;
+  runtime?: "node" | "python" | "go" | "java" | string;
   environment: string;
+  version?: string;
   status: ServiceStatus;
   requests: number;
   error_rate: number;
   latency_ms: number;
   incident_count: number;
+  first_seen_at?: string;
+  last_seen_at?: string;
   last_activity?: string;
   created_at?: string;
   owner_id?: string;
