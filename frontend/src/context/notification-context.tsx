@@ -28,26 +28,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<LiveNotification[]>([
-    {
-      id: "init-1",
-      title: "Diagnostics Engine Live",
-      message: "Streaming pipeline connected: Redis Stream → pgvector → AI Doctor",
-      type: "success",
-      timestamp: new Date().toISOString(),
-      read: false,
-      link: "/dashboard",
-    },
-    {
-      id: "init-2",
-      title: "Isolation Forest Active",
-      message: "Real-time outlier detection model active with 0.05 contamination rate",
-      type: "info",
-      timestamp: new Date(Date.now() - 60000).toISOString(),
-      read: false,
-      link: "/telemetry",
-    },
-  ]);
+  const [notifications, setNotifications] = useState<LiveNotification[]>([]);
 
   const [isConnected, setIsConnected] = useState(false);
   const [latestToast, setLatestToast] = useState<LiveNotification | null>(null);
@@ -131,7 +112,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               message: data.message?.slice(0, 100) || "Exception trace ingested.",
               service_id: data.service_id,
               type: "warning",
-              link: "/telemetry",
+              link: data.incident_id ? `/incidents/${data.incident_id}` : "/incidents",
             });
           }
         } catch (err) {
