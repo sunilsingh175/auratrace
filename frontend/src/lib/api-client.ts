@@ -272,6 +272,7 @@ export async function fetchSystemStats(): Promise<SystemStats> {
   if (!data || typeof data !== "object") throw new Error("Invalid system stats response");
   return {
     total_logs_ingested: Number(data.total_logs_ingested ?? 0),
+    total_incidents_count: Number(data.total_incidents_count ?? 0),
     ingestion_rate_per_sec: Number(data.ingestion_rate_per_sec ?? data.events_per_sec ?? 0),
     error_rate_percent: Number(data.error_rate_percent ?? (typeof data.error_ratio === "number" ? data.error_ratio * 100 : 0)),
     p95_latency_ms: Number(data.p95_latency_ms ?? 0),

@@ -85,6 +85,7 @@ export interface TelemetryLog {
 
 export interface SystemStats {
   total_logs_ingested: number;
+  total_incidents_count?: number;
   ingestion_rate_per_sec: number;
   error_rate_percent: number;
   p95_latency_ms: number;

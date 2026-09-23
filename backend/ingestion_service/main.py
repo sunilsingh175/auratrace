@@ -202,15 +202,18 @@ async def startup_event():
                 """))
 
                 # 2. Ensure services auto-discovery columns
-                await conn.execute(text("""
-                    ALTER TABLE services ADD COLUMN IF NOT EXISTS project_id UUID;
-                    ALTER TABLE services ADD COLUMN IF NOT EXISTS service_id VARCHAR(255);
-                    ALTER TABLE services ADD COLUMN IF NOT EXISTS runtime VARCHAR(50) DEFAULT 'node';
-                    ALTER TABLE services ADD COLUMN IF NOT EXISTS version VARCHAR(50) DEFAULT '1.0.0';
-                    ALTER TABLE services ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-                    ALTER TABLE services ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-                    ALTER TABLE services ADD COLUMN IF NOT EXISTS owner_id UUID;
-                """))
+                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS project_id UUID;"))
+                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS service_id VARCHAR(255);"))
+                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS runtime VARCHAR(50) DEFAULT 'node';"))
+                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS version VARCHAR(50) DEFAULT '1.0.0';"))
+                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
+                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
+                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS owner_id UUID;"))
+
+                # Drop old global unique name constraint if existing from legacy schemas
+                await conn.execute(text("ALTER TABLE services DROP CONSTRAINT IF EXISTS services_name_key;"))
+                await conn.execute(text("ALTER TABLE services DROP CONSTRAINT IF EXISTS services_service_id_key;"))
+
                 await conn.execute(text("""
                     DO $$
                     BEGIN
@@ -232,19 +235,13 @@ async def startup_event():
                         END IF;
                     END $$;
                 """))
-                await conn.execute(text("""
-                    CREATE INDEX IF NOT EXISTS services_owner_idx ON services (owner_id);
-                    CREATE INDEX IF NOT EXISTS services_project_idx ON services (project_id);
-                    CREATE INDEX IF NOT EXISTS services_service_id_idx ON services (service_id);
-                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS services_owner_idx ON services (owner_id);"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS services_project_idx ON services (project_id);"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS services_service_id_idx ON services (service_id);"))
 
                 # 3. Ensure telemetry_logs project_id column
-                await conn.execute(text("""
-                    ALTER TABLE telemetry_logs ADD COLUMN IF NOT EXISTS project_id UUID;
-                """))
-                await conn.execute(text("""
-                    CREATE INDEX IF NOT EXISTS telemetry_logs_project_idx ON telemetry_logs (project_id);
-                """))
+                await conn.execute(text("ALTER TABLE telemetry_logs ADD COLUMN IF NOT EXISTS project_id UUID;"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS telemetry_logs_project_idx ON telemetry_logs (project_id);"))
 
                 # 4. Seed default project and attach orphan services
                 default_hash = hashlib.sha256(b"at_live_master_auratrace_2026").hexdigest()
@@ -302,10 +299,11 @@ async def verify_api_key(
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
     x_project_key: Optional[str] = Header(default=None, alias="X-Project-Key"),
     authorization: Optional[str] = Header(default=None),
-):
+) -> dict:
     """
-    Validates incoming requests against master API key, AuraTrace project API keys, or service API keys.
-    Accepts X-API-Key, X-Project-Key, or Bearer tokens.
+    Validates incoming SDK telemetry requests against AuraTrace project API keys,
+    master API key, or legacy service API keys.
+    Returns a dict with project_id, project_name, and api_key.
     """
     api_key = x_api_key or x_project_key
     if not api_key and authorization:
@@ -320,10 +318,20 @@ async def verify_api_key(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or missing X-API-Key or X-Project-Key header. Access denied.",
             )
-        return "guest"
+        return {
+            "key": "guest",
+            "project_id": "00000000-0000-0000-0000-000000000001",
+            "project_name": "Default Workspace",
+            "is_master": False,
+        }
 
     if MASTER_API_KEY and api_key == MASTER_API_KEY:
-        return api_key
+        return {
+            "key": api_key,
+            "project_id": "00000000-0000-0000-0000-000000000001",
+            "project_name": "AuraTrace Production Platform",
+            "is_master": True,
+        }
 
     # Validate against Project API keys or Service API keys using SHA-256
     if db_engine:
@@ -332,30 +340,49 @@ async def verify_api_key(
             async with db_engine.connect() as conn:
                 # 1. Check projects table
                 proj_res = await conn.execute(
-                    text("SELECT id, name FROM projects WHERE api_key_hash = :hash LIMIT 1"),
+                    text("SELECT id, name, owner_id FROM projects WHERE api_key_hash = :hash LIMIT 1"),
                     {"hash": incoming_hash},
                 )
                 proj = proj_res.mappings().first()
                 if proj:
-                    return api_key
+                    return {
+                        "key": api_key,
+                        "project_id": str(proj["id"]),
+                        "project_name": proj["name"],
+                        "owner_id": str(proj["owner_id"]) if proj["owner_id"] else None,
+                        "is_master": False,
+                    }
 
                 # 2. Check legacy services table
                 res = await conn.execute(
-                    text("SELECT id, name, status FROM services WHERE api_key_hash = :hash AND status = 'ACTIVE' LIMIT 1"),
+                    text("SELECT id, name, project_id, status FROM services WHERE api_key_hash = :hash AND status = 'ACTIVE' LIMIT 1"),
                     {"hash": incoming_hash},
                 )
                 svc = res.mappings().first()
                 if svc:
-                    return api_key
+                    svc_proj_id = str(svc["project_id"]) if svc["project_id"] else "00000000-0000-0000-0000-000000000001"
+                    return {
+                        "key": api_key,
+                        "project_id": svc_proj_id,
+                        "project_name": svc["name"],
+                        "service_id": str(svc["id"]),
+                        "is_master": False,
+                    }
         except Exception as e:
             logger.warning(f"Error validating API key against database: {e}")
 
     if ENABLE_API_AUTH:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing X-API-Key header. Access denied.",
+            detail="Invalid or unrecognized API key. Access denied.",
         )
-    return api_key
+
+    return {
+        "key": api_key,
+        "project_id": "00000000-0000-0000-0000-000000000001",
+        "project_name": "Fallback Workspace",
+        "is_master": False,
+    }
 
 # ============================================================
 # Pydantic Schemas
@@ -911,28 +938,30 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
 # ============================================================
 
 async def auto_discover_service(
+    project_id: Optional[str],
     service_id: str,
     runtime: str = "node",
     environment: str = "production",
     version: str = "1.0.0",
-    project_id: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Auto-discovers and registers the service in PostgreSQL on telemetry arrival.
-    If the service already exists, updates last_seen_at.
+    Auto-discovers and registers the service in PostgreSQL on telemetry arrival,
+    strictly scoped to project_id.
     """
     if not db_engine or not service_id:
         return None
+    proj_id = project_id or "00000000-0000-0000-0000-000000000001"
     try:
         async with db_engine.begin() as conn:
-            # Check if service exists
+            # Check if service exists for this specific project
             res = await conn.execute(
                 text("""
                     SELECT id FROM services 
-                    WHERE (service_id = :service_id OR name = :service_id)
+                    WHERE project_id::text = :project_id
+                      AND (service_id = :service_id OR name = :service_id)
                     LIMIT 1
                 """),
-                {"service_id": service_id},
+                {"project_id": str(proj_id), "service_id": service_id},
             )
             existing = res.first()
             if existing:
@@ -955,7 +984,6 @@ async def auto_discover_service(
                 )
                 return str(existing[0])
             else:
-                proj_id = project_id or "00000000-0000-0000-0000-000000000001"
                 create_res = await conn.execute(
                     text("""
                         INSERT INTO services (
@@ -963,13 +991,13 @@ async def auto_discover_service(
                             status, description, first_seen_at, last_seen_at
                         )
                         VALUES (
-                            :project_id, :service_id, :name, :runtime, :environment, :version,
+                            CAST(:project_id AS uuid), :service_id, :name, :runtime, :environment, :version,
                             'ACTIVE', :desc, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                         )
                         RETURNING id
                     """),
                     {
-                        "project_id": proj_id,
+                        "project_id": str(proj_id),
                         "service_id": service_id,
                         "name": service_id,
                         "runtime": runtime or "node",
@@ -980,10 +1008,10 @@ async def auto_discover_service(
                 )
                 created = create_res.first()
                 if created:
-                    logger.info(f"⚡ Auto-discovered new service '{service_id}' ({runtime}) in PostgreSQL.")
+                    logger.info(f"⚡ Auto-discovered new service '{service_id}' ({runtime}) in project '{proj_id}'.")
                     return str(created[0])
     except Exception as exc:
-        logger.warning(f"Auto-discovery service update warning for '{service_id}': {exc}")
+        logger.warning(f"Auto-discovery service update warning for '{service_id}' in project '{proj_id}': {exc}")
     return None
 
 
@@ -992,13 +1020,31 @@ async def auto_discover_service(
 # ============================================================
 
 # 0. Projects & API Key Management
+async def get_current_user_optional(
+    authorization: Optional[str] = Header(default=None),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+) -> Optional[dict]:
+    if authorization and authorization.lower().startswith("bearer "):
+        try:
+            return await get_current_user(authorization=authorization)
+        except Exception:
+            pass
+    if MASTER_API_KEY and x_api_key == MASTER_API_KEY:
+        return {"id": "00000000-0000-0000-0000-000000000099", "role": "Admin", "name": "System Administrator"}
+    if not ENABLE_API_AUTH:
+        return {"id": "00000000-0000-0000-0000-000000000099", "role": "Developer", "name": "Developer"}
+    return None
+
 @app.get(
     "/api/v1/projects",
     tags=["Projects & API Keys"],
-    summary="List all AuraTrace projects",
-    description="Retrieves all registered projects with active service counts.",
+    summary="List AuraTrace projects (scoped by owner for developers, all for admin)",
+    description="Retrieves registered projects with active service counts.",
 )
-async def list_projects(api_key: str = Depends(verify_api_key)):
+async def list_projects(current_user: Optional[dict] = Depends(get_current_user_optional)):
+    if not current_user and ENABLE_API_AUTH:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
+
     if not db_engine:
         return [{
             "id": "00000000-0000-0000-0000-000000000001",
@@ -1008,47 +1054,54 @@ async def list_projects(api_key: str = Depends(verify_api_key)):
         }]
 
     try:
+        is_admin = current_user.get("role") == "Admin" if current_user else False
+        user_id = current_user.get("id") if current_user else None
+
         async with db_engine.connect() as conn:
-            stmt = text("""
-                SELECT 
-                    p.id,
-                    p.name,
-                    p.created_at,
-                    COUNT(s.id) AS service_count
-                FROM projects p
-                LEFT JOIN services s ON p.id = s.project_id
-                GROUP BY p.id, p.name, p.created_at
-                ORDER BY p.created_at DESC
-            """)
-            res = await conn.execute(stmt)
+            if is_admin:
+                stmt = text("""
+                    SELECT 
+                        p.id,
+                        p.name,
+                        p.created_at,
+                        p.owner_id,
+                        COUNT(s.id) AS service_count
+                    FROM projects p
+                    LEFT JOIN services s ON p.id = s.project_id
+                    GROUP BY p.id, p.name, p.created_at, p.owner_id
+                    ORDER BY p.created_at DESC
+                """)
+                res = await conn.execute(stmt)
+            else:
+                stmt = text("""
+                    SELECT 
+                        p.id,
+                        p.name,
+                        p.created_at,
+                        p.owner_id,
+                        COUNT(s.id) AS service_count
+                    FROM projects p
+                    LEFT JOIN services s ON p.id = s.project_id
+                    WHERE p.owner_id = :owner_id OR p.owner_id IS NULL
+                    GROUP BY p.id, p.name, p.created_at, p.owner_id
+                    ORDER BY p.created_at DESC
+                """)
+                res = await conn.execute(stmt, {"owner_id": user_id})
+
             rows = res.fetchall()
             return [
                 {
                     "id": str(r[0]),
                     "name": r[1],
                     "created_at": r[2].isoformat() if r[2] else datetime.now(timezone.utc).isoformat(),
-                    "service_count": int(r[3] or 0),
+                    "owner_id": str(r[3]) if r[3] else None,
+                    "service_count": int(r[4] or 0),
                 }
                 for r in rows
             ]
     except Exception as exc:
         logger.error(f"Error fetching projects: {exc}")
         return []
-
-async def get_current_user_optional(
-    authorization: Optional[str] = Header(default=None),
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
-) -> Optional[dict]:
-    if MASTER_API_KEY and x_api_key == MASTER_API_KEY:
-        return {"id": "00000000-0000-0000-0000-000000000099", "role": "Admin", "name": "System Administrator"}
-    if authorization and authorization.lower().startswith("bearer "):
-        try:
-            return await get_current_user(authorization=authorization)
-        except Exception:
-            pass
-    if not ENABLE_API_AUTH:
-        return {"id": "00000000-0000-0000-0000-000000000099", "role": "Developer", "name": "Developer"}
-    return None
 
 @app.post(
     "/api/v1/projects",
@@ -1062,7 +1115,7 @@ async def create_project(
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     if not current_user and ENABLE_API_AUTH:
-        raise HTTPException(status_code=401, detail="Bearer access token or X-API-Key required.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer access token or X-API-Key required.")
 
     new_api_key = f"at_live_{secrets.token_hex(16)}"
     key_hash = hashlib.sha256(new_api_key.encode("utf-8")).hexdigest()
@@ -1109,31 +1162,42 @@ async def regenerate_project_key(
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     if not current_user and ENABLE_API_AUTH:
-        raise HTTPException(status_code=401, detail="Bearer access token or X-API-Key required.")
-
-    new_api_key = f"at_live_{secrets.token_hex(16)}"
-    key_hash = hashlib.sha256(new_api_key.encode("utf-8")).hexdigest()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer access token or X-API-Key required.")
 
     if not db_engine:
         raise HTTPException(status_code=503, detail="Database unavailable.")
 
     try:
         async with db_engine.begin() as conn:
-            res = await conn.execute(
+            check_res = await conn.execute(
+                text("SELECT id, name, owner_id FROM projects WHERE id::text = :id OR id::text LIKE :id_prefix LIMIT 1"),
+                {"id": project_id, "id_prefix": f"{project_id}%"},
+            )
+            proj = check_res.mappings().first()
+            if not proj:
+                raise HTTPException(status_code=404, detail="Project not found.")
+
+            is_admin = current_user.get("role") == "Admin" if current_user else False
+            if not is_admin and proj["owner_id"] and str(proj["owner_id"]) != str(current_user.get("id")):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Forbidden: You do not have permission to rotate the API key for this project.",
+                )
+
+            new_api_key = f"at_live_{secrets.token_hex(16)}"
+            key_hash = hashlib.sha256(new_api_key.encode("utf-8")).hexdigest()
+
+            await conn.execute(
                 text("""
                     UPDATE projects
                     SET api_key_hash = :hash, updated_at = CURRENT_TIMESTAMP
-                    WHERE id::text = :id OR id::text LIKE :id_prefix
-                    RETURNING id, name
+                    WHERE id = :id
                 """),
-                {"hash": key_hash, "id": project_id, "id_prefix": f"{project_id}%"},
+                {"hash": key_hash, "id": proj["id"]},
             )
-            row = res.mappings().first()
-            if not row:
-                raise HTTPException(status_code=404, detail="Project not found.")
             return {
-                "id": str(row["id"]),
-                "name": row["name"],
+                "id": str(proj["id"]),
+                "name": proj["name"],
                 "api_key": new_api_key,
                 "message": "Project API key regenerated successfully.",
             }
@@ -1153,26 +1217,37 @@ async def delete_project(
     project_id: str,
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
+    if not current_user and ENABLE_API_AUTH:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer access token or X-API-Key required.")
+
     if not db_engine:
         raise HTTPException(status_code=503, detail="Database unavailable.")
 
     try:
         async with db_engine.begin() as conn:
-            res = await conn.execute(
-                text("""
-                    DELETE FROM projects
-                    WHERE id::text = :id OR id::text LIKE :id_prefix
-                    RETURNING id, name
-                """),
+            check_res = await conn.execute(
+                text("SELECT id, name, owner_id FROM projects WHERE id::text = :id OR id::text LIKE :id_prefix LIMIT 1"),
                 {"id": project_id, "id_prefix": f"{project_id}%"},
             )
-            deleted = res.mappings().first()
-            if not deleted:
+            proj = check_res.mappings().first()
+            if not proj:
                 raise HTTPException(status_code=404, detail="Project not found.")
+
+            is_admin = current_user.get("role") == "Admin" if current_user else False
+            if not is_admin and proj["owner_id"] and str(proj["owner_id"]) != str(current_user.get("id")):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Forbidden: You do not have permission to delete this project.",
+                )
+
+            await conn.execute(
+                text("DELETE FROM projects WHERE id = :id"),
+                {"id": proj["id"]},
+            )
             return {
                 "success": True,
-                "message": f"Project '{deleted['name']}' and its operational data deleted.",
-                "id": str(deleted["id"]),
+                "message": f"Project '{proj['name']}' and its operational data deleted.",
+                "id": str(proj["id"]),
             }
     except HTTPException:
         raise
@@ -1187,7 +1262,7 @@ async def delete_project(
     summary="Purge test workspaces and transient demo records",
 )
 async def clean_test_data(
-    current_user: Optional[dict] = Depends(get_current_user_optional),
+    current_user: dict = Depends(require_admin),
 ):
     if not db_engine:
         raise HTTPException(status_code=503, detail="Database unavailable.")
@@ -1209,6 +1284,8 @@ async def clean_test_data(
                 "message": f"Successfully cleaned {count} test projects.",
                 "deleted_projects_count": count,
             }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"Error cleaning test data: {exc}")
         raise HTTPException(status_code=500, detail="Failed to clean test data.")
@@ -1232,8 +1309,9 @@ async def clean_test_data(
 )
 async def ingest_telemetry(
     payload: TelemetryPayload,
-    api_key: str = Depends(verify_api_key),
+    auth_ctx: dict = Depends(verify_api_key),
 ):
+    project_id = auth_ctx.get("project_id") or "00000000-0000-0000-0000-000000000001"
     svc_id = payload.resolved_service_id
     event_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -1243,8 +1321,9 @@ async def ingest_telemetry(
     environment = payload.environment or "production"
     version = payload.version or "1.0.0"
 
-    # Trigger async service auto-discovery in background
+    # Trigger async service auto-discovery strictly scoped to the authenticated project
     asyncio.create_task(auto_discover_service(
+        project_id=project_id,
         service_id=svc_id,
         runtime=runtime,
         environment=environment,
@@ -1253,6 +1332,7 @@ async def ingest_telemetry(
 
     log_event = {
         "id": event_id,
+        "project_id": project_id,
         "type": "TELEMETRY",
         "service_id": svc_id,
         "runtime": runtime,
@@ -1291,9 +1371,10 @@ async def ingest_telemetry(
     return {
         "status": "accepted",
         "event_id": event_id,
+        "project_id": project_id,
         "service_id": payload.service_id,
         "runtime": runtime,
-        "message": f"Telemetry event queued for ML inference. Service '{payload.service_id}' auto-discovered.",
+        "message": f"Telemetry event queued for ML inference. Service '{payload.service_id}' auto-discovered in project.",
     }
 
 
@@ -1306,8 +1387,9 @@ async def ingest_telemetry(
 )
 async def ingest_batch_telemetry(
     payload: BatchTelemetryPayload,
-    api_key: str = Depends(verify_api_key),
+    auth_ctx: dict = Depends(verify_api_key),
 ):
+    project_id = auth_ctx.get("project_id") or "00000000-0000-0000-0000-000000000001"
     timestamp = datetime.now(timezone.utc).isoformat()
     count = 0
     pipe = redis_client.pipeline()
@@ -1315,6 +1397,7 @@ async def ingest_batch_telemetry(
     for event in payload.events:
         event_dict = event.model_dump()
         event_dict["id"] = str(uuid.uuid4())
+        event_dict["project_id"] = project_id
         event_dict["received_at"] = timestamp
         event_dict["timestamp"] = event_dict.get("timestamp") or timestamp
         stack_val = event_dict.get("stack_trace") or event_dict.get("raw_stack_trace") or ""
@@ -1324,8 +1407,9 @@ async def ingest_batch_telemetry(
         environment = event_dict.get("environment") or "production"
         version = event_dict.get("version") or "1.0.0"
 
-        # Background auto-discover
+        # Background auto-discover scoped to project
         asyncio.create_task(auto_discover_service(
+            project_id=project_id,
             service_id=event.service_id,
             runtime=runtime,
             environment=environment,
@@ -1343,6 +1427,7 @@ async def ingest_batch_telemetry(
     return {
         "status": "accepted",
         "count": count,
+        "project_id": project_id,
         "message": f"Successfully queued {count} telemetry events.",
     }
 
@@ -1356,7 +1441,7 @@ async def ingest_batch_telemetry(
 async def get_recent_telemetry(
     limit: int = Query(50, ge=1, le=200),
     service_id: Optional[str] = Query(None),
-    api_key: str = Depends(verify_api_key),
+    auth_ctx: dict = Depends(verify_api_key),
 ):
     events = []
     try:
@@ -1419,7 +1504,7 @@ async def get_recent_telemetry(
     tags=["Cluster Statistics"],
     summary="Fetch pipeline & cluster telemetry statistics",
 )
-async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
+async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_user_optional)):
     stream_length = 0
 
     try:
@@ -1433,6 +1518,7 @@ async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
             "events_per_sec": 0,
             "ingestion_rate_per_sec": 0,
             "total_logs_ingested": stream_length,
+            "total_incidents_count": 0,
             "p95_latency_ms": 0,
             "error_ratio": 0,
             "error_rate_percent": 0,
@@ -1473,7 +1559,7 @@ async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
             error_count = int(row[2] or 0)
 
             # If no events occurred in the last 5-minute sliding window,
-            # calculate cluster metrics from all available telemetry logs for consistency with the services fleet
+            # calculate cluster metrics from all available telemetry logs for consistency
             if total_events == 0:
                 all_time_metrics = await conn.execute(text("""
                     SELECT
@@ -1506,19 +1592,28 @@ async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
             else:
                 error_rate = ((error_count / total_events) * 100) if total_events else 0
 
-            incidents = await conn.execute(text("""
+            # Incident counts
+            incidents_total_res = await conn.execute(text("SELECT COUNT(*) FROM incidents"))
+            total_incidents = int(incidents_total_res.scalar() or 0)
+
+            incidents_open_res = await conn.execute(text("""
                 SELECT COUNT(*)
                 FROM incidents
                 WHERE status IN ('OPEN', 'INVESTIGATING')
             """))
+            open_incidents = int(incidents_open_res.scalar() or 0)
+
+            # Telemetry logs total count
+            logs_total_res = await conn.execute(text("SELECT COUNT(*) FROM telemetry_logs"))
+            total_logs = int(logs_total_res.scalar() or 0)
+            if total_logs == 0 and stream_length > 0:
+                total_logs = stream_length
 
             active_services = await conn.execute(text("""
                 SELECT COUNT(*)
                 FROM services
                 WHERE status = 'ACTIVE'
             """))
-
-            open_incidents = int(incidents.scalar() or 0)
             service_count = int(active_services.scalar() or 0)
 
             ingestion_rate = total_events / 300
@@ -1526,7 +1621,8 @@ async def get_cluster_stats(api_key: str = Depends(verify_api_key)):
             return {
                 "events_per_sec": round(ingestion_rate, 2),
                 "ingestion_rate_per_sec": round(ingestion_rate, 2),
-                "total_logs_ingested": stream_length,
+                "total_logs_ingested": total_logs,
+                "total_incidents_count": total_incidents,
                 "p95_latency_ms": round(p95_latency, 2),
                 "error_ratio": round(error_rate / 100, 4),
                 "error_rate_percent": round(error_rate, 2),

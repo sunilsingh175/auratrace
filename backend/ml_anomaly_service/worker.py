@@ -493,18 +493,23 @@ async def create_incident(
             # ------------------------------------------------
             service_db_id = None
 
-            # 1. Try match by UUID, name, or service_id
+            target_project_id = telemetry.get("project_id") or "00000000-0000-0000-0000-000000000001"
+
+            # 1. Try match by UUID, or by (project_id, service_id/name)
             result = await conn.execute(
                 text(
                     """
                     SELECT id
                     FROM services
-                    WHERE id::text = :identifier OR name = :identifier OR service_id = :identifier
+                    WHERE (id::text = :identifier)
+                       OR (project_id::text = :project_id
+                           AND (name = :identifier OR service_id = :identifier))
                     LIMIT 1
                     """
                 ),
                 {
                     "identifier": service_identifier,
+                    "project_id": str(target_project_id),
                 },
             )
 
@@ -513,7 +518,7 @@ async def create_incident(
             if service_row:
                 service_db_id = service_row[0]
             else:
-                # 2. Auto-create service so incident foreign key constraint always succeeds
+                # 2. Auto-create service scoped to target project so incident foreign key constraint always succeeds
                 runtime = telemetry.get("runtime", "node")
                 environment = telemetry.get("environment", "production")
                 version = telemetry.get("version", "1.0.0")
@@ -525,13 +530,14 @@ async def create_incident(
                             description, status, first_seen_at, last_seen_at
                         )
                         VALUES (
-                            '00000000-0000-0000-0000-000000000001', :service_id, :name, :runtime,
+                            CAST(:project_id AS uuid), :service_id, :name, :runtime,
                             :environment, :version, :description, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                         )
                         RETURNING id
                         """
                     ),
                     {
+                        "project_id": str(target_project_id),
                         "service_id": service_identifier,
                         "name": service_identifier,
                         "runtime": runtime,

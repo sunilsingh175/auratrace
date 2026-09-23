@@ -179,6 +179,36 @@ async def init_auth_table() -> None:
                 "password_salt": p_salt
             })
 
+        # Seed standard Admin test user
+        p_hash, p_salt = _hash_password("admin123456")
+        await conn.execute(text("""
+            INSERT INTO users (id, name, email, password_hash, password_salt, role, status)
+            VALUES ('00000000-0000-0000-0000-000000000098', 'System Admin', 'admin@auratrace.dev', :password_hash, :password_salt, 'Admin', 'Active')
+            ON CONFLICT (email) DO UPDATE SET
+                password_hash = EXCLUDED.password_hash,
+                password_salt = EXCLUDED.password_salt,
+                role = 'Admin',
+                status = 'Active'
+        """), {
+            "password_hash": p_hash,
+            "password_salt": p_salt
+        })
+
+        # Seed standard Developer test user
+        p_hash, p_salt = _hash_password("developer123456")
+        await conn.execute(text("""
+            INSERT INTO users (id, name, email, password_hash, password_salt, role, status)
+            VALUES ('00000000-0000-0000-0000-000000000097', 'Lead Developer', 'developer@auratrace.dev', :password_hash, :password_salt, 'Developer', 'Active')
+            ON CONFLICT (email) DO UPDATE SET
+                password_hash = EXCLUDED.password_hash,
+                password_salt = EXCLUDED.password_salt,
+                role = 'Developer',
+                status = 'Active'
+        """), {
+            "password_hash": p_hash,
+            "password_salt": p_salt
+        })
+
 
 def _send_otp_email(email: str, otp: str, purpose: str) -> None:
     print(f"[Trace OTP Email] Sending {purpose.upper()} code {otp} to {email}")
