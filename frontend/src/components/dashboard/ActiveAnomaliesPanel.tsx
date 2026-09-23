@@ -2,8 +2,9 @@
 
 import React from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, ShieldCheck, Server } from "lucide-react";
+import { ArrowRight, ShieldCheck, Server, Sparkles, Terminal } from "lucide-react";
 import { Incident } from "@/types";
+import { SeverityBadge } from "@/components/incidents/SeverityBadge";
 
 interface ActiveAnomaliesPanelProps {
   incidents: Incident[];
@@ -23,17 +24,17 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
       <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
         <div>
           <h2 className="font-heading font-extrabold text-lg text-slate-900 tracking-tight">
-            Active Anomalies & Triage
+            Recent Crashes &amp; AI Triage
           </h2>
           <p className="text-xs text-slate-500 font-sans mt-0.5">
-            Isolation Forest & RAG diagnostics
+            Automatic exception capture, pgvector historical lookup &amp; AI diagnosis
           </p>
         </div>
         <Link
           href="/incidents"
           className="inline-flex items-center gap-1.5 text-xs font-bold text-[#dc2626] hover:text-[#b91c1c] transition font-heading"
         >
-          <span>View all</span>
+          <span>View all crashes</span>
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
@@ -43,11 +44,11 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
         <div className="space-y-3">
           {incidents.slice(0, 5).map((incident) => {
             const score = (incident as any).anomaly_score ?? (incident as any).score ?? 0.8;
-            const serviceName = incident.service_id || "hdfs-namenode";
+            const serviceName = incident.service_id || "backend-service";
             const incidentTitle =
               incident.title ||
               incident.error_type ||
-              `SystemAnomaly in ${serviceName}`;
+              `Unhandled Exception in ${serviceName}`;
 
             return (
               <div
@@ -55,40 +56,49 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
                 className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200 transition-all"
               >
                 {/* Left: Status Badge, Service, Title */}
-                <div className="flex items-start sm:items-center gap-3 min-w-0">
-                  <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 font-heading uppercase tracking-wider shrink-0">
-                    {incident.status || "OPEN"}
-                  </span>
-                  <div className="min-w-0">
+                <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                  <div className="shrink-0">
+                    <SeverityBadge status={incident.status || "OPEN"} />
+                  </div>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-900 font-heading truncate">
                         {incidentTitle}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 font-sans">
-                      <Server className="h-3 w-3 text-slate-400" />
-                      <span className="font-semibold text-slate-600">{serviceName}</span>
+                    <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 font-sans">
+                      <div className="flex items-center gap-1">
+                        <Server className="h-3 w-3 text-slate-400" />
+                        <span className="font-semibold text-slate-700">{serviceName}</span>
+                      </div>
+                      {incident.error_type && (
+                        <div className="hidden md:flex items-center gap-1 text-slate-400 font-mono text-[10px]">
+                          <Terminal className="h-3 w-3" />
+                          <span className="truncate max-w-[240px]">{incident.error_type}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Right: Anomaly Score, Outlier Badge, Action link */}
+                {/* Right: Outlier Score & Action CTA */}
                 <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-900 font-heading">
+                    <span className="text-xs font-mono font-bold text-rose-600">
                       {formatPercent(score)}
                     </span>
-                    <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[10px] font-bold text-rose-700 font-heading">
+                    <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[9px] font-bold text-rose-700 font-heading">
                       Outlier
                     </span>
                   </div>
 
                   <Link
                     href={`/incidents/${incident.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:border-slate-300 transition shadow-sm font-heading"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#dc2626] hover:bg-[#b91c1c] text-white px-3 py-1.5 text-xs font-bold font-heading shadow-xs transition"
                   >
-                    <span>View diagnostic patch</span>
-                    <ArrowRight className="h-3 w-3 text-[#dc2626]" />
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>Analyze</span>
+                    <ArrowRight className="h-3 w-3" />
                   </Link>
                 </div>
               </div>
@@ -99,13 +109,15 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
         <div className="p-8 text-center rounded-xl border border-dashed border-slate-200">
           <ShieldCheck className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
           <p className="text-xs font-bold text-slate-700 font-heading">
-            No active anomalies detected
+            No active crashes detected
           </p>
           <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-            All connected microservices are operating within nominal parameters.
+            All connected applications are operating normally.
           </p>
         </div>
       )}
     </div>
   );
 }
+
+export default ActiveAnomaliesPanel;

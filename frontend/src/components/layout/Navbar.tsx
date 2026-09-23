@@ -91,54 +91,20 @@ export function Navbar() {
       badge: null,
     },
     {
-      name: "Projects",
-      href: "/projects",
-      icon: FolderKanban,
-      badge: null,
-    },
-    {
-      name: "Services",
-      href: "/services",
-      icon: Server,
-      badge: serviceCount !== null ? String(serviceCount) : null,
-    },
-    {
-      name: "Live Telemetry",
-      href: "/telemetry",
-      icon: Activity,
-      badge: null,
-    },
-    {
-      name: "Incidents",
+      name: "Crashes",
       href: "/incidents",
       icon: AlertTriangle,
       badge: openIncidentCount !== null && openIncidentCount > 0 ? String(openIncidentCount) : null,
       badgeColor: "bg-rose-100 text-rose-700",
     },
-  ];
-
-  const adminLinks = [
     {
-      name: "Admin Dashboard",
-      href: "/admin/dashboard",
-      icon: ShieldCheck,
-      description: "Cluster health & ML telemetry overview",
-    },
-    {
-      name: "Users & Services",
-      href: "/admin/users-services",
-      icon: Users,
-      description: "Manage accounts & microservice access",
-    },
-    {
-      name: "System Monitoring",
-      href: "/admin/monitoring",
-      icon: BarChart3,
-      description: "Real-time Redis stream & node metrics",
+      name: "Projects & Setup",
+      href: "/projects",
+      icon: FolderKanban,
+      badge: null,
     },
   ];
 
-  const isAdmin = user?.role === "Admin";
   const userDisplayName = user?.name ? user.name.split(" ")[0] : "Guest";
   const userInitials = user?.name
     ? user.name
@@ -148,8 +114,6 @@ export function Navbar() {
         .toUpperCase()
         .substring(0, 2)
     : "U";
-
-  const isAdminActive = pathname?.startsWith("/admin");
 
   return (
     <>
@@ -201,67 +165,6 @@ export function Navbar() {
                     </Link>
                   );
                 })}
-
-                {/* Admin Dropdown */}
-                {isAdmin && (
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowAdminMenu(!showAdminMenu);
-                        setShowUserMenu(false);
-                        setShowNotifications(false);
-                      }}
-                      className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
-                        isAdminActive
-                          ? "bg-slate-900 text-white font-bold"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                      }`}
-                    >
-                      <Shield className={`h-4 w-4 ${isAdminActive ? "text-red-400" : "text-indigo-600"}`} />
-                      <span>Admin Console</span>
-                      <ChevronDown className="h-3 w-3 opacity-70" />
-                    </button>
-
-                    {showAdminMenu && (
-                      <div className="absolute left-0 mt-2 w-64 rounded-2xl border border-slate-100 bg-white p-2 shadow-xl z-50 animate-fadeIn font-sans">
-                        <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-heading">
-                            Admin Operations
-                          </span>
-                        </div>
-                        <div className="space-y-1">
-                          {adminLinks.map((item) => {
-                            const Icon = item.icon;
-                            const isActive = pathname === item.href;
-                            return (
-                              <Link
-                                key={item.href}
-                                href={item.href}
-                                onClick={() => setShowAdminMenu(false)}
-                                className={`flex items-start gap-2.5 rounded-xl px-3 py-2 text-xs transition ${
-                                  isActive
-                                    ? "bg-red-50 text-[#dc2626] font-bold"
-                                    : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                                }`}
-                              >
-                                <Icon
-                                  className={`h-4 w-4 mt-0.5 shrink-0 ${
-                                    isActive ? "text-[#dc2626]" : "text-slate-400"
-                                  }`}
-                                />
-                                <div>
-                                  <p className="font-semibold font-heading leading-tight">{item.name}</p>
-                                  <p className="text-[10px] text-slate-400 mt-0.5 font-normal">{item.description}</p>
-                                </div>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -402,7 +305,6 @@ export function Navbar() {
                     onClick={() => {
                       setShowUserMenu(!showUserMenu);
                       setShowNotifications(false);
-                      setShowAdminMenu(false);
                     }}
                     className="flex items-center gap-2 rounded-full bg-white border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:border-slate-300 transition shadow-sm cursor-pointer font-heading"
                   >
@@ -418,7 +320,7 @@ export function Navbar() {
                     className="flex items-center gap-2 rounded-xl bg-[#dc2626] hover:bg-[#b91c1c] text-white px-4 py-2 text-xs font-bold font-heading shadow-sm transition"
                   >
                     <LogIn className="h-3.5 w-3.5" />
-                    <span>Sign In / Register</span>
+                    <span>Sign In</span>
                   </Link>
                 )}
 
@@ -427,29 +329,16 @@ export function Navbar() {
                     <div className="px-3 py-2 border-b border-slate-100 mb-1">
                       <p className="font-bold text-xs text-slate-900 font-heading">{user.name}</p>
                       <p className="text-[10px] text-slate-500 truncate mt-0.5">{user.email}</p>
-                      <span className="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                        {user.role}
-                      </span>
                     </div>
 
                     <div className="space-y-0.5 text-xs">
-                      {isAdmin && (
-                        <Link
-                          href="/admin/dashboard"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-2 rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-50 transition font-medium"
-                        >
-                          <Shield className="h-3.5 w-3.5 text-indigo-600" />
-                          <span>Admin Console</span>
-                        </Link>
-                      )}
                       <Link
-                        href="/settings"
+                        href="/projects"
                         onClick={() => setShowUserMenu(false)}
                         className="flex items-center gap-2 rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-50 transition font-medium"
                       >
-                        <Settings className="h-3.5 w-3.5 text-slate-500" />
-                        <span>Settings & Profile</span>
+                        <FolderKanban className="h-3.5 w-3.5 text-slate-500" />
+                        <span>Projects &amp; Keys</span>
                       </Link>
                       <button
                         type="button"
@@ -516,31 +405,6 @@ export function Navbar() {
                 );
               })}
             </div>
-
-            {isAdmin && (
-              <div className="pt-2 border-t border-slate-100 space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block px-3 mb-1 font-heading">
-                  Admin Console
-                </span>
-                {adminLinks.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                        isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4 text-slate-400" />
-                      <span>{item.name}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
       </nav>

@@ -236,23 +236,21 @@ export default function IncidentDetailsPage() {
           </Link>
 
           <div className="flex items-center gap-3">
-            {user?.role === "Admin" && (
-              <button
-                type="button"
-                onClick={handleRegenerate}
-                disabled={regenerating}
-                className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-100 transition-all font-heading disabled:opacity-50"
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${
-                    regenerating ? "animate-spin text-red-600" : ""
-                  }`}
-                />
-                <span>
-                  {regenerating ? "Regenerating..." : "Regenerate AI Diagnosis"}
-                </span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleRegenerate}
+              disabled={regenerating}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-100 transition-all font-heading disabled:opacity-50 cursor-pointer"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${
+                  regenerating ? "animate-spin text-red-600" : ""
+                }`}
+              />
+              <span>
+                {regenerating ? "Regenerating..." : "Regenerate AI Diagnosis"}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -336,25 +334,23 @@ export default function IncidentDetailsPage() {
                     </div>
                   </div>
 
-                  {user?.role === "Admin" && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleStatusChange("INVESTIGATING")}
-                        className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-all font-heading"
-                      >
-                        Mark Investigating
-                      </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange("INVESTIGATING")}
+                      className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-all font-heading cursor-pointer"
+                    >
+                      Mark Investigating
+                    </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleStatusChange("RESOLVED")}
-                        className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-all font-heading"
-                      >
-                        Mark Resolved
-                      </button>
-                    </div>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange("RESOLVED")}
+                      className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-all font-heading cursor-pointer"
+                    >
+                      Mark Resolved
+                    </button>
+                  </div>
                 </div>
               </div>
 

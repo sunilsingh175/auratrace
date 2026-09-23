@@ -6,18 +6,9 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   FolderKanban,
-  Server,
-  Activity,
   AlertTriangle,
-  ShieldCheck,
-  Users,
-  BarChart3,
-  Settings,
   LogOut,
-  User,
-  Shield,
   LogIn,
-  UserPlus,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { fetchSystemStats } from "@/lib/api-client";
@@ -26,7 +17,6 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const [serviceCount, setServiceCount] = useState<number | null>(null);
   const [openIncidentCount, setOpenIncidentCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -36,7 +26,6 @@ export function Sidebar() {
       try {
         const stats = await fetchSystemStats();
         if (!mounted) return;
-        setServiceCount(stats.active_services_count);
         setOpenIncidentCount(stats.open_incidents_count);
       } catch (error) {
         // Fallback gracefully without throwing
@@ -60,63 +49,19 @@ export function Sidebar() {
       badge: null,
     },
     {
-      name: "Projects & Keys",
-      href: "/projects",
-      icon: FolderKanban,
-      badge: null,
-    },
-    {
-      name: "Services",
-      href: "/services",
-      icon: Server,
-      badge: serviceCount !== null ? String(serviceCount) : null,
-    },
-    {
-      name: "Live Telemetry",
-      href: "/telemetry",
-      icon: Activity,
-      badge: null,
-    },
-    {
-      name: "Incidents",
+      name: "Crashes",
       href: "/incidents",
       icon: AlertTriangle,
       badge: openIncidentCount !== null && openIncidentCount > 0 ? String(openIncidentCount) : null,
     },
-    ...(user
-      ? [
-          {
-            name: "Settings & Profile",
-            href: "/settings",
-            icon: Settings,
-            badge: null,
-          },
-        ]
-      : []),
-  ];
-
-  const adminLinks = [
     {
-      name: "Admin Dashboard",
-      href: "/admin/dashboard",
-      icon: ShieldCheck,
-      badge: null,
-    },
-    {
-      name: "Users & Services",
-      href: "/admin/users-services",
-      icon: Users,
-      badge: null,
-    },
-    {
-      name: "System Monitoring",
-      href: "/admin/monitoring",
-      icon: BarChart3,
+      name: "Projects & Setup",
+      href: "/projects",
+      icon: FolderKanban,
       badge: null,
     },
   ];
 
-  const isAdmin = user?.role === "Admin";
   const userInitials = user?.name
     ? user.name
         .split(" ")
@@ -180,38 +125,6 @@ export function Sidebar() {
             })}
           </nav>
         </div>
-
-        {/* Admin Navigation (Only shown if user is Admin) */}
-        {isAdmin && (
-          <div className="pt-2 border-t border-slate-100">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block px-4 mb-2 font-heading">
-              Admin Console
-            </span>
-            <nav className="space-y-1">
-              {adminLinks.map((item) => {
-                const Icon = item.icon;
-                const isActive = pathname === item.href || pathname?.startsWith(item.href);
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`group flex items-center justify-between rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
-                      isActive
-                        ? "bg-slate-900 text-white"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-slate-400"}`} />
-                      <span>{item.name}</span>
-                    </div>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-        )}
       </div>
 
       {/* Footer / Account Information */}
@@ -235,7 +148,7 @@ export function Sidebar() {
               type="button"
               onClick={logout}
               title="Sign Out"
-              className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+              className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition cursor-pointer"
             >
               <LogOut className="h-4 w-4" />
             </button>
@@ -255,3 +168,5 @@ export function Sidebar() {
     </aside>
   );
 }
+
+export default Sidebar;

@@ -12,7 +12,6 @@ import { PipelineStatusCard } from "@/components/dashboard/PipelineStatusCard";
 import { SummaryMetricCard } from "@/components/dashboard/SummaryMetricCard";
 import { PerformanceChartCard } from "@/components/dashboard/PerformanceChartCard";
 import { ActiveAnomaliesPanel } from "@/components/dashboard/ActiveAnomaliesPanel";
-import { MonitoredServicesPanel } from "@/components/dashboard/MonitoredServicesPanel";
 import { SdkIntegrationCards } from "@/components/dashboard/SdkIntegrationCards";
 import { useWebSocket, type AnomalyAlertEvent } from "@/hooks/use-websocket";
 import {
@@ -68,7 +67,7 @@ export default function DashboardPage() {
   // Listen to live WebSocket events to update dashboard in real-time
   const handleRealtimeAlert = useCallback(
     (alert: AnomalyAlertEvent) => {
-      console.log("[Trace Dashboard] Real-time anomaly received:", alert);
+      console.log("[AuraTrace Dashboard] Real-time anomaly received:", alert);
       void loadDashboardData();
     },
     [loadDashboardData]
@@ -138,7 +137,7 @@ export default function DashboardPage() {
   const errorRateValue =
     rawError !== null ? `${rawError.toFixed(1)}%` : "Unavailable";
 
-  // 4. Active Incidents
+  // 4. Active Crashes & Incidents
   const activeIncidents =
     stats?.open_incidents_count !== undefined
       ? stats.open_incidents_count
@@ -147,7 +146,7 @@ export default function DashboardPage() {
   return (
     <AppShell
       title="Dashboard"
-      subtitle="Real-time overview of your infrastructure and services"
+      subtitle="Real-time telemetry, crash detection, and AI diagnosis"
     >
       <div className="space-y-6 max-w-[1600px] mx-auto pb-6">
         {/* 1. Pipeline Status Card */}
@@ -185,7 +184,7 @@ export default function DashboardPage() {
           />
 
           <SummaryMetricCard
-            title="Active Incidents"
+            title="Active Crashes"
             value={activeIncidents}
             unit="open"
             description="pgvector RAG diagnosis connected"
@@ -198,13 +197,10 @@ export default function DashboardPage() {
         {/* 3. Performance Section: Cluster Performance & Latency Waveform */}
         <PerformanceChartCard data={timeSeries} />
 
-        {/* 4. Active Anomalies & Triage */}
+        {/* 4. Active Crashes & AI Triage */}
         <ActiveAnomaliesPanel incidents={incidents} />
 
-        {/* 5. Monitored Microservices Fleet */}
-        <MonitoredServicesPanel services={services} />
-
-        {/* 6. SDK Integration Cards (Python & Node.js / TypeScript) */}
+        {/* 5. SDK Integration Cards (Python & Node.js / TypeScript) */}
         <SdkIntegrationCards />
       </div>
     </AppShell>
