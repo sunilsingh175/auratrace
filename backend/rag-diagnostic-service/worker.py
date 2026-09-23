@@ -58,7 +58,7 @@ except ImportError:
         import logging
         get_logger = lambda name: logging.getLogger(name)
         from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-        DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres_password_123@postgres-db:5432/auratrace_db")
+        DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres_password_123@postgres-db:5432/trace_db")
         _engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
         AsyncSessionLocal = async_sessionmaker(bind=_engine, class_=AsyncSession, expire_on_commit=False)
 

@@ -5,7 +5,7 @@ Official Python telemetry and unhandled crash diagnostics SDK for Trace.
 ## Quickstart
 
 ```python
-from auratrace import Trace, TraceMiddleware
+from trace_sdk import Trace, TraceMiddleware
 
 # Initialize Trace Client
 trace = Trace(

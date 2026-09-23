@@ -160,7 +160,3 @@ class Trace:
         self._is_running = False
         if self._worker_thread.is_alive():
             self._worker_thread.join(timeout=1.0)
-
-
-# Backward-compatibility alias
-AuraTrace = Trace

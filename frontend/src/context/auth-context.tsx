@@ -27,8 +27,8 @@ interface AuthContextType {
 
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const STORAGE_KEY_USER_SESSION = "auratrace_auth_session_v3";
-const STORAGE_KEY_ACCESS_TOKEN = "auratrace_access_token_v1";
+const STORAGE_KEY_USER_SESSION = "trace_auth_session_v3";
+const STORAGE_KEY_ACCESS_TOKEN = "trace_access_token_v1";
 
 async function authRequest(path: string, body: unknown) {
   const response = await fetch("/api/aura?path=" + encodeURIComponent("auth/" + path), {

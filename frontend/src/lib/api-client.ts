@@ -17,7 +17,7 @@ async function request(path: string, options: RequestInit = {}) {
   headers.set("Content-Type", "application/json");
 
   if (typeof window !== "undefined") {
-    const token = sessionStorage.getItem("auratrace_access_token_v1");
+    const token = sessionStorage.getItem("trace_access_token_v1");
     if (token) headers.set("Authorization", "Bearer " + token);
   }
   return fetch(`${API_BASE_URL}?path=${encodeURIComponent(path.replace(/^\//, ""))}`, {

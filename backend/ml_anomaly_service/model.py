@@ -40,6 +40,8 @@ class AnomalyDetector:
                 self.model = joblib.load(
                     self.model_path_joblib
                 )
+                if hasattr(self.model, "n_jobs"):
+                    self.model.n_jobs = 1
 
                 print(
                     "Loaded Isolation Forest model from "

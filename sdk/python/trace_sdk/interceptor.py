@@ -56,7 +56,3 @@ class TraceMiddleware(BaseHTTPMiddleware):
                 method=method,
             )
             raise exc from None
-
-
-# Backward-compatibility alias
-AuraTraceMiddleware = TraceMiddleware

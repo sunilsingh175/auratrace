@@ -32,7 +32,6 @@ export class Trace {
   }
 }
 
-// Backward-compatibility alias
-export const AuraTrace = Trace;
+export const AutomaticBackendDetection = Trace;
 
 export { BatchTransporter, type TransporterConfig, type TelemetryPayload };

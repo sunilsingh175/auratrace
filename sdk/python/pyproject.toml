@@ -3,10 +3,10 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "auratrace"
+name = "trace-sdk"
 version = "1.0.0"
 authors = [{ name="Sunil Singh", email="sunilsinghrajput192@gmail.com" }]
-description = "Official Python Telemetry & Crash Reporting SDK for Trace"
+description = "Official Python Telemetry & Crash Reporting SDK for Automatic Backend Detection"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

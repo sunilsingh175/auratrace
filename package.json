@@ -1,5 +1,5 @@
 {
   "dependencies": {
-    "@auratrace/node": "file:sdk/nodejs"
+    "@trace/node": "file:sdk/nodejs"
   }
 }

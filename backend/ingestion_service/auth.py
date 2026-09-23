@@ -260,13 +260,13 @@ def _send_otp_email(email: str, otp: str, purpose: str) -> None:
 
 async def _issue_otp(email: str, purpose: str) -> tuple[str, bool]:
     email = email.strip().lower()
-    cooldown_key = f"auratrace:otp:cooldown:{purpose}:{email}"
+    cooldown_key = f"trace:otp:cooldown:{purpose}:{email}"
     if await _redis.exists(cooldown_key):
         raise HTTPException(status_code=429, detail="Please wait before requesting another OTP.")
     otp = f"{secrets.randbelow(1_000_000):06d}"
     digest = hmac.new(AUTH_SECRET.encode(), otp.encode(), hashlib.sha256).hexdigest()
-    otp_key = f"auratrace:otp:{purpose}:{email}"
-    attempts_key = f"auratrace:otp:attempts:{purpose}:{email}"
+    otp_key = f"trace:otp:{purpose}:{email}"
+    attempts_key = f"trace:otp:attempts:{purpose}:{email}"
     await _redis.setex(otp_key, OTP_TTL_SECONDS, digest)
     await _redis.setex(attempts_key, OTP_TTL_SECONDS, "0")
     await _redis.setex(cooldown_key, OTP_RESEND_SECONDS, "1")
@@ -338,7 +338,7 @@ async def login(payload: LoginPayload):
         msg = (
             "A verification code has been sent to activate your account. Please check your inbox."
             if delivered
-            else "Verification code generated. (Check server logs for code: docker logs auratrace-ingestion)"
+            else "Verification code generated. (Check server logs for code: docker logs trace-ingestion)"
         )
         return {
             "otp_required": True,
@@ -382,7 +382,7 @@ async def forgot_password(payload: ForgotPasswordPayload):
     msg = (
         "A 6-digit password reset code has been sent to your email. Please check your inbox."
         if delivered
-        else "Password reset code generated. (Check server logs for code: docker logs auratrace-ingestion)"
+        else "Password reset code generated. (Check server logs for code: docker logs trace-ingestion)"
     )
     return {
         "otp_required": True,
@@ -396,8 +396,8 @@ async def forgot_password(payload: ForgotPasswordPayload):
 async def reset_password(payload: ResetPasswordPayload):
     _require_config()
     email = payload.email.strip().lower()
-    key = f"auratrace:otp:reset_password:{email}"
-    attempts_key = f"auratrace:otp:attempts:reset_password:{email}"
+    key = f"trace:otp:reset_password:{email}"
+    attempts_key = f"trace:otp:attempts:reset_password:{email}"
     expected = await _redis.get(key)
     if not expected:
         raise HTTPException(status_code=401, detail="Invalid or expired OTP.")
@@ -434,8 +434,8 @@ async def reset_password(payload: ResetPasswordPayload):
 async def verify_otp(payload: VerifyOtpPayload):
     _require_config()
     email = payload.email.strip().lower()
-    key = f"auratrace:otp:{payload.purpose}:{email}"
-    attempts_key = f"auratrace:otp:attempts:{payload.purpose}:{email}"
+    key = f"trace:otp:{payload.purpose}:{email}"
+    attempts_key = f"trace:otp:attempts:{payload.purpose}:{email}"
     expected = await _redis.get(key)
     if not expected:
         raise HTTPException(status_code=401, detail="Invalid or expired OTP.")
@@ -636,7 +636,7 @@ async def resend_otp(payload: ResendOtpPayload):
     msg = (
         "A new verification code has been sent to your email. Please check your inbox."
         if delivered
-        else "A new verification code was generated. (Check server logs for code: docker logs auratrace-ingestion)"
+        else "A new verification code was generated. (Check server logs for code: docker logs trace-ingestion)"
     )
     return {
         "message": msg,

@@ -24,7 +24,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
 )
 
-logger = logging.getLogger("auratrace-model-training")
+logger = logging.getLogger("trace-model-training")
 
 
 BASE_DIR = Path(__file__).resolve().parent

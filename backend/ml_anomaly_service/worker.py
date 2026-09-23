@@ -32,12 +32,12 @@ logging.basicConfig(
     level=logging.INFO,
     format=(
         "%(asctime)s | %(levelname)s | "
-        "auratrace-ml-worker | %(message)s"
+        "trace-ml-worker | %(message)s"
     ),
 )
 
 logger = logging.getLogger(
-    "auratrace-ml-worker"
+    "trace-ml-worker"
 )
 
 
@@ -64,7 +64,7 @@ STREAM_KEY = os.getenv(
 
 CONSUMER_GROUP = os.getenv(
     "REDIS_CONSUMER_GROUP",
-    "auratrace_workers",
+    "trace_workers",
 )
 
 CONSUMER_NAME = os.getenv(

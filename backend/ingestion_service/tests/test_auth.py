@@ -119,8 +119,8 @@ async def test_registration_otp_activates_pending_user(monkeypatch):
     conn = FakeConn(user)
     monkeypatch.setattr(auth, "_engine", FakeEngine(conn))
 
-    await redis.setex("auratrace:otp:register:dev@example.com", 300, otp_digest("123456"))
-    await redis.setex("auratrace:otp:attempts:register:dev@example.com", 300, "0")
+    await redis.setex("trace:otp:register:dev@example.com", 300, otp_digest("123456"))
+    await redis.setex("trace:otp:attempts:register:dev@example.com", 300, "0")
 
     result = await auth.verify_otp(
         auth.VerifyOtpPayload(
@@ -204,7 +204,7 @@ async def test_expired_otp_is_rejected(monkeypatch):
     redis = FakeRedis()
     monkeypatch.setattr(auth, "_redis", redis)
 
-    key = "auratrace:otp:login:dev@example.com"
+    key = "trace:otp:login:dev@example.com"
     await redis.setex(key, -1, otp_digest("123456"))
 
     with pytest.raises(HTTPException) as exc:
@@ -223,8 +223,8 @@ async def test_wrong_otp_is_rejected_and_fifth_attempt_locks_code(monkeypatch):
     redis = FakeRedis()
     monkeypatch.setattr(auth, "_redis", redis)
 
-    key = "auratrace:otp:login:dev@example.com"
-    attempts_key = "auratrace:otp:attempts:login:dev@example.com"
+    key = "trace:otp:login:dev@example.com"
+    attempts_key = "trace:otp:attempts:login:dev@example.com"
     await redis.setex(key, 300, otp_digest("123456"))
     await redis.setex(attempts_key, 300, "0")
 

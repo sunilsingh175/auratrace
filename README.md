@@ -96,7 +96,7 @@ docker compose up -d --build
 * **Live Monitoring Dashboard:** http://localhost:3000
 * **Ingestion Gateway OpenAPI Docs:** http://localhost:8000/docs
 * **Canonical WebSocket Stream:** ws://localhost:8000/ws/telemetry (aliases: /ws, /api/v1/ws)
-* **PostgreSQL pgvector Database:** localhost:5432 (auratrace_db)
+* **PostgreSQL pgvector Database:** localhost:5432 (trace_db)
 * **Redis Stream Broker:** localhost:6379 (telemetry_stream)
 
 ---
@@ -150,7 +150,7 @@ These measurements demonstrate asynchronous Redis buffering and eventual persist
 ## Repository Structure
 
 ```text
-auratrace/
+trace/
 ├── docker-compose.yml
 ├── .env.example
 ├── README.md

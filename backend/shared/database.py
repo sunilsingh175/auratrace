@@ -30,7 +30,7 @@ from pgvector.sqlalchemy import Vector
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres_password_123@localhost:5432/auratrace_db",
+    "postgresql+asyncpg://postgres:postgres_password_123@localhost:5432/trace_db",
 )
 
 

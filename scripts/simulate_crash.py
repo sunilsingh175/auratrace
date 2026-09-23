@@ -60,8 +60,8 @@ CRASH_SCENARIOS = [
         "message": "java.lang.OutOfMemoryError: Java heap space during batch checkout aggregation",
         "stack_trace": (
             "Exception in thread 'http-nio-8080-exec-4' java.lang.OutOfMemoryError: Java heap space\n"
-            "\tat com.auratrace.orders.BatchProcessor.process(BatchProcessor.java:94)\n"
-            "\tat com.auratrace.orders.CheckoutController.checkout(CheckoutController.java:42)"
+            "\tat com.trace.orders.BatchProcessor.process(BatchProcessor.java:94)\n"
+            "\tat com.trace.orders.CheckoutController.checkout(CheckoutController.java:42)"
         ),
         "status_code": 500,
         "latency_ms": 5000.0,

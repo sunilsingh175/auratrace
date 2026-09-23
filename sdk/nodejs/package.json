@@ -1,8 +1,8 @@
 {
-  "name": "@auratrace/node",
+  "name": "@trace/node",
   "version": "1.0.0",
   "type": "module",
-  "description": "Official Node.js Telemetry & Crash Diagnostic SDK for Trace",
+  "description": "Official Node.js Telemetry & Crash Diagnostic SDK for Automatic Backend Detection",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -14,7 +14,7 @@
     "apm",
     "telemetry",
     "tracing",
-    "auratrace",
+    "trace",
     "crash-reporting"
   ],
   "author": "Sunil Singh <sunilsinghrajput192@gmail.com>",

@@ -1,5 +1,5 @@
 """
-AuraTrace Full End-to-End Live Verification Suite
+Automatic Backend Detection Full End-to-End Live Verification Suite
 Validates:
 1. User registration, Login & JWT verification (auth.py get_current_user id::text match)
 2. Protected endpoint /api/v1/auth/me
@@ -99,7 +99,7 @@ def http_delete(url, **kwargs):
 
 def run_tests():
     print("=" * 70)
-    print("   AURATRACE COMPREHENSIVE LIVE RUNTIME & PIPELINE VERIFICATION")
+    print("   AUTOMATIC BACKEND DETECTION LIVE RUNTIME & PIPELINE VERIFICATION")
     print("=" * 70)
 
     test_dev_id = str(uuid.uuid4())
@@ -110,14 +110,14 @@ def run_tests():
         # 1. Database User Setup & /me Authentication Test
         print("\n--- STEP 1: Testing Auth & JWT /me Endpoint (UUID cast fix) ---")
         setup_sql = f"""
-        DELETE FROM users WHERE email IN ('livedev@auratrace.io', 'liveadmin@auratrace.io');
+        DELETE FROM users WHERE email IN ('livedev@trace.io', 'liveadmin@trace.io');
         INSERT INTO users (id, name, email, password_hash, password_salt, role, status)
         VALUES 
-          ('{test_dev_id}', 'Live Dev User', 'livedev@auratrace.io', 'dummy_hash', 'dummy_salt', 'Developer', 'Active'),
-          ('{test_admin_id}', 'Live Admin User', 'liveadmin@auratrace.io', 'dummy_hash', 'dummy_salt', 'Admin', 'Active');
+          ('{test_dev_id}', 'Live Dev User', 'livedev@trace.io', 'dummy_hash', 'dummy_salt', 'Developer', 'Active'),
+          ('{test_admin_id}', 'Live Admin User', 'liveadmin@trace.io', 'dummy_hash', 'dummy_salt', 'Admin', 'Active');
         """
         res = subprocess.run(
-            ['docker', 'compose', 'exec', '-T', 'postgres-db', 'psql', '-U', 'postgres', '-d', 'auratrace_db', '-c', setup_sql],
+            ['docker', 'compose', 'exec', '-T', 'postgres-db', 'psql', '-U', 'postgres', '-d', 'trace_db', '-c', setup_sql],
             capture_output=True, text=True
         )
         if res.returncode != 0:
@@ -162,7 +162,7 @@ def run_tests():
         # Verify in DB that api_key_hash is SHA-256 hash (64 hex characters) and NOT the raw key
         expected_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
         check_hash_cmd = subprocess.run(
-            ['docker', 'compose', 'exec', '-T', 'postgres-db', 'psql', '-U', 'postgres', '-d', 'auratrace_db', '-t', '-A', '-c',
+            ['docker', 'compose', 'exec', '-T', 'postgres-db', 'psql', '-U', 'postgres', '-d', 'trace_db', '-t', '-A', '-c',
              f"SELECT api_key_hash FROM services WHERE name = '{srv_name}';"],
             capture_output=True, text=True
         )
@@ -278,10 +278,10 @@ def run_tests():
         print("\n--- CLEANUP: Cleaning up temporary verification records ---")
         cleanup_sql = f"""
         DELETE FROM services WHERE name = '{srv_name}' OR name LIKE 'verify-payment-%';
-        DELETE FROM users WHERE email IN ('livedev@auratrace.io', 'liveadmin@auratrace.io');
+        DELETE FROM users WHERE email IN ('livedev@trace.io', 'liveadmin@trace.io');
         """
         subprocess.run(
-            ['docker', 'compose', 'exec', '-T', 'postgres-db', 'psql', '-U', 'postgres', '-d', 'auratrace_db', '-c', cleanup_sql],
+            ['docker', 'compose', 'exec', '-T', 'postgres-db', 'psql', '-U', 'postgres', '-d', 'trace_db', '-c', cleanup_sql],
             capture_output=True, text=True
         )
         print("  ✓ Cleaned up verification records.")

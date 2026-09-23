@@ -4,7 +4,7 @@ services:
   # ============================================================================
   postgres-db:
     image: pgvector/pgvector:pg16
-    container_name: auratrace-postgres
+    container_name: trace-postgres
     restart: unless-stopped
 
     environment:
@@ -29,14 +29,14 @@ services:
       start_period: 10s
 
     networks:
-      - auratrace-net
+      - trace-net
 
   # ============================================================================
   # Redis 7.2
   # ============================================================================
   redis-broker:
     image: redis:7.2-alpine
-    container_name: auratrace-redis
+    container_name: trace-redis
     restart: unless-stopped
 
     command:
@@ -58,7 +58,7 @@ services:
       start_period: 5s
 
     networks:
-      - auratrace-net
+      - trace-net
 
   # ============================================================================
   # FastAPI Ingestion Gateway
@@ -68,7 +68,7 @@ services:
       context: .
       dockerfile: backend/ingestion_service/Dockerfile
 
-    container_name: auratrace-ingestion
+    container_name: trace-ingestion
     restart: unless-stopped
 
     environment:
@@ -108,7 +108,7 @@ services:
         condition: service_healthy
 
     networks:
-      - auratrace-net
+      - trace-net
 
   # ============================================================================
   # ML Anomaly Detection Worker
@@ -118,7 +118,7 @@ services:
       context: .
       dockerfile: backend/ml_anomaly_service/Dockerfile
 
-    container_name: auratrace-ml-worker
+    container_name: trace-ml-worker
     restart: unless-stopped
 
     environment:
@@ -146,7 +146,7 @@ services:
         condition: service_healthy
 
     networks:
-      - auratrace-net
+      - trace-net
 
   # ============================================================================
   # RAG AI Diagnostic Doctor
@@ -156,7 +156,7 @@ services:
       context: .
       dockerfile: backend/rag-diagnostic-service/Dockerfile
 
-    container_name: auratrace-rag-doctor
+    container_name: trace-rag-doctor
     restart: unless-stopped
 
     environment:
@@ -180,7 +180,7 @@ services:
         condition: service_healthy
 
     networks:
-      - auratrace-net
+      - trace-net
 
   # ============================================================================
   # Next.js Frontend
@@ -190,7 +190,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
 
-    container_name: auratrace-frontend
+    container_name: trace-frontend
     restart: unless-stopped
 
     ports:
@@ -211,14 +211,14 @@ services:
         condition: service_started
 
     networks:
-      - auratrace-net
+      - trace-net
 
 # ==============================================================================
 # Network
 # ==============================================================================
 
 networks:
-  auratrace-net:
+  trace-net:
     driver: bridge
 
 # ==============================================================================

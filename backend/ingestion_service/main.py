@@ -44,9 +44,9 @@ except ImportError:
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | auratrace-ingestion | %(message)s",
+    format="%(asctime)s | %(levelname)s | trace-ingestion | %(message)s",
 )
-logger = logging.getLogger("auratrace-ingestion")
+logger = logging.getLogger("trace-ingestion")
 
 # ============================================================
 # Environment & Configuration
@@ -55,7 +55,7 @@ logger = logging.getLogger("auratrace-ingestion")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis-broker")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 STREAM_KEY = os.getenv("REDIS_STREAM_KEY", "telemetry_stream")
-CONSUMER_GROUP = os.getenv("REDIS_CONSUMER_GROUP", "auratrace_workers")
+CONSUMER_GROUP = os.getenv("REDIS_CONSUMER_GROUP", "trace_workers")
 REDIS_ANOMALY_CHANNEL = os.getenv("REDIS_ANOMALY_CHANNEL", "anomaly_events")
 MASTER_API_KEY = os.getenv("AURA_MASTER_API_KEY", "")
 ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "true").lower() in ("true", "1", "yes")
@@ -348,7 +348,7 @@ body, .swagger-ui {
 }
 
 /* Custom Header Banner */
-.auratrace-nav-banner {
+.trace-nav-banner {
   background: linear-gradient(135deg, #0f172a 0%, #080c14 100%);
   border-bottom: 1px solid #1e293b;
   padding: 16px 36px;
@@ -362,14 +362,14 @@ body, .swagger-ui {
   backdrop-filter: blur(12px);
 }
 
-.auratrace-brand {
+.trace-brand {
   display: flex;
   align-items: center;
   gap: 12px;
   text-decoration: none;
 }
 
-.auratrace-logo-icon {
+.trace-logo-icon {
   width: 36px;
   height: 36px;
   border-radius: 10px;
@@ -380,14 +380,14 @@ body, .swagger-ui {
   box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
 }
 
-.auratrace-title {
+.trace-title {
   font-size: 18px;
   font-weight: 800;
   color: #ffffff;
   letter-spacing: -0.5px;
 }
 
-.auratrace-badge {
+.trace-badge {
   background: rgba(6, 182, 212, 0.15);
   border: 1px solid rgba(6, 182, 212, 0.3);
   color: #22d3ee;
@@ -399,13 +399,13 @@ body, .swagger-ui {
   margin-left: 6px;
 }
 
-.auratrace-nav-links {
+.trace-nav-links {
   display: flex;
   align-items: center;
   gap: 16px;
 }
 
-.auratrace-link {
+.trace-link {
   color: #94a3b8;
   text-decoration: none;
   font-size: 12px;
@@ -417,20 +417,20 @@ body, .swagger-ui {
   transition: all 0.2s ease;
 }
 
-.auratrace-link:hover {
+.trace-link:hover {
   color: #38bdf8;
   border-color: #38bdf8;
   background: #1e293b;
 }
 
-.auratrace-link.primary {
+.trace-link.primary {
   background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
   color: #ffffff;
   border: none;
   box-shadow: 0 0 15px rgba(37, 99, 235, 0.3);
 }
 
-.auratrace-link.primary:hover {
+.trace-link.primary:hover {
   background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%);
 }
 
@@ -664,30 +664,30 @@ SWAGGER_CUSTOM_JS = """
 window.addEventListener('DOMContentLoaded', () => {
   // Inject custom top navigation bar
   const nav = document.createElement('div');
-  nav.className = 'auratrace-nav-banner';
+  nav.className = 'trace-nav-banner';
   nav.innerHTML = `
-    <a href="/docs" class="auratrace-brand">
-      <div class="auratrace-logo-icon">
+    <a href="/docs" class="trace-brand">
+      <div class="trace-logo-icon">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
         </svg>
       </div>
       <div>
-        <span class="auratrace-title">Automatic Backend Diagnostics</span>
-        <span class="auratrace-badge">v1.2 Live</span>
+        <span class="trace-title">Automatic Backend Diagnostics</span>
+        <span class="trace-badge">v1.2 Live</span>
       </div>
     </a>
-    <div class="auratrace-nav-links">
-      <a href="http://localhost:3000/dashboard" target="_blank" class="auratrace-link primary">
+    <div class="trace-nav-links">
+      <a href="http://localhost:3000/dashboard" target="_blank" class="trace-link primary">
         📊 Frontend Dashboard (Port 3000) ↗
       </a>
-      <a href="/scalar" class="auratrace-link">
+      <a href="/scalar" class="trace-link">
         ⚡ Scalar UI
       </a>
-      <a href="/redoc" class="auratrace-link">
+      <a href="/redoc" class="trace-link">
         📖 ReDoc
       </a>
-      <a href="/api/v1/health" target="_blank" class="auratrace-link">
+      <a href="/api/v1/health" target="_blank" class="trace-link">
         🟢 Health
       </a>
     </div>
@@ -706,7 +706,7 @@ async def custom_swagger_ui_html():
     <meta charset="UTF-8">
     <title>Trace Ingestion Gateway | API Documentation</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" href="https://raw.githubusercontent.com/sunilsingh175/auratrace/complete-aura-trace/frontend/public/favicon.ico">
+    <link rel="icon" href="/favicon.ico">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -748,7 +748,7 @@ async def custom_redoc_html():
     return get_redoc_html(
         openapi_url=app.openapi_url,
         title="Trace Telemetry Specs | ReDoc",
-        redoc_favicon_url="https://raw.githubusercontent.com/sunilsingh175/auratrace/complete-aura-trace/frontend/public/favicon.ico",
+        redoc_favicon_url="/favicon.ico",
     )
 
 @app.get("/scalar", include_in_schema=False)
@@ -761,7 +761,7 @@ async def scalar_docs():
     <title>Trace API Reference | Scalar</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" href="https://raw.githubusercontent.com/sunilsingh175/auratrace/complete-aura-trace/frontend/public/favicon.ico" />
+    <link rel="icon" href="/favicon.ico" />
   </head>
   <body>
     <script
