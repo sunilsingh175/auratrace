@@ -13,5 +13,8 @@ dependencies = [
     "httpx>=0.24.0",
 ]
 
+[tool.setuptools]
+packages = ["auratrace", "trace_sdk"]
+
 [project.urls]
 "Homepage" = "https://github.com/sunilsingh175/auratrace"
