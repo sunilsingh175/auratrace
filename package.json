@@ -1,5 +1,8 @@
 {
+  "name": "auratrace-workspace",
+  "version": "2.0.0",
+  "type": "module",
   "dependencies": {
-    "@trace/node": "file:sdk/nodejs"
+    "@auratrace/node": "file:sdk/nodejs"
   }
 }

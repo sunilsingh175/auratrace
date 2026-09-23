@@ -107,6 +107,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           const data = raw.data || raw;
           const eventType = raw.type || raw.event;
 
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("aura:telemetry_event", {
+                detail: { type: eventType, data },
+              })
+            );
+            if (eventType === "INCIDENT_DIAGNOSED") {
+              window.dispatchEvent(
+                new CustomEvent("aura:incident_diagnosed", { detail: data })
+              );
+            }
+          }
+
           if (
             eventType === "ANOMALY_ALERT" ||
             eventType === "ANOMALY_DETECTED" ||

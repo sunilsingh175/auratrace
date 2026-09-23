@@ -1,0 +1,19 @@
+{
+  "include": [
+    "backend",
+    "sdk/python",
+    "scripts"
+  ],
+  "extraPaths": [
+    "sdk/python",
+    "backend",
+    "backend/shared",
+    "backend/ingestion_service",
+    "backend/ml_anomaly_service",
+    "backend/rag-diagnostic-service"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "off"
+}

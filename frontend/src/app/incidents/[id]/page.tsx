@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
@@ -8,16 +8,13 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
-  Clock3,
   RefreshCw,
   Sparkles,
   Copy,
   Check,
   Terminal,
   Database,
-  Layers,
   FileCode,
-  ShieldAlert,
 } from "lucide-react";
 
 import {
@@ -46,6 +43,7 @@ export default function IncidentDetailsPage() {
   const [incident, setIncident] = useState<Incident | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedPatch, setCopiedPatch] = useState(false);
   const [copiedTrace, setCopiedTrace] = useState(false);
@@ -75,6 +73,89 @@ export default function IncidentDetailsPage() {
     loadIncident();
   }, [loadIncident]);
 
+  const data = incident as any;
+  const rootCause = String(data?.ai_root_cause || data?.root_cause || "").trim();
+  const recoveryPatch = String(
+    data?.ai_suggested_patch ||
+      data?.suggested_patch ||
+      data?.ai_recommended_fix ||
+      data?.code_diff ||
+      ""
+  ).trim();
+
+  const diagnosed = Boolean(
+    data?.is_diagnosed &&
+      (rootCause || recoveryPatch) &&
+      !rootCause.includes("processing in background")
+  );
+
+  // Auto-poll every 1.5s until Gemini RAG diagnosis is completed
+  useEffect(() => {
+    if (loading || !incident || diagnosed) return;
+
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts += 1;
+      if (attempts > 30) {
+        clearInterval(interval);
+        return;
+      }
+
+      try {
+        const fresh = await fetchIncidentById(incidentId);
+        if (!fresh) return;
+
+        const fData = fresh as any;
+        const fRoot = String(fData?.ai_root_cause || fData?.root_cause || "").trim();
+        const fPatch = String(
+          fData?.ai_suggested_patch ||
+            fData?.suggested_patch ||
+            fData?.ai_recommended_fix ||
+            fData?.code_diff ||
+            ""
+        ).trim();
+
+        const isNowDiagnosed = Boolean(
+          fData.is_diagnosed &&
+            (fRoot || fPatch) &&
+            !fRoot.includes("processing in background")
+        );
+
+        if (isNowDiagnosed || fRoot || fPatch) {
+          setIncident(fresh);
+          if (isNowDiagnosed) {
+            clearInterval(interval);
+          }
+        }
+      } catch (err) {
+        // Silently continue polling
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [loading, incident, diagnosed, incidentId]);
+
+  // Listen to WebSocket events dispatched from notification context
+  useEffect(() => {
+    const handleEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const detail = customEvent?.detail;
+      const incomingId = detail?.data?.incident_id || detail?.incident_id || detail?.id;
+
+      if (!incomingId || incomingId === incidentId) {
+        loadIncident();
+      }
+    };
+
+    window.addEventListener("aura:incident_diagnosed", handleEvent);
+    window.addEventListener("aura:telemetry_event", handleEvent);
+
+    return () => {
+      window.removeEventListener("aura:incident_diagnosed", handleEvent);
+      window.removeEventListener("aura:telemetry_event", handleEvent);
+    };
+  }, [incidentId, loadIncident]);
+
   const handleRegenerate = useCallback(async () => {
     if (!incident?.id || regenerating) return;
 
@@ -85,25 +166,30 @@ export default function IncidentDetailsPage() {
       await regenerateIncidentDiagnosis(incident.id);
 
       for (let attempt = 0; attempt < 15; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 1500));
 
         try {
           const freshIncident = await fetchIncidentById(incident.id);
           if (!freshIncident) continue;
 
-          setIncident(freshIncident);
-          const data = freshIncident as any;
-          const diagnosed = Boolean(data.is_diagnosed);
-          const rootCause = String(data.ai_root_cause || "").trim();
-          const patch = String(
-            data.ai_suggested_patch ||
-              data.ai_recommended_fix ||
-              data.code_diff ||
+          const fData = freshIncident as any;
+          const fRoot = String(fData.ai_root_cause || "").trim();
+          const fPatch = String(
+            fData.ai_suggested_patch ||
+              fData.ai_recommended_fix ||
+              fData.code_diff ||
               ""
           ).trim();
 
-          if (diagnosed || rootCause || patch) {
-            break;
+          const isNowDiagnosed = Boolean(
+            fData.is_diagnosed && (fRoot || fPatch) && !fRoot.includes("processing in background")
+          );
+
+          if (isNowDiagnosed || fRoot || fPatch) {
+            setIncident(freshIncident);
+            if (isNowDiagnosed) {
+              break;
+            }
           }
         } catch (pollError) {
           console.error("Crash diagnosis polling error:", pollError);
@@ -118,12 +204,17 @@ export default function IncidentDetailsPage() {
   }, [incident, regenerating]);
 
   const handleStatusChange = useCallback(
-    async (status: "OPEN" | "INVESTIGATING" | "RESOLVED") => {
-      if (!incident?.id) return;
+    async (newStatus: "OPEN" | "INVESTIGATING" | "RESOLVED") => {
+      if (!incident?.id || updatingStatus) return;
+
+      setUpdatingStatus(true);
+      setError(null);
+
+      // Optimistic update
+      setIncident((prev: any) => (prev ? { ...prev, status: newStatus } : prev));
 
       try {
-        setError(null);
-        await updateIncidentStatus(incident.id, status);
+        await updateIncidentStatus(incident.id, newStatus);
         const freshIncident = await fetchIncidentById(incident.id);
         if (freshIncident) {
           setIncident(freshIncident);
@@ -131,12 +222,12 @@ export default function IncidentDetailsPage() {
       } catch (err) {
         console.error("Failed to update status:", err);
         setError("Unable to update crash status.");
+      } finally {
+        setUpdatingStatus(false);
       }
     },
-    [incident]
+    [incident, updatingStatus]
   );
-
-  const data = incident as any;
 
   const appName = String(data?.service_id || "Unknown application");
   const errorType = String(data?.error_type || "ApplicationException");
@@ -154,21 +245,10 @@ export default function IncidentDetailsPage() {
     data?.stack_trace || data?.raw_stack_trace || "No stack trace available for this event."
   ).trim();
 
-  const rootCause = String(data?.ai_root_cause || data?.root_cause || "").trim();
-
-  const recoveryPatch = String(
-    data?.ai_suggested_patch ||
-      data?.suggested_patch ||
-      data?.ai_recommended_fix ||
-      data?.code_diff ||
-      ""
-  ).trim();
-
   const historicalMatches = Array.isArray(data?.similar_incidents)
     ? data.similar_incidents
     : [];
 
-  const diagnosed = Boolean(data?.is_diagnosed || rootCause || recoveryPatch);
   const status = String(data?.status || "OPEN");
 
   const copyPatchToClipboard = async () => {
@@ -225,18 +305,29 @@ export default function IncidentDetailsPage() {
               <button
                 type="button"
                 onClick={() => handleStatusChange("RESOLVED")}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition font-heading cursor-pointer"
+                disabled={updatingStatus}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition font-heading cursor-pointer disabled:opacity-50"
               >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>Mark Resolved</span>
+                {updatingStatus ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+                <span>{updatingStatus ? "Resolving..." : "Mark Resolved"}</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => handleStatusChange("OPEN")}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition font-heading cursor-pointer"
+                disabled={updatingStatus}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition font-heading cursor-pointer disabled:opacity-50"
               >
-                <span>Re-open Crash</span>
+                {updatingStatus ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-500" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
+                )}
+                <span>{updatingStatus ? "Updating..." : "Re-open Crash"}</span>
               </button>
             )}
           </div>
@@ -271,6 +362,18 @@ export default function IncidentDetailsPage() {
             <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <SeverityBadge severity={data?.severity || "high"} />
+                {status === "RESOLVED" ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 font-heading">
+                    <CheckCircle2 className="h-3 w-3" />
+                    RESOLVED
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-[10px] font-bold text-rose-700 font-heading">
+                    <AlertTriangle className="h-3 w-3" />
+                    ACTIVE CRASH
+                  </span>
+                )}
+                <span className="text-slate-300">•</span>
                 <span className="text-[11px] text-slate-400 font-sans">
                   Detected at {formatTime(data?.created_at)}
                 </span>
@@ -299,33 +402,48 @@ export default function IncidentDetailsPage() {
             <div className="panel p-6 bg-white border-red-100 shadow-[0_4px_20px_-4px_rgba(220,38,38,0.05)]">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-red-600" />
+                  <Sparkles className={`h-5 w-5 text-red-600 ${!diagnosed ? "animate-pulse" : ""}`} />
                   <h2 className="text-sm font-bold font-heading text-slate-900 uppercase tracking-wider">
                     AI Diagnosis: What Happened &amp; Why
                   </h2>
                 </div>
-                {diagnosed && (
+                {diagnosed ? (
                   <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
                     <CheckCircle2 className="h-3 w-3" />
                     pgvector + Gemini Analysis
                   </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                    Gemini AI Analyzing...
+                  </span>
                 )}
               </div>
 
-              {rootCause ? (
-                <div className="rounded-xl bg-red-50/30 border border-red-100/80 p-4 text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
+              {diagnosed && rootCause ? (
+                <div className="rounded-xl bg-red-50/30 border border-red-100/80 p-4 text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-wrap animate-fadeIn">
                   {rootCause}
                 </div>
               ) : (
-                <div className="rounded-xl bg-slate-50 p-6 text-center text-xs text-slate-400 font-sans">
-                  AI diagnosis is currently processing for this crash event.
+                <div className="rounded-xl bg-slate-50 border border-slate-100 p-6 text-center text-xs font-sans">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-red-50 text-red-600 border border-red-100">
+                      <Sparkles className="h-5 w-5 animate-spin text-red-600" />
+                    </div>
+                    <p className="font-bold text-slate-800 font-heading text-sm mt-1">
+                      AI Doctor is diagnosing root cause...
+                    </p>
+                    <p className="text-slate-500 text-xs max-w-md">
+                      Retrieving similar historical crashes via pgvector and synthesizing Gemini recovery patch. Auto-refreshing in real-time...
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* 3. Recommended Code Fix & Patch */}
-            {recoveryPatch && (
-              <div className="panel p-6 bg-slate-950 border-slate-900 text-white shadow-xl">
+            {diagnosed && recoveryPatch ? (
+              <div className="panel p-6 bg-slate-950 border-slate-900 text-white shadow-xl animate-fadeIn">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
                   <div className="flex items-center gap-2">
                     <FileCode className="h-5 w-5 text-emerald-400" />
@@ -362,11 +480,30 @@ export default function IncidentDetailsPage() {
                   <pre className="whitespace-pre-wrap">{recoveryPatch}</pre>
                 </div>
               </div>
-            )}
+            ) : !diagnosed ? (
+              <div className="panel p-6 bg-slate-950 border-slate-900 text-white shadow-xl">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <FileCode className="h-5 w-5 text-slate-400 animate-pulse" />
+                    <div>
+                      <h2 className="text-sm font-bold font-heading text-white">
+                        Recommended Code Fix
+                      </h2>
+                      <p className="text-[11px] text-slate-400 font-sans">
+                        Generating remediation patch in background...
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 font-mono text-xs text-slate-400 text-center animate-pulse">
+                  // Remediation patch will appear here automatically when Gemini completes analysis...
+                </div>
+              </div>
+            ) : null}
 
             {/* 4. Similar Historical Errors (pgvector RAG) */}
             {historicalMatches.length > 0 && (
-              <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
+              <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] animate-fadeIn">
                 <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
                   <Database className="h-4 w-4 text-slate-500" />
                   <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-heading">

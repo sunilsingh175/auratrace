@@ -103,7 +103,7 @@ export function AuthForm({ initialTab = "login" }: AuthFormProps) {
       if (result.success) {
         setSuccessMessage("Account verification successful! Redirecting to platform...");
         setTimeout(() => {
-          router.push(result.role === "Admin" ? "/admin/dashboard" : "/dashboard");
+          router.push(result.role === "Admin" ? "/admin" : "/dashboard");
         }, 500);
       } else {
         setErrorMessage(result.error || "Invalid or expired OTP code.");
@@ -134,7 +134,7 @@ export function AuthForm({ initialTab = "login" }: AuthFormProps) {
     } else if (result.success) {
       setSuccessMessage("Authentication successful! Redirecting to Dashboard...");
       setTimeout(() => {
-        router.push(result.role === "Admin" ? "/admin/dashboard" : "/dashboard");
+        router.push(result.role === "Admin" ? "/admin" : "/dashboard");
       }, 500);
     } else {
       setErrorMessage(typeof result.error === "string" ? result.error : "Invalid email or password.");

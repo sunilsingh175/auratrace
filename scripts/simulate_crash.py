@@ -14,10 +14,27 @@ from datetime import datetime, timezone
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATASET_PATH = os.path.join(BASE_DIR, "datasets", "HDFS_v1", "HDFS.log")
+def _load_env():
+    candidates = [
+        ".env",
+        os.path.join(os.path.dirname(__file__), "..", ".env"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            with open(candidate, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k not in os.environ:
+                            os.environ[k] = v
+
+_load_env()
+
 INGESTION_URL = os.getenv("INGESTION_URL", "http://127.0.0.1:8000/api/v1/telemetry")
-API_KEY = os.getenv("AURA_MASTER_API_KEY") or os.getenv("AURA_API_KEY") or ""
+API_KEY = os.getenv("AURA_MASTER_API_KEY") or os.getenv("AURATRACE_API_KEY") or os.getenv("AURA_API_KEY") or ""
 
 SERVICES = [
     "payment-service",
@@ -34,7 +51,7 @@ CRASH_SCENARIOS = [
         "message": "sqlalchemy.exc.TimeoutError: QueuePool limit of size 10 overflow 10 reached, connection timed out",
         "stack_trace": (
             "Traceback (most recent call last):\n"
-            '  File "/app/services/payment.py", line 142, in process_charge\n'
+            '  File "services/payment.py", line 142, in process_charge\n'
             "    db = engine.connect()\n"
             "sqlalchemy.exc.TimeoutError: QueuePool limit exceeded"
         ),
@@ -47,7 +64,7 @@ CRASH_SCENARIOS = [
         "message": "redis.exceptions.ConnectionError: Error 111 connecting to redis-broker:6379. Connection refused.",
         "stack_trace": (
             "Traceback (most recent call last):\n"
-            '  File "/app/services/session.py", line 88, in get_session\n'
+            '  File "services/session.py", line 88, in get_session\n'
             "    user_data = redis_client.get(session_token)\n"
             "redis.exceptions.ConnectionError: Connection refused"
         ),
@@ -102,9 +119,8 @@ def generate_synthetic_telemetry(idx: int):
 
 def stream_logs(max_lines=150):
     if not API_KEY:
-        print("[!] ERROR: No API key provided.")
-        print("[!] Please configure AURA_MASTER_API_KEY or AURA_API_KEY environment variable before running.")
-        print("[!] Example: export AURA_MASTER_API_KEY=\"your_key_here\" (or in PowerShell: $env:AURA_MASTER_API_KEY=\"your_key_here\")")
+        print("[!] ERROR: No API key found.")
+        print("[!] Please configure AURA_MASTER_API_KEY or AURATRACE_API_KEY in environment or .env")
         sys.exit(1)
 
     headers = {
@@ -112,9 +128,8 @@ def stream_logs(max_lines=150):
         "X-API-Key": API_KEY,
     }
 
-    use_file = os.path.exists(DATASET_PATH)
-    print(f"[*] Starting Automatic Backend Detection telemetry stream to {INGESTION_URL}")
-    print(f"[*] Mode: {'Dataset File (' + DATASET_PATH + ')' if use_file else 'Standalone Synthetic Generator'}")
+    print(f"[*] Starting telemetry stream to {INGESTION_URL}")
+    print(f"[*] Mode: Standalone Synthetic Anomaly Generator")
 
     for idx in range(max_lines):
         payload, is_error = generate_synthetic_telemetry(idx)

@@ -3,9 +3,43 @@
  * Demonstrates zero-config auto-discovery, telemetry streaming, and automated exception capture.
  */
 
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { AuraTrace } from "../sdk/nodejs/dist/index.js";
 
-const API_KEY = process.env.AURATRACE_API_KEY || "aura_secret_key_123";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env if available
+function loadEnv() {
+  const envPath = path.resolve(__dirname, "..", ".env");
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, "utf-8").split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#") && trimmed.includes("=")) {
+        const [k, ...v] = trimmed.split("=");
+        const key = k.trim();
+        const val = v.join("=").trim().replace(/^['"]|['"]$/g, "");
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+}
+
+loadEnv();
+
+const API_KEY = process.env.AURATRACE_API_KEY || process.env.AURA_MASTER_API_KEY;
+if (!API_KEY) {
+  console.error(
+    "❌ Error: AURATRACE_API_KEY or AURA_MASTER_API_KEY environment variable is required."
+  );
+  process.exit(1);
+}
+
 const ENDPOINT = process.env.AURATRACE_ENDPOINT || "http://127.0.0.1:8000";
 
 console.log("==================================================");

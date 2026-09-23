@@ -2,9 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  experimental: {
-    cpus: 1,
-    workerThreads: false,
+  async redirects() {
+    return [
+      {
+        source: "/admin/dashboard",
+        destination: "/admin",
+        permanent: true,
+      },
+    ];
   },
 };
 

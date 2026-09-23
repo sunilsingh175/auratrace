@@ -21,7 +21,32 @@ if sys.platform.startswith("win"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-API_KEY = os.getenv("AURATRACE_API_KEY", "aura_secret_key_123")
+def _load_env():
+    candidates = [
+        ".env",
+        os.path.join(os.path.dirname(__file__), "..", ".env"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            with open(candidate, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k not in os.environ:
+                            os.environ[k] = v
+
+_load_env()
+
+API_KEY = os.getenv("AURATRACE_API_KEY") or os.getenv("AURA_MASTER_API_KEY")
+if not API_KEY:
+    raise RuntimeError(
+        "AURATRACE_API_KEY or AURA_MASTER_API_KEY is required. "
+        "Please set it in your environment or in a .env file."
+    )
+
 ENDPOINT = os.getenv("AURATRACE_ENDPOINT", "http://127.0.0.1:8000")
 
 print("==================================================")

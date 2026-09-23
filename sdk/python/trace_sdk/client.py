@@ -20,6 +20,23 @@ except ImportError:
 
 
 
+def _sanitize_stack_trace(trace_str: str) -> str:
+    if not trace_str:
+        return ""
+    import re
+    def _clean_path(match):
+        full_path = match.group(1).replace("\\", "/")
+        parts = full_path.split("/")
+        for marker in ["scripts", "app", "backend", "services", "controllers", "models", "workers"]:
+            if marker in parts:
+                idx = parts.index(marker)
+                return f'File "{"/".join(parts[idx:])}"'
+        if len(parts) > 1:
+            return f'File "{"/".join(parts[-2:])}"'
+        return f'File "{parts[-1]}"'
+    return re.sub(r'File "([^"]+)"', _clean_path, trace_str)
+
+
 class Trace:
     def __init__(
         self,
@@ -90,7 +107,7 @@ class Trace:
     ):
         """Extracts stack trace and error type from an Exception instance and dispatches it."""
         tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__)
-        formatted_trace = "".join(tb_lines)
+        formatted_trace = _sanitize_stack_trace("".join(tb_lines))
         error_type = exc.__class__.__name__
         msg = message or str(exc) or error_type
 
@@ -109,8 +126,8 @@ class Trace:
 
         def unhandled_handler(exc_type, exc_value, exc_traceback):
             try:
-                formatted_trace = "".join(
-                    traceback.format_exception(exc_type, exc_value, exc_traceback)
+                formatted_trace = _sanitize_stack_trace(
+                    "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
                 )
                 self.critical(
                     message=f"Unhandled crash: {exc_value}",
