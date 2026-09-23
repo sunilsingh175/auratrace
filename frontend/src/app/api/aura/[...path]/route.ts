@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND_URL = process.env.AURA_BACKEND_URL || process.env.AURA_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const MASTER_API_KEY = process.env.AURA_MASTER_API_KEY || "";
 
 async function handler(request: NextRequest, context: { params: { path: string[] } }) {
-  if (!MASTER_API_KEY) {
-    return NextResponse.json({ detail: "AuraTrace server API key is not configured." }, { status: 500 });
-  }
-
   const targetPath = `/${context.params.path.join("/")}`;
   const target = new URL(targetPath, BACKEND_URL);
   request.nextUrl.searchParams.forEach((value, key) => target.searchParams.set(key, value));
@@ -19,9 +14,15 @@ async function handler(request: NextRequest, context: { params: { path: string[]
   } else {
     headers.set("content-type", "application/json");
   }
+  
   const authorization = request.headers.get("authorization");
   if (authorization) headers.set("authorization", authorization);
-  headers.set("X-API-Key", MASTER_API_KEY);
+
+  const xApiKey = request.headers.get("x-api-key");
+  if (xApiKey) headers.set("x-api-key", xApiKey);
+
+  const xProjectKey = request.headers.get("x-project-key");
+  if (xProjectKey) headers.set("x-project-key", xProjectKey);
 
   let body: BodyInit | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {

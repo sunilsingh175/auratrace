@@ -85,7 +85,7 @@ export function AdminOverview({
             {totalCrashesCount}
           </p>
           <p className="mt-1 text-[11px] text-slate-400 font-sans">
-            {telemetryLogsCount} telemetry logs ({stats?.open_incidents_count ?? 0} open)
+            {stats?.open_incidents_count ?? 0} active &bull; {telemetryLogsCount} telemetry events
           </p>
         </div>
 
