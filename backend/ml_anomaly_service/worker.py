@@ -595,7 +595,7 @@ async def create_incident(
                     error_type,
                 )
 
-                return incident_id
+                return None
 
             # ------------------------------------------------
             # Create incident in PostgreSQL matching schema
@@ -875,17 +875,18 @@ async def process_message(
             effective_score,
         )
 
-        publish_anomaly(
-            telemetry,
-            effective_score,
-            incident_id,
-        )
+        if incident_id:
+            publish_anomaly(
+                telemetry,
+                effective_score,
+                incident_id,
+            )
 
-        logger.info(
-            "AI diagnostic pipeline trigger prepared | "
-            "incident=%s",
-            incident_id,
-        )
+            logger.info(
+                "AI diagnostic pipeline trigger prepared | "
+                "incident=%s",
+                incident_id,
+            )
 
     else:
 

@@ -37,26 +37,52 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const addNotification = useCallback(
     (item: Omit<LiveNotification, "id" | "timestamp" | "read">) => {
-      const newNotification: LiveNotification = {
-        ...item,
-        id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        timestamp: new Date().toISOString(),
-        read: false,
-      };
+      setNotifications((prev) => {
+        const now = Date.now();
+        // Deduplicate: if same link or same (title + service_id) was added within 15 seconds, skip duplicate
+        const isDuplicate = prev.some((n) => {
+          const timeDiff = now - new Date(n.timestamp).getTime();
+          if (timeDiff < 15000) {
+            if (item.link && n.link && item.link === n.link) return true;
+            if (n.title === item.title && n.service_id === item.service_id) return true;
+          }
+          return false;
+        });
 
-      setNotifications((prev) => [newNotification, ...prev].slice(0, 50));
-      setLatestToast(newNotification);
+        if (isDuplicate) {
+          return prev;
+        }
 
-      // Auto dismiss toast after 5 seconds
-      setTimeout(() => {
-        setLatestToast((curr) => (curr?.id === newNotification.id ? null : curr));
-      }, 5000);
+        const newNotification: LiveNotification = {
+          ...item,
+          id: `notif-${now}-${Math.random().toString(36).substr(2, 5)}`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        };
+
+        setLatestToast(newNotification);
+
+        // Auto dismiss toast after 5 seconds
+        setTimeout(() => {
+          setLatestToast((curr) => (curr?.id === newNotification.id ? null : curr));
+        }, 5000);
+
+        return [newNotification, ...prev].slice(0, 50);
+      });
     },
     []
   );
 
   const connectWebSocket = useCallback(() => {
     if (typeof window === "undefined") return;
+
+    if (
+      wsRef.current &&
+      (wsRef.current.readyState === WebSocket.OPEN ||
+        wsRef.current.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = process.env.NEXT_PUBLIC_WS_HOST || window.location.hostname;
@@ -122,14 +148,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       ws.onclose = () => {
         setIsConnected(false);
+        wsRef.current = null;
         if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = setTimeout(connectWebSocket, 4000);
       };
 
       ws.onerror = () => {
-        ws.close();
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
       };
     } catch (e) {
+      wsRef.current = null;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = setTimeout(connectWebSocket, 4000);
     }
@@ -139,7 +170,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     connectWebSocket();
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      if (wsRef.current) wsRef.current.close();
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
   }, [connectWebSocket]);
 
