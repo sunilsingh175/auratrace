@@ -8,11 +8,9 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { PipelineStatusCard } from "@/components/dashboard/PipelineStatusCard";
 import { SummaryMetricCard } from "@/components/dashboard/SummaryMetricCard";
 import { PerformanceChartCard } from "@/components/dashboard/PerformanceChartCard";
 import { ActiveAnomaliesPanel } from "@/components/dashboard/ActiveAnomaliesPanel";
-import { SdkIntegrationCards } from "@/components/dashboard/SdkIntegrationCards";
 import { useWebSocket, type AnomalyAlertEvent } from "@/hooks/use-websocket";
 import {
   fetchSystemStats,
@@ -73,7 +71,7 @@ export default function DashboardPage() {
     [loadDashboardData]
   );
 
-  const { isConnected } = useWebSocket(handleRealtimeAlert);
+  useWebSocket(handleRealtimeAlert);
 
   useEffect(() => {
     loadDashboardData();
@@ -81,7 +79,7 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [loadDashboardData]);
 
-  // Compute metrics from backend stats with graceful service aggregation consistency
+  // Compute metrics from backend stats with graceful fallback
   const totalServiceRequests = services.reduce(
     (acc, s) => acc + (typeof s.requests === "number" ? s.requests : 0),
     0
@@ -107,25 +105,7 @@ export default function DashboardPage() {
         ) / totalServiceRequests
       : null;
 
-  // 1. Ingestion Velocity: active rps, or 0 if buffered/idle, or Unavailable
-  const ingestionRpsValue =
-    stats?.ingestion_rate_per_sec !== undefined && stats.ingestion_rate_per_sec > 0
-      ? Math.round(stats.ingestion_rate_per_sec)
-      : (stats?.total_logs_ingested && stats.total_logs_ingested > 0) || totalServiceRequests > 0
-      ? 0
-      : "Unavailable";
-
-  // 2. P95 Cluster Latency: live stats p95, or service aggregate weighted latency, or Unavailable
-  const rawP95 =
-    stats?.p95_latency_ms !== undefined && stats.p95_latency_ms > 0
-      ? stats.p95_latency_ms
-      : aggregateLatency !== null && aggregateLatency > 0
-      ? aggregateLatency
-      : null;
-  const p95LatencyValue =
-    rawP95 !== null ? Math.round(rawP95) : "Unavailable";
-
-  // 3. Global Error Rate: live stats error rate, or service aggregate error rate, or 0.0% if services healthy, or Unavailable
+  // 1. Error Rate
   const rawError =
     stats?.error_rate_percent !== undefined && stats.error_rate_percent > 0
       ? stats.error_rate_percent
@@ -135,73 +115,101 @@ export default function DashboardPage() {
       ? 0.0
       : null;
   const errorRateValue =
-    rawError !== null ? `${rawError.toFixed(1)}%` : "Unavailable";
+    rawError !== null ? `${rawError.toFixed(1)}%` : "0.0%";
 
-  // 4. Active Crashes & Incidents
+  // 2. P95 Latency
+  const rawP95 =
+    stats?.p95_latency_ms !== undefined && stats.p95_latency_ms > 0
+      ? stats.p95_latency_ms
+      : aggregateLatency !== null && aggregateLatency > 0
+      ? aggregateLatency
+      : null;
+  const p95LatencyValue =
+    rawP95 !== null ? Math.round(rawP95) : 0;
+
+  // 3. Active Crashes
   const activeIncidents =
     stats?.open_incidents_count !== undefined
       ? stats.open_incidents_count
       : incidents.filter((i) => i.status === "OPEN" || i.status === "INVESTIGATING").length;
 
+  // 4. Total Crashes
+  const totalCrashes =
+    stats?.total_logs_ingested !== undefined && stats.total_logs_ingested > 0
+      ? stats.total_logs_ingested
+      : incidents.length;
+
   return (
     <AppShell
       title="Dashboard"
-      subtitle="Real-time telemetry, crash detection, and AI diagnosis"
+      subtitle="Real-time application health, crash telemetry, and performance"
     >
       <div className="space-y-6 max-w-[1600px] mx-auto pb-6">
-        {/* 1. Pipeline Status Card */}
-        <PipelineStatusCard isOnline={isConnected} />
+        {/* Application Health Header & Metrics */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
+              Application Health
+            </h2>
+            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Telemetry Active</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <SummaryMetricCard
+              title="Error Rate"
+              value={errorRateValue}
+              description="Application error ratio"
+              badge="Live"
+              icon={Percent}
+              tone={rawError && rawError > 1 ? "red" : "slate"}
+            />
 
-        {/* 2. Four Large Summary Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <SummaryMetricCard
-            title="Ingestion Velocity"
-            value={ingestionRpsValue}
-            unit={typeof ingestionRpsValue === "number" ? "events/s" : undefined}
-            description="Redis Stream buffer active"
-            badge="Live API"
-            icon={Activity}
-            tone="slate"
-          />
+            <SummaryMetricCard
+              title="P95 Latency"
+              value={p95LatencyValue}
+              unit="ms"
+              description="P95 response latency"
+              badge="Live"
+              icon={Clock}
+              tone="slate"
+            />
 
-          <SummaryMetricCard
-            title="P95 Cluster Latency"
-            value={p95LatencyValue}
-            unit={typeof p95LatencyValue === "number" ? "ms" : undefined}
-            description="Cluster P95 latency aggregate"
-            badge="Live API"
-            icon={Clock}
-            tone="slate"
-          />
+            <SummaryMetricCard
+              title="Active Crashes"
+              value={activeIncidents}
+              unit="open"
+              description="Unresolved incidents"
+              badge="Live"
+              icon={AlertTriangle}
+              tone={activeIncidents > 0 ? "red" : "slate"}
+            />
 
-          <SummaryMetricCard
-            title="Global Error Rate"
-            value={errorRateValue}
-            description="Cluster telemetry error ratio"
-            badge="Live API"
-            icon={Percent}
-            tone="slate"
-          />
-
-          <SummaryMetricCard
-            title="Active Crashes"
-            value={activeIncidents}
-            unit="open"
-            description="pgvector RAG diagnosis connected"
-            badge="Live API"
-            icon={AlertTriangle}
-            tone="red"
-          />
+            <SummaryMetricCard
+              title="Total Crashes"
+              value={totalCrashes}
+              unit="recorded"
+              description="Total exception telemetry"
+              badge="Total"
+              icon={Activity}
+              tone="slate"
+            />
+          </div>
         </div>
 
-        {/* 3. Performance Section: Cluster Performance & Latency Waveform */}
-        <PerformanceChartCard data={timeSeries} />
-
-        {/* 4. Active Crashes & AI Triage */}
+        {/* Recent Crashes */}
         <ActiveAnomaliesPanel incidents={incidents} />
 
-        {/* 5. SDK Integration Cards (Python & Node.js / TypeScript) */}
-        <SdkIntegrationCards />
+        {/* Performance: Latency / Error chart */}
+        <div>
+          <div className="mb-3">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
+              Performance
+            </h2>
+          </div>
+          <PerformanceChartCard data={timeSeries} />
+        </div>
       </div>
     </AppShell>
   );

@@ -12,7 +12,7 @@ interface ActiveAnomaliesPanelProps {
 
 function formatPercent(value: unknown): string {
   const num = Number(value);
-  if (!Number.isFinite(num)) return "80%";
+  if (!Number.isFinite(num) || num <= 0) return "N/A";
   if (num <= 1) return `${Math.round(num * 100)}%`;
   return `${Math.round(num)}%`;
 }
@@ -24,10 +24,10 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
       <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
         <div>
           <h2 className="font-heading font-extrabold text-lg text-slate-900 tracking-tight">
-            Recent Crashes &amp; AI Triage
+            Recent Crashes
           </h2>
           <p className="text-xs text-slate-500 font-sans mt-0.5">
-            Automatic exception capture, pgvector historical lookup &amp; AI diagnosis
+            Automatic exception capture, stack traces &amp; AI triage
           </p>
         </div>
         <Link
@@ -43,8 +43,8 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
       {incidents.length > 0 ? (
         <div className="space-y-3">
           {incidents.slice(0, 5).map((incident) => {
-            const score = (incident as any).anomaly_score ?? (incident as any).score ?? 0.8;
-            const serviceName = incident.service_id || "backend-service";
+            const score = incident.anomaly_score;
+            const serviceName = incident.service_id || "Unknown application";
             const incidentTitle =
               incident.title ||
               incident.error_type ||
@@ -83,14 +83,16 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
 
                 {/* Right: Outlier Score & Action CTA */}
                 <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-rose-600">
-                      {formatPercent(score)}
-                    </span>
-                    <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[9px] font-bold text-rose-700 font-heading">
-                      Outlier
-                    </span>
-                  </div>
+                  {typeof score === "number" && score > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-rose-600">
+                        {formatPercent(score)}
+                      </span>
+                      <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[9px] font-bold text-rose-700 font-heading">
+                        Outlier
+                      </span>
+                    </div>
+                  )}
 
                   <Link
                     href={`/incidents/${incident.id}`}
@@ -109,10 +111,10 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
         <div className="p-8 text-center rounded-xl border border-dashed border-slate-200">
           <ShieldCheck className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
           <p className="text-xs font-bold text-slate-700 font-heading">
-            No active crashes detected
+            No Crashes Found
           </p>
           <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-            All connected applications are operating normally.
+            No crashes match the current filters.
           </p>
         </div>
       )}

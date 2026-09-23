@@ -138,7 +138,7 @@ export default function IncidentDetailsPage() {
 
   const data = incident as any;
 
-  const appName = String(data?.service_id || "payment-api");
+  const appName = String(data?.service_id || "Unknown application");
   const errorType = String(data?.error_type || "ApplicationException");
   const crashTitle =
     data?.title ||
@@ -376,7 +376,7 @@ export default function IncidentDetailsPage() {
 
                 <div className="space-y-3">
                   {historicalMatches.map((match: any, idx: number) => {
-                    const similarityPct = Math.round((match.similarity_score ?? 0.85) * 100);
+                    const score = typeof match.similarity_score === "number" ? match.similarity_score : null;
                     return (
                       <div
                         key={idx}
@@ -391,9 +391,11 @@ export default function IncidentDetailsPage() {
                           </p>
                         </div>
 
-                        <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 shrink-0 font-heading">
-                          {similarityPct}% match
-                        </span>
+                        {score !== null && (
+                          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 shrink-0 font-heading">
+                            {Math.round(score * 100)}% match
+                          </span>
+                        )}
                       </div>
                     );
                   })}

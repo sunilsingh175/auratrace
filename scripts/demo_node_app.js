@@ -5,7 +5,7 @@
 
 import { AuraTrace } from "../sdk/nodejs/dist/index.js";
 
-const API_KEY = process.env.AURATRACE_API_KEY || "at_live_master_auratrace_2026";
+const API_KEY = process.env.AURATRACE_API_KEY || "aura_secret_key_123";
 const ENDPOINT = process.env.AURATRACE_ENDPOINT || "http://localhost:8000";
 
 console.log("==================================================");

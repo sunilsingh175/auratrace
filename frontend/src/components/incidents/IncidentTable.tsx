@@ -94,14 +94,14 @@ export function IncidentTable({ incidents }: IncidentTableProps) {
             No Crashes Found
           </p>
           <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            All connected applications are operating normally without uncaught exceptions.
+            No crashes match the current filters.
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {filtered.map((inc) => {
             const scorePct = Math.round(inc.anomaly_score * 100);
-            const appName = inc.service_id || "payment-api";
+            const appName = inc.service_id || "Unknown application";
             const crashTitle =
               inc.title ||
               (inc.error_type === "PoolTimeout" || inc.error_type === "ConnectionPoolTimeout"

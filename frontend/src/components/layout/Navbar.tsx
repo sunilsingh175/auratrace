@@ -103,6 +103,16 @@ export function Navbar() {
       icon: FolderKanban,
       badge: null,
     },
+    ...(user?.role === "Admin"
+      ? [
+          {
+            name: "Admin",
+            href: "/admin",
+            icon: Shield,
+            badge: null,
+          },
+        ]
+      : []),
   ];
 
   const userDisplayName = user?.name ? user.name.split(" ")[0] : "Guest";
@@ -332,6 +342,16 @@ export function Navbar() {
                     </div>
 
                     <div className="space-y-0.5 text-xs">
+                      {user.role === "Admin" && (
+                        <Link
+                          href="/admin"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center gap-2 rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-50 transition font-medium"
+                        >
+                          <Shield className="h-3.5 w-3.5 text-[#dc2626]" />
+                          <span>Admin Console</span>
+                        </Link>
+                      )}
                       <Link
                         href="/projects"
                         onClick={() => setShowUserMenu(false)}

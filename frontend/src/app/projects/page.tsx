@@ -75,11 +75,34 @@ export default function ProjectsPage() {
   };
 
   const activeProject = projects[0];
-  const apiKey = activeProject?.api_key || "at_live_master_key_12345";
+  const hasRealKey = Boolean(activeProject?.api_key);
+  const displayKey = activeProject?.api_key || "at_live_••••••••••••••••••••••••";
+  const [regenerating, setRegenerating] = useState(false);
+
+  const handleRegenerateKey = async () => {
+    if (!activeProject) return;
+    setRegenerating(true);
+    try {
+      const res = await regenerateProjectKey(activeProject.id);
+      setProjects((prev) =>
+        prev.map((p) => (p.id === activeProject.id ? { ...p, api_key: res.api_key } : p))
+      );
+      setActionSuccess("API Key regenerated successfully. Copy and store it securely.");
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch {
+      setError("Failed to regenerate API key.");
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const copyApiKey = async () => {
+    if (!activeProject?.api_key) {
+      await handleRegenerateKey();
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(apiKey);
+      await navigator.clipboard.writeText(activeProject.api_key);
       setCopiedKey(true);
       setTimeout(() => setCopiedKey(false), 2000);
     } catch {
@@ -92,18 +115,19 @@ import { AuraTrace } from '@auratrace/node';
 
 // 2. Initialize AuraTrace (automatically captures crashes & unhandled exceptions)
 AuraTrace.init({
-  apiKey: "${apiKey}"
+  apiKey: process.env.AURATRACE_API_KEY, // Or pass key string directly
 });
 
 // 3. Attach Express / HTTP middleware
 app.use(AuraTrace.expressMiddleware());`;
 
   const pythonSnippet = `# 1. Install SDK: pip install auratrace
+import os
 import auratrace
 
 # 2. Initialize AuraTrace (automatically captures crashes & unhandled exceptions)
 auratrace.init(
-    api_key="${apiKey}"
+    api_key=os.environ["AURATRACE_API_KEY"],
 )`;
 
   const copySnippet = async (type: "node" | "python") => {
@@ -219,28 +243,44 @@ auratrace.init(
                   Use this key in your application to authenticate the AuraTrace SDK.
                 </p>
 
-                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-[#f8fafc] p-2.5">
-                  <Key className="h-4 w-4 text-slate-400 shrink-0 ml-1.5" />
-                  <span className="flex-1 font-mono text-xs font-bold text-slate-800 truncate">
-                    {apiKey}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={copyApiKey}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:border-slate-300 transition shadow-xs font-heading cursor-pointer shrink-0"
-                  >
-                    {copiedKey ? (
-                      <>
-                        <Check className="h-3.5 w-3.5 text-emerald-600" />
-                        <span className="text-emerald-700">Copied</span>
-                      </>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-slate-200 bg-[#f8fafc] p-2.5">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Key className="h-4 w-4 text-slate-400 shrink-0 ml-1.5" />
+                    <span className="font-mono text-xs font-bold text-slate-800 truncate">
+                      {displayKey}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {hasRealKey ? (
+                      <button
+                        type="button"
+                        onClick={copyApiKey}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:border-slate-300 transition shadow-xs font-heading cursor-pointer"
+                      >
+                        {copiedKey ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                            <span className="text-emerald-700">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5 text-slate-500" />
+                            <span>Copy Key</span>
+                          </>
+                        )}
+                      </button>
                     ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5 text-slate-500" />
-                        <span>Copy API Key</span>
-                      </>
+                      <button
+                        type="button"
+                        onClick={handleRegenerateKey}
+                        disabled={regenerating}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:border-slate-300 transition shadow-xs font-heading cursor-pointer"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 text-slate-500 ${regenerating ? "animate-spin" : ""}`} />
+                        <span>{regenerating ? "Regenerating..." : "Regenerate Key"}</span>
+                      </button>
                     )}
-                  </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -314,7 +354,7 @@ auratrace.init(
                           {"\n"}
                           <span className="text-amber-300">AuraTrace</span>.<span className="text-blue-400">init</span>(&#123;
                           {"\n"}
-                          &nbsp;&nbsp;apiKey: <span className="text-emerald-300">&quot;{apiKey}&quot;</span>
+                          &nbsp;&nbsp;apiKey: <span className="text-sky-300">process</span>.<span className="text-sky-300">env</span>.<span className="text-emerald-300">AURATRACE_API_KEY</span>
                           {"\n"}
                           &#125;);
                           {"\n\n"}
@@ -352,13 +392,15 @@ auratrace.init(
                     <div className="mt-1.5 relative rounded-xl bg-slate-900 border border-slate-800 p-4 font-mono text-xs text-slate-300 leading-relaxed overflow-x-auto">
                       <pre>
                         <code>
+                          <span className="text-purple-400">import</span> <span className="text-purple-400">os</span>
+                          {"\n"}
                           <span className="text-purple-400">import</span> <span className="text-blue-300">auratrace</span>
                           {"\n\n"}
                           <span className="text-slate-500"># Initialize with your project API key</span>
                           {"\n"}
                           <span className="text-blue-300">auratrace</span>.<span className="text-blue-400">init</span>(
                           {"\n"}
-                          &nbsp;&nbsp;&nbsp;&nbsp;api_key=<span className="text-emerald-300">&quot;{apiKey}&quot;</span>
+                          &nbsp;&nbsp;&nbsp;&nbsp;api_key=<span className="text-purple-400">os</span>.<span className="text-blue-300">environ</span>[<span className="text-emerald-300">&quot;AURATRACE_API_KEY&quot;</span>]
                           {"\n"}
                           )
                         </code>

@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   LogOut,
   LogIn,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { fetchSystemStats } from "@/lib/api-client";
@@ -60,6 +61,16 @@ export function Sidebar() {
       icon: FolderKanban,
       badge: null,
     },
+    ...(user?.role === "Admin"
+      ? [
+          {
+            name: "Admin Console",
+            href: "/admin",
+            icon: Shield,
+            badge: null,
+          },
+        ]
+      : []),
   ];
 
   const userInitials = user?.name

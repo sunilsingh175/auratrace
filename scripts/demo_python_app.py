@@ -21,7 +21,7 @@ if sys.platform.startswith("win"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-API_KEY = os.getenv("AURATRACE_API_KEY", "at_live_master_auratrace_2026")
+API_KEY = os.getenv("AURATRACE_API_KEY", "aura_secret_key_123")
 ENDPOINT = os.getenv("AURATRACE_ENDPOINT", "http://localhost:8000")
 
 print("==================================================")

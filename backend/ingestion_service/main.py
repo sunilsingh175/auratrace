@@ -251,7 +251,7 @@ async def startup_event():
                 await conn.execute(text("""
                     INSERT INTO projects (id, name, api_key_hash)
                     VALUES ('00000000-0000-0000-0000-000000000001', 'AuraTrace Production Platform', :hash)
-                    ON CONFLICT (id) DO NOTHING;
+                    ON CONFLICT (id) DO UPDATE SET api_key_hash = EXCLUDED.api_key_hash;
                 """), {"hash": default_hash})
 
                 await conn.execute(text("""
@@ -1142,6 +1142,77 @@ async def regenerate_project_key(
     except Exception as exc:
         logger.error(f"Error regenerating project key: {exc}")
         raise HTTPException(status_code=500, detail="Failed to regenerate project API key.")
+
+
+@app.delete(
+    "/api/v1/projects/{project_id}",
+    tags=["Projects & API Keys"],
+    summary="Delete project and cascade associated telemetry/crashes",
+)
+async def delete_project(
+    project_id: str,
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+):
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
+
+    try:
+        async with db_engine.begin() as conn:
+            res = await conn.execute(
+                text("""
+                    DELETE FROM projects
+                    WHERE id::text = :id OR id::text LIKE :id_prefix
+                    RETURNING id, name
+                """),
+                {"id": project_id, "id_prefix": f"{project_id}%"},
+            )
+            deleted = res.mappings().first()
+            if not deleted:
+                raise HTTPException(status_code=404, detail="Project not found.")
+            return {
+                "success": True,
+                "message": f"Project '{deleted['name']}' and its operational data deleted.",
+                "id": str(deleted["id"]),
+            }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Error deleting project: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to delete project.")
+
+
+@app.post(
+    "/api/v1/admin/clean-test-data",
+    tags=["Administrative Tools"],
+    summary="Purge test workspaces and transient demo records",
+)
+async def clean_test_data(
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+):
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
+
+    try:
+        async with db_engine.begin() as conn:
+            res = await conn.execute(
+                text("""
+                    DELETE FROM projects
+                    WHERE name LIKE 'E2E Test Workspace%'
+                       OR name LIKE 'Test%'
+                       OR name = 'sdfghjk'
+                       OR name = 'startuphub'
+                """)
+            )
+            count = res.rowcount
+            return {
+                "success": True,
+                "message": f"Successfully cleaned {count} test projects.",
+                "deleted_projects_count": count,
+            }
+    except Exception as exc:
+        logger.error(f"Error cleaning test data: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to clean test data.")
+
 
 
 # 1. Telemetry Ingestion (with Automatic Service Discovery)

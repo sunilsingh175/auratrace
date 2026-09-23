@@ -131,12 +131,7 @@ export async function fetchProjects(): Promise<Project[]> {
     return {
       id: p.id,
       name: p.name,
-      api_key:
-        p.api_key ||
-        cachedKey ||
-        (p.id === "00000000-0000-0000-0000-000000000001"
-          ? "at_live_master_auratrace_2026"
-          : `at_live_${p.id.replace(/-/g, "").slice(0, 24)}`),
+      api_key: p.api_key || cachedKey || undefined,
       created_at: p.created_at || new Date().toISOString(),
       service_count: Number(p.service_count ?? 0),
     };
@@ -157,6 +152,43 @@ export async function createProject(data: { name: string }): Promise<Project> {
 export async function regenerateProjectKey(projectId: string): Promise<{ id: string; name: string; api_key: string }> {
   const path = `projects/${encodeURIComponent(projectId)}/regenerate-key`;
   const res = await request(path, { method: "POST" });
+  ensureOk(res, path);
+  const result = await res.json();
+  if (result?.id && result?.api_key && typeof window !== "undefined") {
+    localStorage.setItem(`auratrace_key_${result.id}`, result.api_key);
+  }
+  return result;
+}
+
+export async function deleteProject(projectId: string): Promise<{ success: boolean; message: string }> {
+  const path = `projects/${encodeURIComponent(projectId)}`;
+  const res = await request(path, { method: "DELETE" });
+  ensureOk(res, path);
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(`auratrace_key_${projectId}`);
+  }
+  return res.json();
+}
+
+export async function cleanTestData(): Promise<{ success: boolean; message: string; deleted_projects_count: number }> {
+  const path = "admin/clean-test-data";
+  const res = await request(path, { method: "POST" });
+  ensureOk(res, path);
+  return res.json();
+}
+
+export async function simulateCrash(
+  scenario: string = "db_pool_exhaustion",
+  serviceId?: string
+): Promise<{ status?: string; scenario?: string; event_id?: string; message: string }> {
+  const path = "simulate-crash";
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify({
+      scenario,
+      service_id: serviceId || "checkout-service",
+    }),
+  });
   ensureOk(res, path);
   return res.json();
 }
@@ -231,21 +263,6 @@ export async function deleteService(serviceId: string): Promise<{ success: boole
   return res.json();
 }
 
-export async function simulateCrash(
-  serviceId: string,
-  scenario: string = "db_pool_exhaustion"
-): Promise<any> {
-  const path = "simulate-crash";
-  const res = await request(path, {
-    method: "POST",
-    body: JSON.stringify({
-      service_id: serviceId,
-      scenario,
-    }),
-  });
-  ensureOk(res, path);
-  return res.json();
-}
 
 export async function fetchSystemStats(): Promise<SystemStats> {
   const path = "stats";
