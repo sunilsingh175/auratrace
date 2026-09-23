@@ -223,13 +223,10 @@ export default function ProjectsPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <Link
-                          href="/services"
-                          className="rounded-full bg-slate-50 border border-slate-200 px-3 py-1 text-xs font-bold text-slate-700 font-heading inline-flex items-center gap-1.5 hover:bg-slate-100 transition"
-                        >
+                        <span className="rounded-full bg-slate-50 border border-slate-200 px-3 py-1 text-xs font-bold text-slate-700 font-heading inline-flex items-center gap-1.5">
                           <Server className="h-3.5 w-3.5 text-slate-500" />
-                          <span>{project.service_count ?? 0} Services</span>
-                        </Link>
+                          <span>{project.service_count ?? 0} Active Services</span>
+                        </span>
                       </div>
                     </div>
 
@@ -405,12 +402,12 @@ export default function ProjectsPage() {
               </div>
 
               <div className="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs">
-                <span className="text-slate-400 font-sans">Automatic AI diagnostics included</span>
+                <span className="text-slate-400 font-sans">Automatic AI diagnostics &amp; crash detection included</span>
                 <Link
-                  href="/services"
+                  href="/incidents"
                   className="inline-flex items-center gap-1 font-bold text-red-400 hover:text-red-300 transition font-heading"
                 >
-                  <span>View Services Fleet</span>
+                  <span>View Crashes &amp; Incidents</span>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
