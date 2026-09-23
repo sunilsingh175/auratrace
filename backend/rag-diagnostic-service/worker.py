@@ -3,7 +3,7 @@ import sys
 import json
 import asyncio
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
@@ -202,6 +202,7 @@ async def save_diagnosis(
     incident_id: uuid.UUID,
     root_cause: str,
     suggested_patch: str,
+    similar_fixes: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
 
     async with AsyncSessionLocal() as session:
@@ -218,10 +219,12 @@ async def save_diagnosis(
 
         incident.root_cause = root_cause
         incident.suggested_patch = suggested_patch
+        if similar_fixes is not None:
+            incident.similar_fixes = similar_fixes
         incident.is_diagnosed = True
 
         await session.commit()
-        logger.info("Incident %s diagnosis saved successfully.", incident_id)
+        logger.info("Incident %s diagnosis and pgvector similarity saved successfully.", incident_id)
 
 
 # ---------------------------------------------------------
@@ -299,6 +302,7 @@ async def process_anomaly(
         incident_id=incident_id,
         root_cause=root_cause,
         suggested_patch=suggested_patch,
+        similar_fixes=similar_records,
     )
 
     # 5. Broadcast diagnosis update via Redis Pub/Sub for live WebSocket UI updates

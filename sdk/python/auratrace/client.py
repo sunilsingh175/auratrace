@@ -174,44 +174,56 @@ class AuraTrace:
 
         sys.excepthook = unhandled_handler
 
-    def flush(self, timeout: float = 2.0):
-        """Flushes remaining items in the queue synchronously."""
-        deadline = time.time() + timeout
-        while not self._queue.empty() and time.time() < deadline:
-            time.sleep(0.05)
-
-    def _flusher_loop(self):
-        """Background daemon sending buffered logs to AuraTrace Ingestion Gateway."""
-        client = httpx.Client(timeout=5.0) if httpx is not None else None
+    def _send_batch(self, batch: List[Dict[str, Any]]):
+        if not batch:
+            return
         url = f"{self.endpoint}/api/v1/telemetry/batch"
         headers = {
             "Content-Type": "application/json",
             "X-API-Key": self.api_key,
             "X-Project-Key": self.api_key,
         }
+        try:
+            if httpx is not None:
+                with httpx.Client(timeout=5.0) as client:
+                    client.post(url, json={"events": batch}, headers=headers)
+            else:
+                req_data = json.dumps({"events": batch}).encode("utf-8")
+                req = urllib.request.Request(url, data=req_data, headers=headers, method="POST")
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    pass
+        except Exception:
+            pass  # Fail silent to avoid degrading host application
 
+    def flush(self, timeout: float = 2.0):
+        """Flushes all queued items synchronously."""
+        batch = []
+        while not self._queue.empty():
+            try:
+                item = self._queue.get_nowait()
+                batch.append(item)
+            except queue.Empty:
+                break
+        if batch:
+            self._send_batch(batch)
+
+    def _flusher_loop(self):
+        """Background daemon sending buffered logs to AuraTrace Ingestion Gateway."""
         while self._is_running:
             batch = []
-            deadline = time.time() + self.flush_interval_seconds
-
-            while len(batch) < self.batch_size and time.time() < deadline:
-                try:
-                    item = self._queue.get(timeout=0.1)
-                    batch.append(item)
-                except queue.Empty:
-                    break
+            try:
+                item = self._queue.get(timeout=self.flush_interval_seconds)
+                batch.append(item)
+                while len(batch) < self.batch_size:
+                    try:
+                        batch.append(self._queue.get_nowait())
+                    except queue.Empty:
+                        break
+            except queue.Empty:
+                pass
 
             if batch:
-                try:
-                    if client is not None:
-                        client.post(url, json={"events": batch}, headers=headers)
-                    else:
-                        req_data = json.dumps({"events": batch}).encode("utf-8")
-                        req = urllib.request.Request(url, data=req_data, headers=headers, method="POST")
-                        with urllib.request.urlopen(req, timeout=5.0) as resp:
-                            pass
-                except Exception:
-                    pass  # Fail silent to avoid degrading primary service
+                self._send_batch(batch)
 
     def shutdown(self):
         self._is_running = False

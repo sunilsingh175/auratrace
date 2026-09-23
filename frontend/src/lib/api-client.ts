@@ -62,6 +62,7 @@ export async function fetchIncidents(params?: {
     code_diff: item.code_diff || item.ai_suggested_patch,
     system_metrics: item.system_metrics,
     similar_incidents: item.similar_incidents,
+    source: item.source || "sdk",
   }));
 }
 
@@ -89,6 +90,7 @@ export async function fetchIncidentById(id: string): Promise<Incident | null> {
       code_diff: item.code_diff || item.ai_suggested_patch,
       system_metrics: item.system_metrics,
       similar_incidents: item.similar_incidents,
+      source: item.source || "sdk",
     };
   } catch (err) {
     console.warn("Failed to fetch incident by id:", err);

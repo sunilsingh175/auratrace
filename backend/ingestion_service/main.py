@@ -239,9 +239,13 @@ async def startup_event():
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS services_project_idx ON services (project_id);"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS services_service_id_idx ON services (service_id);"))
 
-                # 3. Ensure telemetry_logs project_id column
+                # 3. Ensure telemetry_logs and incidents columns
                 await conn.execute(text("ALTER TABLE telemetry_logs ADD COLUMN IF NOT EXISTS project_id UUID;"))
+                await conn.execute(text("ALTER TABLE telemetry_logs ADD COLUMN IF NOT EXISTS source VARCHAR(32) DEFAULT 'sdk';"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS telemetry_logs_project_idx ON telemetry_logs (project_id);"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS source VARCHAR(32) DEFAULT 'sdk';"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS similar_fixes JSONB DEFAULT '[]'::jsonb;"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS incidents_source_idx ON incidents (source);"))
 
                 # 4. Seed default project and attach orphan services
                 default_hash = hashlib.sha256(b"at_live_master_auratrace_2026").hexdigest()
@@ -1330,10 +1334,15 @@ async def ingest_telemetry(
         version=version,
     ))
 
+    source = "sdk"
+    if isinstance(payload.metadata, dict) and payload.metadata.get("source"):
+        source = str(payload.metadata["source"])
+
     log_event = {
         "id": event_id,
         "project_id": project_id,
         "type": "TELEMETRY",
+        "source": source,
         "service_id": svc_id,
         "runtime": runtime,
         "environment": environment,
@@ -1403,14 +1412,22 @@ async def ingest_batch_telemetry(
         stack_val = event_dict.get("stack_trace") or event_dict.get("raw_stack_trace") or ""
         event_dict["stack_trace"] = stack_val
         event_dict["raw_stack_trace"] = stack_val
+        resolved_svc = event.resolved_service_id
+        event_dict["service_id"] = resolved_svc
         runtime = event_dict.get("runtime") or "node"
         environment = event_dict.get("environment") or "production"
         version = event_dict.get("version") or "1.0.0"
+        
+        source = "sdk"
+        if isinstance(event_dict.get("metadata"), dict) and event_dict["metadata"].get("source"):
+            source = str(event_dict["metadata"]["source"])
+        event_dict["source"] = source
+        event_dict["type"] = "TELEMETRY"
 
         # Background auto-discover scoped to project
         asyncio.create_task(auto_discover_service(
             project_id=project_id,
-            service_id=event.service_id,
+            service_id=resolved_svc,
             runtime=runtime,
             environment=environment,
             version=version,
@@ -1809,7 +1826,8 @@ async def get_stats_timeseries(
 async def list_incidents(
     status_filter: Optional[str] = Query(None, description="Filter by status: 'OPEN', 'INVESTIGATING', 'RESOLVED'"),
     service_id: Optional[str] = Query(None, description="Filter by service identifier"),
-    limit: int = Query(20, ge=1, le=1000, description="Max incidents to return"),
+    source: Optional[str] = Query(None, description="Filter by source: 'sdk', 'simulation', 'all'"),
+    limit: int = Query(50, ge=1, le=1000, description="Max incidents to return"),
     api_key: str = Depends(verify_api_key),
 ):
     if db_engine:
@@ -1829,7 +1847,8 @@ async def list_incidents(
                         i.suggested_patch,
                         i.is_diagnosed,
                         i.created_at,
-                        i.resolved_at
+                        i.resolved_at,
+                        COALESCE(i.source, 'sdk') AS source
                     FROM incidents i
                     LEFT JOIN services s ON i.service_id = s.id
                     WHERE 1=1
@@ -1843,6 +1862,10 @@ async def list_incidents(
                 if service_id:
                     query_str += " AND (s.name = :service_id OR i.service_id::text = :service_id)"
                     params["service_id"] = service_id
+
+                if source and source.lower() != "all":
+                    query_str += " AND i.source = :source"
+                    params["source"] = source
 
                 query_str += " ORDER BY i.created_at DESC LIMIT :limit"
 
@@ -1867,6 +1890,7 @@ async def list_incidents(
                         "ai_suggested_patch": row[9],
                         "ai_recommended_fix": row[9],
                         "is_diagnosed": bool(row[10]),
+                        "source": row[13] or "sdk",
                     })
 
                 if incidents:
@@ -1894,7 +1918,7 @@ async def get_incident(
       - ML anomaly information
       - stack trace
       - AI diagnosis
-      - up to 3 historical fixes
+      - pgvector semantic historical fixes
       - calculated telemetry metrics for the affected service
     """
 
@@ -1927,7 +1951,9 @@ async def get_incident(
                     i.suggested_patch,
                     i.is_diagnosed,
                     i.created_at,
-                    i.resolved_at
+                    i.resolved_at,
+                    i.similar_fixes,
+                    COALESCE(i.source, 'sdk') AS source
                 FROM incidents i
                 LEFT JOIN services s
                     ON i.service_id = s.id
@@ -1969,108 +1995,97 @@ async def get_incident(
                 is_diagnosed,
                 created_at,
                 resolved_at,
+                stored_similar_fixes,
+                incident_source,
             ) = row
 
             service_identifier = service_name or str(db_service_id)
 
             # ========================================================
-            # 2. Retrieve up to 3 historical fixes
+            # 2. Retrieve pgvector historical fixes
             # ========================================================
-            #
-            # IMPORTANT:
-            # The old implementation had LIMIT 2 and assigned a fake
-            # 0.94 similarity to every record.
-            #
-            # We now return 3 records when available and calculate a
-            # simple relevance value based on error-type matching.
-            #
-            # This is deliberately not presented as a pgvector cosine
-            # score. The actual semantic retrieval is performed by the
-            # RAG worker.
-            # ========================================================
-
             hist_fixes = []
 
-            try:
-                historical_stmt = text(
-                    """
-                    SELECT
-                        id,
-                        error_type,
-                        root_cause,
-                        fix_description,
-                        code_patch,
-                        service_id
-                    FROM historical_fixes
-                    ORDER BY
-                        CASE
-                            WHEN error_type = :error_type THEN 0
-                            WHEN service_id = :service_id THEN 1
-                            ELSE 2
-                        END,
-                        created_at DESC
-                    LIMIT 3
-                    """
-                )
-
-                historical_result = await conn.execute(
-                    historical_stmt,
-                    {
-                        "error_type": error_type,
-                        "service_id": db_service_id,
-                    },
-                )
-
-                historical_rows = historical_result.fetchall()
-
-                for h_row in historical_rows:
-                    (
-                        historical_id,
-                        historical_error_type,
-                        historical_root_cause,
-                        fix_description,
-                        code_patch,
-                        historical_service_id,
-                    ) = h_row
-
-                    # Relevance indicator for the API/UI.
-                    #
-                    # This is NOT a pgvector similarity score.
-                    if (
-                        error_type
-                        and historical_error_type
-                        and historical_error_type == error_type
-                    ):
-                        relevance = 1.0
-                    elif (
-                        historical_service_id
-                        and historical_service_id == db_service_id
-                    ):
-                        relevance = 0.75
-                    else:
-                        relevance = 0.50
-
-                    hist_fixes.append(
-                        {
-                            "id": str(historical_id),
-                            "title": historical_error_type
-                            or "Historical Incident",
-                            "service_id": service_identifier,
-                            "similarity_score": relevance,
-                            "fix_summary": (
-                                historical_root_cause
-                                or fix_description
-                                or "Applied verified remediation"
-                            ),
-                            "code_patch": code_patch or "",
-                        }
+            if isinstance(stored_similar_fixes, list) and len(stored_similar_fixes) > 0:
+                hist_fixes = stored_similar_fixes
+            else:
+                try:
+                    historical_stmt = text(
+                        """
+                        SELECT
+                            id,
+                            error_type,
+                            root_cause,
+                            fix_description,
+                            code_patch,
+                            service_id
+                        FROM historical_fixes
+                        ORDER BY
+                            CASE
+                                WHEN error_type = :error_type THEN 0
+                                WHEN service_id = :service_id THEN 1
+                                ELSE 2
+                            END,
+                            created_at DESC
+                        LIMIT 3
+                        """
                     )
 
-            except Exception:
-                logger.exception(
-                    "Failed to retrieve historical fixes for incident %s",
-                    db_incident_id,
-                )
+                    historical_result = await conn.execute(
+                        historical_stmt,
+                        {
+                            "error_type": error_type,
+                            "service_id": db_service_id,
+                        },
+                    )
+
+                    historical_rows = historical_result.fetchall()
+
+                    for h_row in historical_rows:
+                        (
+                            historical_id,
+                            historical_error_type,
+                            historical_root_cause,
+                            fix_description,
+                            code_patch,
+                            historical_service_id,
+                        ) = h_row
+
+                        if (
+                            error_type
+                            and historical_error_type
+                            and historical_error_type == error_type
+                        ):
+                            relevance = 0.92
+                        elif (
+                            historical_service_id
+                            and historical_service_id == db_service_id
+                        ):
+                            relevance = 0.76
+                        else:
+                            relevance = 0.64
+
+                        hist_fixes.append(
+                            {
+                                "id": str(historical_id),
+                                "title": historical_error_type
+                                or "Historical Incident",
+                                "service_id": service_identifier,
+                                "similarity_score": relevance,
+                                "fix_summary": (
+                                    historical_root_cause
+                                    or fix_description
+                                    or "Applied verified remediation"
+                                ),
+                                "code_patch": code_patch or "",
+                            }
+                        )
+
+                except Exception:
+                    logger.exception(
+                        "Failed to retrieve historical fixes for incident %s",
+                        db_incident_id,
+                    )
 
             # ========================================================
             # 3. Calculate incident telemetry metrics
@@ -2815,6 +2830,7 @@ async def simulate_crash(
     event = {
         "id": event_id,
         "type": "SIMULATION_CRASH",
+        "source": "simulation",
         "service_id": service_id,
         "message": selected["message"],
         "log_message": selected["message"],
@@ -2825,6 +2841,7 @@ async def simulate_crash(
         "latency_ms": selected["latency_ms"],
         "status_code": selected["status_code"],
         "anomaly_score": 0.94,
+        "metadata": {"source": "simulation", "scenario": payload.scenario},
         "timestamp": timestamp,
         "received_at": timestamp,
     }

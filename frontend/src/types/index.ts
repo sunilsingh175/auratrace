@@ -72,6 +72,7 @@ export interface Incident {
   ai_root_cause?: string;
   ai_recommended_fix?: string;
   code_diff?: string;
+  source?: "sdk" | "simulation" | string;
 }
 
 export interface TelemetryLog {

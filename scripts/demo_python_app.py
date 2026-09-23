@@ -22,7 +22,7 @@ if sys.platform.startswith("win"):
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 API_KEY = os.getenv("AURATRACE_API_KEY", "aura_secret_key_123")
-ENDPOINT = os.getenv("AURATRACE_ENDPOINT", "http://localhost:8000")
+ENDPOINT = os.getenv("AURATRACE_ENDPOINT", "http://127.0.0.1:8000")
 
 print("==================================================")
 print("🚀 Starting Demo Python Microservice with AuraTrace")

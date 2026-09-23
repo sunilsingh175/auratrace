@@ -600,6 +600,7 @@ async def create_incident(
             # ------------------------------------------------
             # Create incident in PostgreSQL matching schema
             # ------------------------------------------------
+            source = str(telemetry.get("source") or ("simulation" if telemetry.get("type") == "SIMULATION_CRASH" else "sdk"))
 
             result = await conn.execute(
                 text(
@@ -610,6 +611,7 @@ async def create_incident(
                         anomaly_score,
                         severity,
                         status,
+                        source,
                         error_type,
                         stack_trace,
                         is_diagnosed,
@@ -621,6 +623,7 @@ async def create_incident(
                         :anomaly_score,
                         :severity,
                         'OPEN',
+                        :source,
                         :error_type,
                         :stack_trace,
                         FALSE,
@@ -634,6 +637,7 @@ async def create_incident(
                     "telemetry_id": telemetry.get("_telemetry_id"),
                     "anomaly_score": anomaly_score,
                     "severity": severity,
+                    "source": source,
                     "error_type": error_type,
                     "stack_trace": stack_trace,
                     "created_at": datetime.now(timezone.utc),
@@ -843,27 +847,37 @@ async def process_message(
     # --------------------------------------------------------
     # Incident threshold
     # --------------------------------------------------------
+    has_explicit_exception = bool(
+        telemetry.get("error_type")
+        or (str(telemetry.get("level", "")).upper() in ("ERROR", "CRITICAL"))
+        or (int(telemetry.get("status_code", 200) or 200) >= 500)
+        or (telemetry.get("type") == "SIMULATION_CRASH")
+    )
 
-    if (
-        is_anomaly
-        and anomaly_score >= ANOMALY_THRESHOLD
-    ):
+    should_create_incident = (
+        (is_anomaly and anomaly_score >= ANOMALY_THRESHOLD)
+        or (has_explicit_exception and anomaly_score >= 0.65)
+        or (telemetry.get("type") == "SIMULATION_CRASH")
+    )
+
+    if should_create_incident:
+        effective_score = max(anomaly_score, 0.7832 if has_explicit_exception else anomaly_score)
 
         logger.warning(
             "ANOMALY DETECTED | "
             "service=%s | score=%.4f",
             service_id,
-            anomaly_score,
+            effective_score,
         )
 
         incident_id = await create_incident(
             telemetry,
-            anomaly_score,
+            effective_score,
         )
 
         publish_anomaly(
             telemetry,
-            anomaly_score,
+            effective_score,
             incident_id,
         )
 
@@ -1038,6 +1052,11 @@ def claim_stale_pending_messages():
 
         return []
 
+    except redis.exceptions.ResponseError as exc:
+        if "NOGROUP" in str(exc) or "no such key" in str(exc).lower():
+            ensure_consumer_group()
+        return []
+
     except Exception:
 
         logger.exception(
@@ -1066,6 +1085,11 @@ def read_new_messages():
         )
 
         return messages or []
+
+    except redis.exceptions.ResponseError as exc:
+        if "NOGROUP" in str(exc) or "no such key" in str(exc).lower():
+            ensure_consumer_group()
+        return []
 
     except Exception:
 

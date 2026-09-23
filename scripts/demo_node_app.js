@@ -6,7 +6,7 @@
 import { AuraTrace } from "../sdk/nodejs/dist/index.js";
 
 const API_KEY = process.env.AURATRACE_API_KEY || "aura_secret_key_123";
-const ENDPOINT = process.env.AURATRACE_ENDPOINT || "http://localhost:8000";
+const ENDPOINT = process.env.AURATRACE_ENDPOINT || "http://127.0.0.1:8000";
 
 console.log("==================================================");
 console.log("🚀 Starting Demo Node.js Microservice with AuraTrace");

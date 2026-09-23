@@ -302,6 +302,12 @@ class TelemetryLog(Base):
         default=dict,
     )
 
+    source: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="sdk",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -365,6 +371,13 @@ class Incident(Base):
         index=True,
     )
 
+    source: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="sdk",
+        index=True,
+    )
+
     error_type: Mapped[Optional[str]] = mapped_column(
         String(255),
         nullable=True,
@@ -383,6 +396,12 @@ class Incident(Base):
     suggested_patch: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    similar_fixes: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=list,
     )
 
     is_diagnosed: Mapped[bool] = mapped_column(

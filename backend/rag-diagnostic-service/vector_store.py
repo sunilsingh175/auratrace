@@ -143,31 +143,35 @@ class VectorStore:
             query_embedding = embedder.get_embedding(search_query)
 
             async with AsyncSessionLocal() as session:
+                distance_col = HistoricalFix.embedding.cosine_distance(query_embedding).label("distance")
                 stmt = (
-                    select(HistoricalFix)
+                    select(HistoricalFix, distance_col)
                     .where(HistoricalFix.embedding.isnot(None))
-                    .order_by(HistoricalFix.embedding.cosine_distance(query_embedding))
+                    .order_by(distance_col)
                     .limit(top_k)
                 )
 
                 result = await session.execute(stmt)
-                fixes = list(result.scalars().all())
+                rows = result.all()
 
                 logger.info(
-                    "Returning %d/%d semantically similar historical fixes.",
-                    len(fixes),
+                    "Returning %d/%d semantically similar historical fixes from pgvector.",
+                    len(rows),
                     top_k,
                 )
 
                 return [
                     {
                         "error_type": fix.error_type or "UnknownError",
+                        "title": f"Fix for {fix.error_type or 'Error'}",
                         "stack_trace": fix.stack_trace or "",
                         "root_cause": fix.root_cause or "",
+                        "fix_summary": fix.fix_description or fix.root_cause or "Verified patch",
                         "fix_description": fix.fix_description or "",
                         "code_patch": fix.code_patch or "",
+                        "similarity_score": round(max(0.0, min(1.0, 1.0 - float(dist))), 4),
                     }
-                    for fix in fixes[:top_k]
+                    for fix, dist in rows
                 ]
 
         except Exception as exc:

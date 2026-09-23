@@ -139,6 +139,9 @@ services:
 
       DATABASE_URL: ${DATABASE_URL}
 
+    volumes:
+      - ./backend:/app/backend
+
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -172,6 +175,9 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL}
 
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+
+    volumes:
+      - ./backend:/app/backend
 
     depends_on:
       postgres-db:
