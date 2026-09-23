@@ -97,7 +97,7 @@ def generate_synthetic_telemetry(idx: int):
             "message": scenario["message"],
             "error_type": scenario["error_type"],
             "raw_stack_trace": scenario["stack_trace"],
-            "latency_ms": scenario["latency_ms"] + random.uniform(-200, 500),
+            "latency_ms": float(scenario["latency_ms"]) + random.uniform(-200, 500),
             "status_code": scenario["status_code"],
             "level": "ERROR",
             "metadata": {"synthetic": True, "line_idx": idx, "scenario": scenario["error_type"]},
