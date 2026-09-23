@@ -105,7 +105,7 @@ export function IncidentTable({ incidents, onRefresh }: IncidentTableProps) {
             <thead className="border-b border-slate-100 bg-[#f8fafc] text-[10px] font-bold uppercase tracking-wider text-slate-400 font-heading">
               <tr>
                 <th className="px-5 py-3.5">Incident</th>
-                <th className="px-5 py-3.5">Service</th>
+                <th className="px-5 py-3.5">Application</th>
                 <th className="px-5 py-3.5">Severity</th>
                 <th className="px-5 py-3.5">Status</th>
                 <th className="px-5 py-3.5">Outlier Score</th>

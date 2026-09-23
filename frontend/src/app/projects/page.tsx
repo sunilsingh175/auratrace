@@ -287,7 +287,7 @@ export default function ProjectsPage() {
                 </h2>
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                   Install the SDK, supply your Project API Key, and start your app. AuraTrace automatically discovers
-                  your services.
+                  your application runtime and captures crashes.
                 </p>
 
                 {/* Tabs */}

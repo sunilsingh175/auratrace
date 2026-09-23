@@ -72,7 +72,7 @@ app.use(AuraTrace.expressMiddleware());`;
                 <span className="text-purple-400">from</span>{" "}
                 <span className="text-emerald-300">&apos;@auratrace/node&apos;</span>;
                 {"\n\n"}
-                <span className="text-slate-500">// Auto-detects service name &amp; unhandled crashes</span>
+                <span className="text-slate-500">// Auto-detects application name &amp; unhandled crashes</span>
                 {"\n"}
                 <span className="text-amber-300">AuraTrace</span>.
                 <span className="text-blue-400">init</span>(&#123; apiKey: process.env.
@@ -137,7 +137,7 @@ app.use(AuraTrace.expressMiddleware());`;
                 <span className="text-purple-400">import</span>{" "}
                 <span className="text-blue-300">auratrace</span>
                 {"\n\n"}
-                <span className="text-slate-500"># Zero-config service auto-discovery &amp; crash capture</span>
+                <span className="text-slate-500"># Zero-config application auto-discovery &amp; crash capture</span>
                 {"\n"}
                 <span className="text-blue-300">auratrace</span>.
                 <span className="text-blue-400">init</span>(api_key=os.environ[
