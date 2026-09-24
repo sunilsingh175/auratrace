@@ -2,19 +2,13 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, Server, Sparkles, Terminal } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Incident } from "@/types";
 import { SeverityBadge } from "@/components/incidents/SeverityBadge";
+import { formatTimeAgo } from "@/lib/utils";
 
 interface ActiveAnomaliesPanelProps {
   incidents: Incident[];
-}
-
-function formatPercent(value: unknown): string {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) return "N/A";
-  if (num <= 1) return `${Math.round(num * 100)}%`;
-  return `${Math.round(num)}%`;
 }
 
 export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
@@ -27,7 +21,7 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
             Recent Crashes
           </h2>
           <p className="text-xs text-slate-500 font-sans mt-0.5">
-            Automatic exception capture, stack traces &amp; AI triage
+            Real-time exception capture and AI diagnostic fixes
           </p>
         </div>
         <Link
@@ -41,9 +35,8 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
 
       {/* Incident Rows */}
       {incidents.length > 0 ? (
-        <div className="space-y-3">
-          {incidents.slice(0, 5).map((incident) => {
-            const score = incident.anomaly_score;
+        <div className="divide-y divide-slate-100">
+          {incidents.slice(0, 6).map((incident) => {
             const serviceName = incident.service_id || "Unknown application";
             const incidentTitle =
               incident.title ||
@@ -53,52 +46,37 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
             return (
               <div
                 key={incident.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200 transition-all"
+                className="flex items-center justify-between py-3.5 px-2 hover:bg-slate-50/70 rounded-xl transition-colors group"
               >
-                {/* Left: Severity Badge, Service, Title */}
-                <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
-                  <div className="shrink-0">
+                {/* Left: Severity Badge, Title, Service, Timestamp */}
+                <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+                  <div className="shrink-0 pt-0.5 sm:pt-0">
                     <SeverityBadge severity={incident.severity || "high"} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900 font-heading truncate">
+                      <Link
+                        href={`/incidents/${incident.id}`}
+                        className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-red-600 transition font-heading truncate"
+                      >
                         {incidentTitle}
-                      </span>
+                      </Link>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 font-sans">
-                      <div className="flex items-center gap-1">
-                        <Server className="h-3 w-3 text-slate-400" />
-                        <span className="font-semibold text-slate-700">{serviceName}</span>
-                      </div>
-                      {incident.error_type && (
-                        <div className="hidden md:flex items-center gap-1 text-slate-400 font-mono text-[10px]">
-                          <Terminal className="h-3 w-3" />
-                          <span className="truncate max-w-[240px]">{incident.error_type}</span>
-                        </div>
-                      )}
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 font-sans">
+                      <span className="font-medium text-slate-700">{serviceName}</span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-slate-400">{formatTimeAgo(incident.created_at)}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Right: Outlier Score & Action CTA */}
-                <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
-                  {typeof score === "number" && score > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-rose-600">
-                        {formatPercent(score)}
-                      </span>
-                      <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[9px] font-bold text-rose-700 font-heading">
-                        Outlier
-                      </span>
-                    </div>
-                  )}
-
+                {/* Right: View Action */}
+                <div className="shrink-0 ml-3">
                   <Link
                     href={`/incidents/${incident.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#dc2626] hover:bg-[#b91c1c] text-white px-3.5 py-1.5 text-xs font-bold font-heading shadow-xs transition cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-red-600 group-hover:translate-x-0.5 transition-all font-heading py-1.5 px-3 rounded-lg hover:bg-red-50/50"
                   >
-                    <span>View Crash &amp; Fix</span>
+                    <span>View</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
@@ -110,10 +88,10 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
         <div className="p-8 text-center rounded-xl border border-dashed border-slate-200">
           <ShieldCheck className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
           <p className="text-xs font-bold text-slate-700 font-heading">
-            No Crashes Found
+            No Crashes Recorded
           </p>
           <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-            No crashes match the current filters.
+            Application health is optimal. No active crashes detected.
           </p>
         </div>
       )}

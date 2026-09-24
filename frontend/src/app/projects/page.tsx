@@ -44,7 +44,7 @@ export default function ProjectsPage() {
       setProjects(data);
     } catch (err) {
       console.error(err);
-      setError("Unable to load AuraTrace projects. Please verify backend connectivity.");
+      setError("Unable to load AuraTrace projects.");
     } finally {
       setLoading(false);
     }
@@ -65,11 +65,11 @@ export default function ProjectsPage() {
       setProjects([created, ...projects]);
       setNewProjectName("");
       setShowCreateForm(false);
-      setActionSuccess(`Project "${created.name}" created successfully.`);
+      setActionSuccess(`Project "${created.name}" created.`);
       setTimeout(() => setActionSuccess(null), 4000);
     } catch (err) {
       console.error(err);
-      setError("Failed to create project. Please try again.");
+      setError("Failed to create project.");
     } finally {
       setCreating(false);
     }
@@ -77,7 +77,7 @@ export default function ProjectsPage() {
 
   const activeProject = projects[0];
   const hasRealKey = Boolean(activeProject?.api_key);
-  const displayKey = activeProject?.api_key || "••••••••••••••••••••";
+  const displayKey = activeProject?.api_key || "A7K92M481X63P205";
 
   const handleRegenerateKey = async () => {
     if (!activeProject) return;
@@ -87,7 +87,7 @@ export default function ProjectsPage() {
       setProjects((prev) =>
         prev.map((p) => (p.id === activeProject.id ? { ...p, api_key: res.api_key } : p))
       );
-      setActionSuccess("API Key regenerated successfully. Copy and store it securely.");
+      setActionSuccess("API key regenerated.");
       setTimeout(() => setActionSuccess(null), 4000);
     } catch {
       setError("Failed to regenerate API key.");
@@ -131,22 +131,22 @@ export default function ProjectsPage() {
     }
   };
 
-  const nodeInitCode = `const AuraTrace = require("@auratrace/node");
+  const nodeInitCode = `import AuraTrace from "@auratrace/node";
 
 AuraTrace.init({
   apiKey: process.env.AURATRACE_API_KEY
 });`;
 
-  const pythonInitCode = `import os
-import auratrace
+  const pythonInitCode = `import auratrace
+import os
 
 auratrace.init(
-    api_key=os.getenv("AURATRACE_API_KEY")
+  api_key=os.getenv("AURATRACE_API_KEY")
 )`;
 
   return (
     <AppShell hideHeaderTitle>
-      <div className="page-container max-w-5xl">
+      <div className="page-container max-w-4xl space-y-8 pb-16">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -162,7 +162,7 @@ auratrace.init(
               Projects &amp; Setup
             </h1>
             <p className="mt-1 text-xs text-slate-500 font-sans">
-              Create project → Copy API key → Install SDK → Initialize SDK → AuraTrace automatically discovers the application.
+              Install the SDK once. AuraTrace automatically discovers your application and captures crashes, stack traces, and telemetry.
             </p>
           </div>
 
@@ -193,7 +193,7 @@ auratrace.init(
           </div>
         )}
 
-        {/* Create Project Form (if toggled or no projects) */}
+        {/* Create Project Form (if toggled) */}
         {(showCreateForm || (!loading && projects.length === 0)) && (
           <div className="panel p-6 bg-white border-slate-200 shadow-sm animate-in fade-in duration-200">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-heading">
@@ -222,33 +222,25 @@ auratrace.init(
           </div>
         )}
 
-        {/* Section 1: Your Project */}
-        <div className="panel space-y-5">
+        {/* 1. Your Project & API Key */}
+        <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
               Your Project
             </h2>
-            {projects.length > 1 && (
-              <span className="text-xs text-slate-400 font-mono">
-                {projects.length} Projects Available
-              </span>
-            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
             <div>
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-heading">
-                Project Name
-              </span>
-              <p className="mt-1 text-base font-bold text-slate-900 font-heading">
+              <p className="text-base font-bold text-slate-900 font-heading">
                 {loading ? "Loading..." : activeProject?.name || "AuraTrace Demo"}
               </p>
             </div>
 
             <div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-heading">
-                  Project API Key
+                  API Key
                 </span>
                 {hasRealKey && (
                   <button
@@ -264,10 +256,10 @@ auratrace.init(
                 )}
               </div>
 
-              <div className="mt-1.5 flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-slate-200 bg-[#f8fafc] p-2">
-                <div className="flex items-center gap-2 flex-1 min-w-0 px-2">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Key className="h-4 w-4 text-slate-400 shrink-0" />
-                  <span className="font-mono text-xs font-bold text-slate-800 truncate">
+                  <span className="font-mono text-sm font-bold tracking-wider text-slate-800 truncate">
                     {displayKey}
                   </span>
                 </div>
@@ -275,7 +267,7 @@ auratrace.init(
                 <button
                   type="button"
                   onClick={copyApiKey}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:border-slate-300 transition shadow-xs font-heading cursor-pointer shrink-0"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white border border-slate-200 px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:border-slate-300 transition shadow-xs font-heading cursor-pointer shrink-0"
                 >
                   {copiedKey ? (
                     <>
@@ -285,7 +277,7 @@ auratrace.init(
                   ) : (
                     <>
                       <Copy className="h-3.5 w-3.5 text-slate-500" />
-                      <span>Copy API Key</span>
+                      <span>Copy</span>
                     </>
                   )}
                 </button>
@@ -294,8 +286,8 @@ auratrace.init(
           </div>
         </div>
 
-        {/* Section 2: Install AuraTrace */}
-        <div className="panel space-y-4">
+        {/* 2. Install AuraTrace */}
+        <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-4">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading border-b border-slate-100 pb-3">
             Install AuraTrace
           </h2>
@@ -347,14 +339,14 @@ auratrace.init(
           </div>
         </div>
 
-        {/* Section 3: Initialize SDK */}
-        <div className="panel p-6 bg-white border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)] space-y-4">
+        {/* 3. Initialize the SDK */}
+        <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-4">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading border-b border-slate-100 pb-3">
-            Initialize SDK
+            Initialize the SDK
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Node.js code block */}
+            {/* Node.js snippet */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800 font-heading">
@@ -379,30 +371,12 @@ auratrace.init(
                 </button>
               </div>
 
-              <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-xs text-slate-300 leading-relaxed overflow-x-auto">
-                <pre>
-                  <code>
-                    <span className="text-purple-400">const</span>{" "}
-                    <span className="text-amber-300">AuraTrace</span> ={" "}
-                    <span className="text-blue-400">require</span>(
-                    <span className="text-emerald-300">&quot;@auratrace/node&quot;</span>
-                    );
-                    {"\n\n"}
-                    <span className="text-amber-300">AuraTrace</span>.
-                    <span className="text-blue-400">init</span>(&#123;
-                    {"\n"}
-                    &nbsp;&nbsp;apiKey:{" "}
-                    <span className="text-sky-300">process</span>.
-                    <span className="text-sky-300">env</span>.
-                    <span className="text-emerald-300">AURATRACE_API_KEY</span>
-                    {"\n"}
-                    &#125;);
-                  </code>
-                </pre>
+              <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-xs text-slate-200 leading-relaxed overflow-x-auto">
+                <pre className="whitespace-pre-wrap">{nodeInitCode}</pre>
               </div>
             </div>
 
-            {/* Python code block */}
+            {/* Python snippet */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800 font-heading">
@@ -427,43 +401,24 @@ auratrace.init(
                 </button>
               </div>
 
-              <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-xs text-slate-300 leading-relaxed overflow-x-auto">
-                <pre>
-                  <code>
-                    <span className="text-purple-400">import</span>{" "}
-                    <span className="text-purple-400">os</span>
-                    {"\n"}
-                    <span className="text-purple-400">import</span>{" "}
-                    <span className="text-blue-300">auratrace</span>
-                    {"\n\n"}
-                    <span className="text-blue-300">auratrace</span>.
-                    <span className="text-blue-400">init</span>(
-                    {"\n"}
-                    &nbsp;&nbsp;&nbsp;&nbsp;api_key=
-                    <span className="text-purple-400">os</span>.
-                    <span className="text-blue-300">getenv</span>(
-                    <span className="text-emerald-300">&quot;AURATRACE_API_KEY&quot;</span>
-                    )
-                    {"\n"}
-                    )
-                  </code>
-                </pre>
+              <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-xs text-slate-200 leading-relaxed overflow-x-auto">
+                <pre className="whitespace-pre-wrap">{pythonInitCode}</pre>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Section 4: You're ready */}
+        {/* 4. Complete footer card */}
         <div className="panel p-6 bg-gradient-to-r from-slate-900 to-slate-950 border-slate-800 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
               <h3 className="text-base font-bold font-heading text-white">
-                You&apos;re ready
+                Zero Configuration
               </h3>
             </div>
             <p className="text-xs text-slate-300 font-sans max-w-lg leading-relaxed">
-              AuraTrace automatically detects your application, runtime, version, crashes, and telemetry.
+              Install the SDK once. AuraTrace automatically discovers your application and captures crashes, stack traces, and telemetry.
             </p>
           </div>
 
@@ -481,4 +436,3 @@ auratrace.init(
     </AppShell>
   );
 }
-

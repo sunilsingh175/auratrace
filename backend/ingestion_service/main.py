@@ -11,6 +11,7 @@ import asyncio
 import time
 import hashlib
 import secrets
+import string
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -58,6 +59,12 @@ STREAM_KEY = os.getenv("REDIS_STREAM_KEY", "telemetry_stream")
 CONSUMER_GROUP = os.getenv("REDIS_CONSUMER_GROUP", "trace_workers")
 REDIS_ANOMALY_CHANNEL = os.getenv("REDIS_ANOMALY_CHANNEL", "anomaly_events")
 MASTER_API_KEY = os.getenv("AURA_MASTER_API_KEY", "")
+
+def generate_alphanumeric_api_key(length: int = 16) -> str:
+    """Generate a high-entropy 16-character uppercase alphanumeric API key (e.g. A7K92M481X63P205)."""
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
 ENABLE_API_AUTH = os.getenv("ENABLE_API_AUTH", "true").lower() in ("true", "1", "yes")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -1179,7 +1186,7 @@ async def create_project(
     if not current_user and ENABLE_API_AUTH:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required to create a project.")
 
-    new_api_key = secrets.token_urlsafe(16).replace("-", "").replace("_", "")[:20].upper()
+    new_api_key = generate_alphanumeric_api_key(16)
     key_hash = hashlib.sha256(new_api_key.encode("utf-8")).hexdigest()
     owner_id = current_user["id"] if current_user and "id" in current_user else None
 
@@ -1246,7 +1253,7 @@ async def regenerate_project_key(
                     detail="Forbidden: You do not have permission to rotate the API key for this project.",
                 )
 
-            new_api_key = f"at_live_{secrets.token_hex(16)}"
+            new_api_key = generate_alphanumeric_api_key(16)
             key_hash = hashlib.sha256(new_api_key.encode("utf-8")).hexdigest()
 
             await conn.execute(
@@ -2748,7 +2755,7 @@ async def create_service(
     current_user: dict = Depends(get_current_user),
 ):
     service_name = payload.id or payload.name
-    new_key = f"at_live_{secrets.token_hex(16)}"
+    new_key = generate_alphanumeric_api_key(16)
     key_hash = hashlib.sha256(new_key.encode("utf-8")).hexdigest()
 
     if not db_engine:

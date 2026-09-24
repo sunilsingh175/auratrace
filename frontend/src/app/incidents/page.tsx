@@ -6,7 +6,6 @@ import {
   RefreshCw,
   CheckCircle2,
   Sparkles,
-  Layers,
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -19,13 +18,13 @@ export default function IncidentsPage() {
 
   const handleRealtimeAlert = useCallback(
     (alert: AnomalyAlertEvent) => {
-      console.log("[AuraTrace] Realtime crash alert:", alert);
+      console.log("[AuraTrace Crashes] Realtime crash alert:", alert);
       void refresh();
     },
     [refresh]
   );
 
-  const { isConnected } = useWebSocket(handleRealtimeAlert);
+  useWebSocket(handleRealtimeAlert);
 
   const activeCount = incidents.filter(
     (i) => i.status === "OPEN" || i.status === "INVESTIGATING"
@@ -39,7 +38,7 @@ export default function IncidentsPage() {
 
   return (
     <AppShell hideHeaderTitle>
-      <div className="page-container max-w-6xl">
+      <div className="page-container max-w-6xl space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -56,7 +55,7 @@ export default function IncidentsPage() {
               Crashes
             </h1>
             <p className="mt-0.5 text-xs text-slate-500 font-sans">
-              Live crash detection, AI root-cause analysis, and actionable code fixes
+              Real-time exception monitoring, anomaly scores &amp; automated AI fixes
             </p>
           </div>
 
@@ -65,22 +64,22 @@ export default function IncidentsPage() {
             onClick={() => refresh()}
             disabled={loading}
             className="button-secondary active:scale-95 transition-all cursor-pointer font-heading flex items-center gap-2"
-            title="Refresh crashes list"
+            title="Refresh crashes"
           >
             <RefreshCw
               className={`h-3.5 w-3.5 ${
                 loading ? "animate-spin text-red-600" : "text-slate-500"
               }`}
             />
-            <span>{loading ? "Refreshing..." : "Refresh Crashes"}</span>
+            <span>{loading ? "Refreshing..." : "Refresh"}</span>
           </button>
         </div>
 
-        {/* 4 Clean Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 3 Clean Summary Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <div className="panel border-rose-200 bg-rose-50/40 p-5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700 font-heading">
+              <span className="text-xs font-bold uppercase tracking-wider text-rose-700 font-heading">
                 Active Crashes
               </span>
               <AlertTriangle className="h-4 w-4 text-rose-500" />
@@ -90,21 +89,9 @@ export default function IncidentsPage() {
             </p>
           </div>
 
-          <div className="panel p-5 bg-white border-slate-100">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-heading">
-                Total Crashes
-              </span>
-              <Layers className="h-4 w-4 text-slate-400" />
-            </div>
-            <p className="mt-2 font-mono text-2xl font-bold text-slate-900">
-              {incidents.length}
-            </p>
-          </div>
-
           <div className="panel border-purple-200 bg-purple-50/40 p-5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700 font-heading">
+              <span className="text-xs font-bold uppercase tracking-wider text-purple-700 font-heading">
                 Diagnoses Ready
               </span>
               <Sparkles className="h-4 w-4 text-purple-500" />
@@ -116,7 +103,7 @@ export default function IncidentsPage() {
 
           <div className="panel border-emerald-200 bg-emerald-50/40 p-5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 font-heading">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 font-heading">
                 Resolved
               </span>
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -127,7 +114,7 @@ export default function IncidentsPage() {
           </div>
         </div>
 
-        {/* Crash Cards Feed */}
+        {/* Crash Cards List */}
         <IncidentTable
           incidents={incidents}
           onRefresh={refresh}
