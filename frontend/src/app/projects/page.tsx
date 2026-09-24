@@ -10,9 +10,7 @@ import {
   Check,
   RefreshCw,
   Code2,
-  Sparkles,
   ArrowRight,
-  Terminal,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { fetchProjects, createProject, regenerateProjectKey } from "@/lib/api-client";
