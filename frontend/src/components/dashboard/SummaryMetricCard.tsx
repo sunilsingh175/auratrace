@@ -11,9 +11,6 @@ interface SummaryMetricCardProps {
   badge?: string;
   icon: LucideIcon;
   tone?: "red" | "emerald" | "amber" | "slate" | "purple" | "blue";
-  trend?: string;
-  trendDirection?: "up" | "down" | "neutral";
-  sparklineColor?: string;
 }
 
 export function SummaryMetricCard({
@@ -24,9 +21,6 @@ export function SummaryMetricCard({
   badge = "Live API",
   icon: Icon,
   tone = "slate",
-  trend,
-  trendDirection = "neutral",
-  sparklineColor,
 }: SummaryMetricCardProps) {
   const toneClasses = {
     red: "bg-red-50 text-[#dc2626] border-red-100",
@@ -37,20 +31,8 @@ export function SummaryMetricCard({
     blue: "bg-blue-50 text-blue-600 border-blue-100",
   };
 
-  const resolvedSparklineColor =
-    sparklineColor ||
-    (tone === "red"
-      ? "#ef4444"
-      : tone === "emerald"
-      ? "#10b981"
-      : tone === "amber"
-      ? "#f59e0b"
-      : tone === "purple"
-      ? "#a855f7"
-      : "#3b82f6");
-
   return (
-    <div className="panel p-6 bg-white border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:border-slate-200 hover:shadow-md transition-all relative overflow-hidden group">
+    <div className="panel min-h-[156px] p-5 flex flex-col justify-between hover:border-slate-200 hover:shadow-md transition-all">
       {/* Top row: Label + Badge + Icon */}
       <div className="flex items-center justify-between mb-4">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-heading">
@@ -78,40 +60,6 @@ export function SummaryMetricCard({
             {unit}
           </span>
         )}
-      </div>
-
-      {/* Trend & Sparkline mini visual */}
-      <div className="flex items-center justify-between mt-2 pt-1">
-        {trend ? (
-          <div className="flex items-center gap-1 text-[11px] font-bold font-heading">
-            <span
-              className={
-                trendDirection === "up"
-                  ? "text-emerald-600"
-                  : trendDirection === "down"
-                  ? "text-rose-600"
-                  : "text-slate-500"
-              }
-            >
-              {trendDirection === "up" ? "↑" : trendDirection === "down" ? "↓" : "•"} {trend}
-            </span>
-          </div>
-        ) : (
-          <div />
-        )}
-
-        {/* Mini sparkline curve */}
-        <div className="w-20 h-5 opacity-70 group-hover:opacity-100 transition-opacity">
-          <svg viewBox="0 0 80 20" className="w-full h-full overflow-visible">
-            <path
-              d="M 0,15 Q 15,5 30,12 T 60,8 T 80,11"
-              fill="none"
-              stroke={resolvedSparklineColor}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </div>
       </div>
 
       {/* Bottom row: Supporting description */}
