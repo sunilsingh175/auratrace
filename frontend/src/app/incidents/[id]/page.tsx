@@ -90,12 +90,12 @@ export default function IncidentDetailsPage() {
 
   // Auto-poll every 1.5s until Gemini RAG diagnosis is completed
   useEffect(() => {
-    if (loading || !incident || diagnosed) return;
+    if (!incidentId || diagnosed) return;
 
     let attempts = 0;
     const interval = setInterval(async () => {
       attempts += 1;
-      if (attempts > 40) {
+      if (attempts > 50) {
         clearInterval(interval);
         return;
       }
@@ -114,16 +114,9 @@ export default function IncidentDetailsPage() {
             ""
         ).trim();
 
-        const isNowDiagnosed = Boolean(
-          (fData.is_diagnosed || (fRoot && !fRoot.includes("processing in background"))) &&
-            (fRoot || fPatch)
-        );
-
-        if (isNowDiagnosed || fRoot || fPatch) {
+        if (fData.is_diagnosed || (fRoot && !fRoot.includes("processing in background"))) {
           setIncident(fresh);
-          if (isNowDiagnosed) {
-            clearInterval(interval);
-          }
+          clearInterval(interval);
         }
       } catch (err) {
         // Silently continue polling
@@ -131,7 +124,7 @@ export default function IncidentDetailsPage() {
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [loading, incident, diagnosed, incidentId]);
+  }, [incidentId, diagnosed]);
 
   // Listen to WebSocket events dispatched from notification context
   useEffect(() => {
@@ -141,6 +134,16 @@ export default function IncidentDetailsPage() {
       const incomingId = detail?.data?.incident_id || detail?.incident_id || detail?.id;
 
       if (!incomingId || incomingId === incidentId) {
+        const eventData = detail?.data || detail;
+        if (eventData?.ai_root_cause || eventData?.ai_suggested_patch) {
+          setIncident((prev: any) => ({
+            ...prev,
+            is_diagnosed: true,
+            ai_root_cause: eventData.ai_root_cause || prev?.ai_root_cause,
+            ai_suggested_patch: eventData.ai_suggested_patch || prev?.ai_suggested_patch,
+            ai_recommended_fix: eventData.ai_suggested_patch || prev?.ai_recommended_fix,
+          }));
+        }
         loadIncident();
       }
     };
