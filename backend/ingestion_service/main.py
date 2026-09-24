@@ -1170,7 +1170,7 @@ async def list_projects(current_user: Optional[dict] = Depends(get_current_user_
     status_code=status.HTTP_201_CREATED,
     tags=["Projects & API Keys"],
     summary="Create a new AuraTrace project and generate API key",
-    description="Provisions an AuraTrace project and returns a unique, secret project API key (e.g. at_live_...).",
+    description="Provisions an AuraTrace project and returns a unique, secret alphanumeric project API key.",
 )
 async def create_project(
     payload: ProjectCreatePayload,
@@ -1179,7 +1179,7 @@ async def create_project(
     if not current_user and ENABLE_API_AUTH:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required to create a project.")
 
-    new_api_key = f"at_live_{secrets.token_hex(16)}"
+    new_api_key = secrets.token_urlsafe(16).replace("-", "").replace("_", "")[:20].upper()
     key_hash = hashlib.sha256(new_api_key.encode("utf-8")).hexdigest()
     owner_id = current_user["id"] if current_user and "id" in current_user else None
 
