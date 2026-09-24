@@ -44,7 +44,7 @@ export default function ProjectsPage() {
       setProjects(data);
     } catch (err) {
       console.error(err);
-      setError("Unable to load AutoTrace projects.");
+      setError("Unable to load Automatic Backend Detection projects.");
     } finally {
       setLoading(false);
     }
@@ -407,7 +407,7 @@ autotrace.init(
               </h3>
             </div>
             <p className="text-xs text-slate-300 font-sans max-w-lg leading-relaxed">
-              Install the SDK once. AutoTrace automatically discovers your application and captures crashes, stack traces, and telemetry.
+              Install the SDK once. Automatic Backend Detection automatically discovers your application and captures crashes, stack traces, and telemetry.
             </p>
           </div>
 

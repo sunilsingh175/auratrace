@@ -51,7 +51,7 @@ export default function PrivacyPolicyPage() {
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-sans">
-            AutoTrace collects application telemetry and crash information to detect failures, identify potential causes, retrieve relevant historical fixes, and generate diagnostic recommendations.
+            Automatic Backend Detection collects application telemetry and crash information to detect failures, identify potential causes, retrieve relevant historical fixes, and generate diagnostic recommendations.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-6 pt-6 border-t border-slate-100 text-xs text-slate-500 font-sans">
@@ -75,7 +75,7 @@ export default function PrivacyPolicyPage() {
               <span>Data Collected When the SDK is Installed</span>
             </h2>
             <p>
-              When an application integrates the AutoTrace Node.js or Python SDK, our platform ingests diagnostic and operational telemetry necessary for automated incident triage:
+              When an application integrates the Automatic Backend Detection Node.js or Python SDK, our platform ingests diagnostic and operational telemetry necessary for automated incident triage:
             </p>
 
             <div className="grid sm:grid-cols-2 gap-3 pt-2">
@@ -148,7 +148,7 @@ export default function PrivacyPolicyPage() {
               <span>Why Data is Collected</span>
             </h2>
             <div className="p-4 rounded-2xl bg-red-50/50 border border-red-100 text-slate-800 text-xs sm:text-sm leading-relaxed font-sans">
-              <strong>Purpose:</strong> AutoTrace collects application telemetry and crash information to detect failures, identify potential causes, retrieve relevant historical fixes, and generate diagnostic recommendations.
+              <strong>Purpose:</strong> Automatic Backend Detection collects application telemetry and crash information to detect failures, identify potential causes, retrieve relevant historical fixes, and generate diagnostic recommendations.
             </div>
           </section>
 
@@ -159,10 +159,10 @@ export default function PrivacyPolicyPage() {
               <span>Sensitive Secrets & Log Sanitization Policy</span>
             </h2>
             <p>
-              <strong>AutoTrace does not intentionally collect passwords, authentication tokens, API keys, database connection strings, or other secrets from application logs.</strong>
+              <strong>Automatic Backend Detection does not intentionally collect passwords, authentication tokens, API keys, database connection strings, or other secrets from application logs.</strong>
             </p>
             <p>
-              While AutoTrace SDKs filter standard authorization headers, developers are responsible for ensuring that proprietary application logs and payload attachments are sanitized before transmission where appropriate.
+              While client SDKs filter standard authorization headers, developers are responsible for ensuring that proprietary application logs and payload attachments are sanitized before transmission where appropriate.
             </p>
           </section>
 
@@ -184,7 +184,7 @@ export default function PrivacyPolicyPage() {
               <span>Questions & Inquiries</span>
             </h2>
             <p>
-              If you have any questions regarding this Privacy Policy or data handling in AutoTrace, please reach out via our contact page:
+              If you have any questions regarding this Privacy Policy or data handling in Automatic Backend Detection, please reach out via our contact page:
             </p>
             <div className="pt-2">
               <Link

@@ -146,7 +146,7 @@ function ProfileSettingsContent() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-bold text-slate-900 font-heading truncate">
-                  {user?.name || "AutoTrace Developer"}
+                  {user?.name || "Automatic Backend Detection Developer"}
                 </h2>
                 <span
                   className={`px-2 py-0.5 rounded-md text-[10px] font-bold font-heading border ${

@@ -32,7 +32,7 @@ export function AppShell({
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center text-slate-500 font-sans text-xs">
         <div className="flex flex-col items-center gap-3">
           <div className="h-7 w-7 animate-spin rounded-full border-2 border-red-600 border-t-transparent" />
-          <span className="font-medium">Loading AutoTrace...</span>
+          <span className="font-medium">Loading Automatic Backend Detection...</span>
         </div>
       </div>
     );

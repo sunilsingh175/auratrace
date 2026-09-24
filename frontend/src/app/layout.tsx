@@ -6,7 +6,7 @@ import { NotificationProvider } from "@/context/notification-context";
 export const metadata: Metadata = {
   title: "Automatic Backend Detection | AI Observability & Crash Diagnostics",
   description:
-    "Automatic Backend Detection (AuraTrace) - Autonomous telemetry ingestion, unsupervised Isolation Forest anomaly detection, pgvector RAG, and automated AI self-healing root-cause diagnostics.",
+    "Automatic Backend Detection - Autonomous telemetry ingestion, unsupervised Isolation Forest anomaly detection, pgvector RAG, and automated AI self-healing root-cause diagnostics.",
   icons: {
     icon: "/logo-icon.svg",
     shortcut: "/logo-icon.svg",

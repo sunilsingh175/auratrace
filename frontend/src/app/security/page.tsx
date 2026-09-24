@@ -25,7 +25,7 @@ import { AuthFooter } from "@/components/auth/AuthFooter";
 export default function SecurityArchitecturePage() {
   const pipelineSteps = [
     { title: "Application", desc: "User application running Node.js or Python backend services" },
-    { title: "AutoTrace SDK", desc: "Captures unhandled exceptions, runtime telemetry, and rolling metric windows" },
+    { title: "Automatic Backend Detection SDK", desc: "Captures unhandled exceptions, runtime telemetry, and rolling metric windows" },
     { title: "API Authentication", desc: "Validates project API keys and enforces project-level tenant isolation" },
     { title: "FastAPI Ingestion Service", desc: "High-throughput asynchronous telemetry receiver and schema validator" },
     { title: "Redis Stream Buffer", desc: "In-memory operational queue decoupling telemetry ingestion from ML evaluation" },
@@ -65,7 +65,7 @@ export default function SecurityArchitecturePage() {
     },
     {
       title: "No Automatic Source Code Modification",
-      desc: "AutoTrace operates in read-only diagnostic mode; source code changes require explicit developer action.",
+      desc: "Automatic Backend Detection operates in read-only diagnostic mode; source code changes require explicit developer action.",
     },
   ];
 
@@ -97,7 +97,7 @@ export default function SecurityArchitecturePage() {
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-sans">
-            AutoTrace is designed with multi-tier service isolation, API authentication, and read-only telemetry diagnostics to ensure secure observability for backend applications.
+            Automatic Backend Detection is designed with multi-tier service isolation, API authentication, and read-only telemetry diagnostics to ensure secure observability for backend applications.
           </p>
         </div>
 
@@ -175,7 +175,7 @@ export default function SecurityArchitecturePage() {
               Have a security inquiry or vulnerability report?
             </h3>
             <p className="text-xs text-slate-300 mt-1 max-w-lg font-sans">
-              For security-related questions or responsible disclosure regarding the AutoTrace project architecture, please contact our team.
+              For security-related questions or responsible disclosure regarding the Automatic Backend Detection project architecture, please contact our team.
             </p>
           </div>
           <Link

@@ -14,8 +14,6 @@ import {
   Sparkles,
   ExternalLink,
   Github,
-  GraduationCap,
-  Users,
 } from "lucide-react";
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { AuthFooter } from "@/components/auth/AuthFooter";
@@ -98,30 +96,33 @@ export default function ContactPage() {
         </div>
 
         {/* Page Hero */}
-        <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] mb-8">
+        <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] mb-8">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-xs font-semibold text-[#dc2626] mb-4 font-heading">
             <Mail className="w-3.5 h-3.5" />
-            <span>Contact AutoTrace</span>
+            <span>Contact Automatic Backend Detection</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-heading">
-            Contact &amp; Inquiries
+            Contact &amp; Support
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-sans">
-            For questions, technical issues, security concerns, or project-related inquiries regarding AutoTrace:
+            For questions, technical inquiries, feedback, or support regarding Automatic Backend Detection:
           </p>
 
-          {/* Project Details Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8 pt-6 border-t border-slate-100 text-xs">
+          {/* Project Details Grid (Email & GitHub) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-slate-100 text-xs">
             <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1">
               <div className="flex items-center gap-2 font-bold text-slate-900 font-heading">
                 <Mail className="w-4 h-4 text-[#dc2626]" />
                 <span>Project Email</span>
               </div>
-              <p className="text-slate-600 font-mono text-xs pt-1">
-                sunilsinghrajput192@gmail.com
-              </p>
+              <a
+                href="mailto:startuphub695@gmail.com"
+                className="text-slate-700 hover:text-[#dc2626] font-mono text-xs pt-1 block truncate transition-colors"
+              >
+                startuphub695@gmail.com
+              </a>
             </div>
 
             <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1">
@@ -139,37 +140,17 @@ export default function ContactPage() {
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
-
-            <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1">
-              <div className="flex items-center gap-2 font-bold text-slate-900 font-heading">
-                <Users className="w-4 h-4 text-purple-600" />
-                <span>Project Team</span>
-              </div>
-              <p className="text-slate-600 text-xs pt-1">
-                Final Year Engineering Project Team
-              </p>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1">
-              <div className="flex items-center gap-2 font-bold text-slate-900 font-heading">
-                <GraduationCap className="w-4 h-4 text-emerald-600" />
-                <span>Institution</span>
-              </div>
-              <p className="text-slate-600 text-xs pt-1">
-                Department of Computer Science &amp; Engineering
-              </p>
-            </div>
           </div>
         </div>
 
         {/* Contact Form Card */}
-        <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)]">
+        <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)]">
           <div className="mb-6 border-b border-slate-100 pb-4">
             <h2 className="text-xl font-bold text-slate-900 font-heading">
               Send a Message
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Leave your inquiry and our project team will review it.
+              Leave your inquiry and we will get back to you shortly.
             </p>
           </div>
 
@@ -183,7 +164,7 @@ export default function ContactPage() {
                   Message Submitted Successfully
                 </h3>
                 <p className="mt-2 text-xs sm:text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
-                  Your message has been directly dispatched to the project team.
+                  Your message has been delivered. We will review your inquiry and follow up.
                 </p>
 
                 {inquiryId && (

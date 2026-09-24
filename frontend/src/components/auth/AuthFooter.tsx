@@ -7,7 +7,7 @@ export function AuthFooter() {
   return (
     <footer className="w-full py-8 text-center text-xs text-slate-500">
       <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-        <span>© 2026 AutoTrace Inc.</span>
+        <span>© 2026 Automatic Backend Detection Inc.</span>
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-medium">
           <Link
             href="/privacy"
