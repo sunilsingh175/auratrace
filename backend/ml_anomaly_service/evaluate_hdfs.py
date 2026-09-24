@@ -188,26 +188,15 @@ def evaluate_hdfs_benchmark(
     cm = confusion_matrix(y_test, y_test_pred)
     tn, fp, fn, tp = cm.ravel() if cm.shape == (2, 2) else (0, 0, 0, 0)
 
-    print("\n" + "=" * 72)
+    print("========================================================================")
     print(" 📊 OUT-OF-SAMPLE TEST SET EVALUATION METRICS (Held-Out 30%)")
-    print("=" * 72)
+    print("========================================================================")
     print(f"  • Test Accuracy:        {test_accuracy:.4f} ({test_accuracy*100:.2f}%)")
     print(f"  • Test ROC-AUC Score:   {test_roc_auc:.4f} ({test_roc_auc*100:.2f}%)")
     print(f"  • PR-AUC (Avg Prec):    {test_pr_auc:.4f} ({test_pr_auc*100:.2f}%)")
     print(f"  • Precision:            {test_precision:.4f} ({test_precision*100:.2f}%)")
     print(f"  • Recall:               {test_recall:.4f} ({test_recall*100:.2f}%)")
     print(f"  • F1-Score:             {test_f1:.4f} ({test_f1*100:.2f}%)")
-    print(f"  • Inference Velocity:   {len(X_test)/infer_time:,.1f} sessions/sec")
-    print("-" * 72)
-    print(" Confusion Matrix Breakdown (Test Set):")
-    print(f"  - True Positives (TP - Caught Anomalies):    {tp:,}")
-    print(f"  - False Positives (FP - False Alarms):       {fp:,}")
-    print(f"  - True Negatives (TN - Correct Normal):      {tn:,}")
-    print(f"  - False Negatives (FN - Missed Anomalies):   {fn:,}")
-    print("=" * 72)
-    print(" ✅ Validation Confirmed: Isolation Forest demonstrates strong out-of-sample")
-    print("    generalization for unsupervised anomaly detection on log telemetry.")
-    print("=" * 72)
 
 
 if __name__ == "__main__":
