@@ -84,9 +84,8 @@ export default function IncidentDetailsPage() {
   ).trim();
 
   const diagnosed = Boolean(
-    data?.is_diagnosed &&
-      (rootCause || recoveryPatch) &&
-      !rootCause.includes("processing in background")
+    (data?.is_diagnosed || (rootCause && !rootCause.includes("processing in background"))) &&
+      (rootCause || recoveryPatch)
   );
 
   // Auto-poll every 1.5s until Gemini RAG diagnosis is completed
@@ -96,7 +95,7 @@ export default function IncidentDetailsPage() {
     let attempts = 0;
     const interval = setInterval(async () => {
       attempts += 1;
-      if (attempts > 30) {
+      if (attempts > 40) {
         clearInterval(interval);
         return;
       }
@@ -116,9 +115,8 @@ export default function IncidentDetailsPage() {
         ).trim();
 
         const isNowDiagnosed = Boolean(
-          fData.is_diagnosed &&
-            (fRoot || fPatch) &&
-            !fRoot.includes("processing in background")
+          (fData.is_diagnosed || (fRoot && !fRoot.includes("processing in background"))) &&
+            (fRoot || fPatch)
         );
 
         if (isNowDiagnosed || fRoot || fPatch) {

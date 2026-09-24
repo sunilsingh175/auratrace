@@ -69,8 +69,10 @@ export interface Incident {
   stack_trace?: string;
   system_metrics?: SystemMetrics;
   similar_incidents?: SimilarIncident[];
+  is_diagnosed?: boolean;
   ai_root_cause?: string;
   ai_recommended_fix?: string;
+  ai_suggested_patch?: string;
   code_diff?: string;
   source?: "sdk" | "simulation" | string;
 }
