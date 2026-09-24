@@ -194,29 +194,11 @@ export default function IncidentDetailsPage() {
     data?.stack_trace || data?.raw_stack_trace || "No stack trace available for this event."
   ).trim();
 
-  // Historical pgvector matches (with fallback if empty to provide clear examples)
-  const defaultHistoricalMatches = [
-    {
-      title: "Redis Connection Failure",
-      similarity_score: 0.817,
-      fix_summary: "Add connection retry and timeout handling.",
-    },
-    {
-      title: "Connection Pool Failure",
-      similarity_score: 0.667,
-      fix_summary: "Configure connection retry behavior.",
-    },
-    {
-      title: "Cache Service Unavailable",
-      similarity_score: 0.664,
-      fix_summary: "Add service availability checks.",
-    },
-  ];
-
-  const historicalMatches =
-    Array.isArray(data?.similar_incidents) && data.similar_incidents.length > 0
-      ? data.similar_incidents
-      : defaultHistoricalMatches;
+  // Show only similarity matches returned by the backend. Never fabricate
+  // historical evidence when pgvector has no results.
+  const historicalMatches = Array.isArray(data?.similar_incidents)
+    ? data.similar_incidents
+    : [];
 
   const status = String(data?.status || "OPEN");
 
@@ -242,9 +224,9 @@ export default function IncidentDetailsPage() {
 
   if (!whatHappenedText) {
     if (rawLogMessage && rawLogMessage !== errorType && rawLogMessage.length > 10) {
-      whatHappenedText = `The application ${appName} encountered an unhandled exception: ${rawLogMessage}`;
+      whatHappenedText = `The application ${appName} reported: ${rawLogMessage}`;
     } else {
-      whatHappenedText = `The application ${appName} encountered an unhandled ${errorType} runtime exception during execution.`;
+      whatHappenedText = `The application ${appName} reported a ${errorType} failure during execution.`;
     }
   }
 
@@ -491,7 +473,7 @@ export default function IncidentDetailsPage() {
                       </h2>
                     </div>
                     <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-                      Apply retry and connection handling to the client
+                      Developer-reviewable remediation generated from the diagnostic context
                     </p>
                   </div>
 
