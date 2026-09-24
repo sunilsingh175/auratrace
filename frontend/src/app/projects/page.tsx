@@ -77,7 +77,7 @@ export default function ProjectsPage() {
 
   const activeProject = projects[0];
   const hasRealKey = Boolean(activeProject?.api_key);
-  const displayKey = activeProject?.api_key || "at_live_••••••••••••••••••••••••";
+  const displayKey = activeProject?.api_key || "••••••••••••••••••••";
 
   const handleRegenerateKey = async () => {
     if (!activeProject) return;
@@ -146,7 +146,7 @@ auratrace.init(
 
   return (
     <AppShell hideHeaderTitle>
-      <div className="max-w-4xl mx-auto space-y-8 pb-16">
+      <div className="page-container max-w-5xl">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -223,7 +223,7 @@ auratrace.init(
         )}
 
         {/* Section 1: Your Project */}
-        <div className="panel p-6 bg-white border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)] space-y-5">
+        <div className="panel space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
               Your Project
@@ -295,7 +295,7 @@ auratrace.init(
         </div>
 
         {/* Section 2: Install AuraTrace */}
-        <div className="panel p-6 bg-white border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)] space-y-4">
+        <div className="panel space-y-4">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading border-b border-slate-100 pb-3">
             Install AuraTrace
           </h2>
