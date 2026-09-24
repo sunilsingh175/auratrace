@@ -13,6 +13,9 @@ import {
   MessageSquare,
   Sparkles,
   ExternalLink,
+  Github,
+  GraduationCap,
+  Users,
 } from "lucide-react";
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { AuthFooter } from "@/components/auth/AuthFooter";
@@ -61,7 +64,6 @@ export default function ContactPage() {
       }
     } catch (err) {
       console.error("Submission error:", err);
-      // Even if network fails, construct a client-side confirmation and provide mailto fallback
       setSubmitted(true);
       setInquiryId(`INQ-${Date.now().toString(36).toUpperCase()}`);
     } finally {
@@ -80,28 +82,95 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fafbfc] text-slate-900 flex flex-col justify-between selection:bg-red-500/20 selection:text-red-900">
+    <div className="min-h-screen bg-[#fafbfc] text-slate-900 flex flex-col justify-between selection:bg-red-500/20 selection:text-red-900 font-sans">
       <AuthHeader />
 
-      <main className="flex-1 max-w-3xl w-full mx-auto px-6 py-8 md:py-12">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 md:py-12">
         {/* Back Link */}
         <div className="mb-6">
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors font-sans"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors font-heading"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Return to Dashboard</span>
           </Link>
         </div>
 
+        {/* Page Hero */}
+        <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-xs font-semibold text-[#dc2626] mb-4 font-heading">
+            <Mail className="w-3.5 h-3.5" />
+            <span>Contact AutoTrace</span>
+          </div>
+
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-heading">
+            Contact &amp; Inquiries
+          </h1>
+
+          <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-sans">
+            For questions, technical issues, security concerns, or project-related inquiries regarding AutoTrace:
+          </p>
+
+          {/* Project Details Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8 pt-6 border-t border-slate-100 text-xs">
+            <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1">
+              <div className="flex items-center gap-2 font-bold text-slate-900 font-heading">
+                <Mail className="w-4 h-4 text-[#dc2626]" />
+                <span>Project Email</span>
+              </div>
+              <p className="text-slate-600 font-mono text-xs pt-1">
+                sunilsinghrajput192@gmail.com
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1">
+              <div className="flex items-center gap-2 font-bold text-slate-900 font-heading">
+                <Github className="w-4 h-4 text-slate-800" />
+                <span>GitHub Repository</span>
+              </div>
+              <a
+                href="https://github.com/sunilsingh175/auratrace"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#dc2626] hover:underline font-mono text-xs pt-1 inline-flex items-center gap-1"
+              >
+                <span>github.com/sunilsingh175/auratrace</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1">
+              <div className="flex items-center gap-2 font-bold text-slate-900 font-heading">
+                <Users className="w-4 h-4 text-purple-600" />
+                <span>Project Team</span>
+              </div>
+              <p className="text-slate-600 text-xs pt-1">
+                Final Year Engineering Project Team
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1">
+              <div className="flex items-center gap-2 font-bold text-slate-900 font-heading">
+                <GraduationCap className="w-4 h-4 text-emerald-600" />
+                <span>Institution</span>
+              </div>
+              <p className="text-slate-600 text-xs pt-1">
+                Department of Computer Science &amp; Engineering
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Contact Form Card */}
         <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)]">
-          {/* Main Title matching the screenshot */}
-          <div className="mb-8">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-heading leading-snug">
-              Questions or comments? Get in touch and we&apos;ll be happy to help.
-            </h1>
+          <div className="mb-6 border-b border-slate-100 pb-4">
+            <h2 className="text-xl font-bold text-slate-900 font-heading">
+              Send a Message
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Leave your inquiry and our project team will review it.
+            </p>
           </div>
 
           {submitted ? (
@@ -110,11 +179,11 @@ export default function ContactPage() {
                 <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-200">
                   <CheckCircle2 className="w-6 h-6 stroke-[2.2]" />
                 </div>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-heading">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900 font-heading">
                   Message Submitted Successfully
-                </h2>
+                </h3>
                 <p className="mt-2 text-xs sm:text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
-                  Your message has been directly dispatched to the administrative team. We will review your inquiry and follow up shortly.
+                  Your message has been directly dispatched to the project team.
                 </p>
 
                 {inquiryId && (
@@ -151,10 +220,10 @@ export default function ContactPage() {
                 </div>
               )}
 
-              {/* Row 1: Name and Email * */}
+              {/* Row 1: Name and Email */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="name-input" className="sr-only">
+                  <label htmlFor="name-input" className="text-xs font-semibold text-slate-700 block mb-1 font-heading">
                     Name
                   </label>
                   <input
@@ -162,13 +231,13 @@ export default function ContactPage() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Name"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+                    placeholder="Your Name"
+                    className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-500 focus:bg-white"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="email-input" className="sr-only">
+                  <label htmlFor="email-input" className="text-xs font-semibold text-slate-700 block mb-1 font-heading">
                     Email *
                   </label>
                   <input
@@ -177,31 +246,31 @@ export default function ContactPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email *"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+                    placeholder="name@example.com"
+                    className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-500 focus:bg-white"
                   />
                 </div>
               </div>
 
               {/* Row 2: Phone number */}
               <div>
-                <label htmlFor="phone-input" className="sr-only">
-                  Phone number
+                <label htmlFor="phone-input" className="text-xs font-semibold text-slate-700 block mb-1 font-heading">
+                  Phone (Optional)
                 </label>
                 <input
                   id="phone-input"
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Phone number"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+                  placeholder="+91..."
+                  className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-500 focus:bg-white"
                 />
               </div>
 
               {/* Row 3: Comment */}
               <div>
-                <label htmlFor="comment-input" className="sr-only">
-                  Comment
+                <label htmlFor="comment-input" className="text-xs font-semibold text-slate-700 block mb-1 font-heading">
+                  Message *
                 </label>
                 <textarea
                   id="comment-input"
@@ -209,8 +278,8 @@ export default function ContactPage() {
                   required
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Comment"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-800 focus:ring-1 focus:ring-slate-800 resize-none font-sans"
+                  placeholder="Describe your inquiry, feedback, or question..."
+                  className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-500 focus:bg-white resize-none font-sans"
                 />
               </div>
 
@@ -219,21 +288,20 @@ export default function ContactPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-xl bg-[#bcaaa4] hover:bg-[#a1887f] active:bg-[#8d6e63] text-slate-900 font-heading font-medium px-8 py-3 text-sm transition shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto"
+                  className="button-primary px-8 py-3 text-xs font-heading font-bold disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto"
                 >
                   {submitting ? (
                     <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                       <span>Sending...</span>
                     </>
                   ) : (
-                    <span>Send</span>
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Send Message</span>
+                    </>
                   )}
                 </button>
-
-                <span className="text-xs text-slate-400 font-sans">
-                  Direct communication protected with TLS encryption.
-                </span>
               </div>
             </form>
           )}

@@ -17,185 +17,165 @@ import {
   Layers,
   Database,
   Terminal,
+  ArrowDown,
 } from "lucide-react";
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { AuthFooter } from "@/components/auth/AuthFooter";
 
 export default function SecurityArchitecturePage() {
+  const pipelineSteps = [
+    { title: "Application", desc: "User application running Node.js or Python backend services" },
+    { title: "AutoTrace SDK", desc: "Captures unhandled exceptions, runtime telemetry, and rolling metric windows" },
+    { title: "API Authentication", desc: "Validates project API keys and enforces project-level tenant isolation" },
+    { title: "FastAPI Ingestion Service", desc: "High-throughput asynchronous telemetry receiver and schema validator" },
+    { title: "Redis Stream Buffer", desc: "In-memory operational queue decoupling telemetry ingestion from ML evaluation" },
+    { title: "ML Anomaly Detection", desc: "Unsupervised Isolation Forest model detecting system & latency anomalies" },
+    { title: "PostgreSQL + pgvector", desc: "Persistent incident store and high-dimensional embeddings for similarity search" },
+    { title: "RAG / AI Diagnosis", desc: "Retrieval-augmented root cause analysis and contextual code fix synthesis" },
+  ];
+
+  const securityFeatures = [
+    {
+      title: "API-Key Authentication",
+      desc: "Every telemetry payload requires an authorized workspace API key before ingestion.",
+    },
+    {
+      title: "Project-Level Isolation",
+      desc: "Telemetry, services, and crash incidents are strictly partitioned per project API key.",
+    },
+    {
+      title: "Role-Based Access Control (RBAC)",
+      desc: "Dashboard access distinguishes Developer permissions from Administrator controls.",
+    },
+    {
+      title: "Stack-Trace Sanitization",
+      desc: "Client SDKs sanitize authorization headers and sensitive tokens prior to transport.",
+    },
+    {
+      title: "Server-Side API Key Hashing",
+      desc: "API keys and password credentials are securely hashed and authenticated server-side.",
+    },
+    {
+      title: "Internal Microservice Network",
+      desc: "PostgreSQL, Redis, and ML workers communicate over an isolated internal Docker bridge network.",
+    },
+    {
+      title: "Developer vs Admin Separation",
+      desc: "Administrative operations (user suspension, project purging) require verified Admin status.",
+    },
+    {
+      title: "No Automatic Source Code Modification",
+      desc: "AutoTrace operates in read-only diagnostic mode; source code changes require explicit developer action.",
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#fafbfc] text-slate-900 flex flex-col justify-between selection:bg-red-500/20 selection:text-red-900">
+    <div className="min-h-screen bg-[#fafbfc] text-slate-900 flex flex-col justify-between selection:bg-red-500/20 selection:text-red-900 font-sans">
       <AuthHeader />
 
-      <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-8 md:py-12">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 md:py-12">
         {/* Back Link */}
         <div className="mb-6">
           <Link
-            href="/login"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors font-heading"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Return to Sign in</span>
+            <span>Return to Dashboard</span>
           </Link>
         </div>
 
         {/* Page Hero */}
         <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-xs font-semibold text-[#b91c1c] mb-4">
-            <Shield className="w-3.5 h-3.5 text-[#c51f33]" />
-            <span>Cryptographic Security & Verification Model</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-xs font-semibold text-[#dc2626] mb-4 font-heading">
+            <Shield className="w-3.5 h-3.5" />
+            <span>Technical Security Overview</span>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-            Security Architecture & Cryptographic Transport
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-heading">
+            Security Architecture
           </h1>
 
-          <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl">
-            Automatic Backend Detection leverages End-to-End Cryptographic Transport, multi-factor OTP authentication, PBKDF2 password hashing, and token authorization to protect enterprise telemetry.
+          <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-sans">
+            AutoTrace is designed with multi-tier service isolation, API authentication, and read-only telemetry diagnostics to ensure secure observability for backend applications.
           </p>
+        </div>
 
-          <div className="mt-6 flex flex-wrap items-center gap-4 pt-6 border-t border-slate-100 text-xs">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span className="font-semibold">Secure OTP Multi-Factor Authentication</span>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 text-slate-700 border border-slate-200">
-              <Lock className="w-4 h-4 text-slate-500" />
-              <span>TLS 1.3 + AES-256 + PBKDF2</span>
-            </div>
+        {/* Implemented System Architecture Pipeline */}
+        <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] mb-8 space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-heading">
+              Implemented Telemetry & Diagnostic Pipeline
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              End-to-end data flow from client application to AI diagnosis
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {pipelineSteps.map((step, idx) => (
+              <React.Fragment key={idx}>
+                <div className="p-3.5 rounded-2xl bg-[#f8fafc] border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-slate-800 text-xs font-bold font-mono">
+                      {idx + 1}
+                    </span>
+                    <span className="font-bold text-slate-900 text-xs sm:text-sm font-heading">
+                      {step.title}
+                    </span>
+                  </div>
+                  <span className="text-xs text-slate-600 font-sans sm:text-right">
+                    {step.desc}
+                  </span>
+                </div>
+
+                {idx < pipelineSteps.length - 1 && (
+                  <div className="flex justify-center py-0.5">
+                    <ArrowDown className="h-4 w-4 text-slate-300" />
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
           </div>
         </div>
 
-        {/* Architecture Grid */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          {/* Card 1 */}
-          <div className="bg-white rounded-3xl p-7 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 rounded-2xl bg-red-50 text-[#b91c1c] flex items-center justify-center mb-5 border border-red-100">
-                <Cpu className="w-6 h-6 stroke-[2]" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Encrypted Ingestion & Transport Layer
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Telemetry ingestion pipelines and anomaly classifications enforce strict <strong>TLS 1.3 Encryption</strong> and constant-time API token validation. Traces are parsed and buffered in high-throughput in-memory Redis streams without unencrypted external routing.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-semibold text-[#b91c1c]">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>End-to-End Encrypted Transport</span>
-            </div>
+        {/* Implemented Security Measures Grid */}
+        <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] mb-8 space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-heading">
+              Implemented Security Measures
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Technical protections actively enforcing safety across the platform
+            </p>
           </div>
 
-          {/* Card 2 */}
-          <div className="bg-white rounded-3xl p-7 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-5 border border-blue-100">
-                <Lock className="w-6 h-6 stroke-[2]" />
+          <div className="grid sm:grid-cols-2 gap-4">
+            {securityFeatures.map((feat, idx) => (
+              <div
+                key={idx}
+                className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1.5"
+              >
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-900 font-heading">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>{feat.title}</span>
+                </div>
+                <p className="text-xs text-slate-600 font-sans pl-6 leading-relaxed">
+                  {feat.desc}
+                </p>
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Cryptographic Access & Password Hashing
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                User credentials utilize <strong>PBKDF2-HMAC-SHA256</strong> with 310,000 rounds and unique cryptographically secure 16-byte random salts. Session authentication uses HMAC-SHA256 authenticated JSON Web Tokens with ephemeral expiry.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-semibold text-blue-700">
-              <CheckCircle2 className="w-4 h-4 text-blue-600" />
-              <span>Zero Plaintext Password Exposure</span>
-            </div>
-          </div>
-
-          {/* Card 3 */}
-          <div className="bg-white rounded-3xl p-7 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mb-5 border border-purple-100">
-                <KeyRound className="w-6 h-6 stroke-[2]" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Email OTP & Brute-Force Rate Limiting
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Account creation and critical sign-in events require 6-digit cryptographic OTP verification delivered via SMTP. Redis token buckets strictly enforce a 5-attempt threshold and 30-second resend cooldown to eliminate brute-force vector attacks.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-semibold text-purple-700">
-              <CheckCircle2 className="w-4 h-4 text-purple-600" />
-              <span>Multi-Factor Verification Required</span>
-            </div>
-          </div>
-
-          {/* Card 4 */}
-          <div className="bg-white rounded-3xl p-7 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-5 border border-emerald-100">
-                <Layers className="w-6 h-6 stroke-[2]" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Isolation Forest & AI Sandboxing
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Autonomous anomaly detection operates via unsupervised Isolation Forests hosted on localized sandboxes. Telemetry traces are pre-filtered to remove API tokens, authorization headers, and environment variables before analysis.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-semibold text-emerald-700">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Local Sandboxed AI Ingestion</span>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Security Specifications Detail Card */}
-        <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] space-y-6 text-sm text-slate-700 mb-8">
-          <h2 className="text-xl font-bold text-slate-900">
-            Security Control Matrix
-          </h2>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="py-3 px-4">Component</th>
-                  <th className="py-3 px-4">Standard / Algorithm</th>
-                  <th className="py-3 px-4">Enforcement Layer</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                <tr>
-                  <td className="py-3 px-4 font-semibold text-slate-900">Transport Security</td>
-                  <td className="py-3 px-4 text-slate-600">TLS 1.3 / Perfect Forward Secrecy</td>
-                  <td className="py-3 px-4 text-emerald-700 font-medium">Gateway & Ingress</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 font-semibold text-slate-900">Payload Encryption</td>
-                  <td className="py-3 px-4 text-slate-600">AES-256-GCM / TLS In-Transit</td>
-                  <td className="py-3 px-4 text-emerald-700 font-medium">Network & Broker</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 font-semibold text-slate-900">Password Hashing</td>
-                  <td className="py-3 px-4 text-slate-600">PBKDF2-HMAC-SHA256 (310k rounds)</td>
-                  <td className="py-3 px-4 text-emerald-700 font-medium">Auth Microservice</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 font-semibold text-slate-900">Session Tokens</td>
-                  <td className="py-3 px-4 text-slate-600">HMAC-SHA256 Signed Bearer Token</td>
-                  <td className="py-3 px-4 text-emerald-700 font-medium">Redis + Ingestion</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 font-semibold text-slate-900">API Authentication</td>
-                  <td className="py-3 px-4 text-slate-600">Constant-Time HMAC Key Verification</td>
-                  <td className="py-3 px-4 text-emerald-700 font-medium">SDK Client Interceptor</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Security Contact Banner */}
+        {/* Security Questions Card */}
         <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
           <div>
-            <h3 className="text-lg font-bold">Have a security question or report?</h3>
-            <p className="text-xs text-slate-300 mt-1 max-w-lg">
-              Our dedicated product security incident response team (PSIRT) is on standby 24/7 to address responsible disclosures and audit inquiries.
+            <h3 className="text-base sm:text-lg font-bold font-heading">
+              Have a security inquiry or vulnerability report?
+            </h3>
+            <p className="text-xs text-slate-300 mt-1 max-w-lg font-sans">
+              For security-related questions or responsible disclosure regarding the AutoTrace project architecture, please contact our team.
             </p>
           </div>
           <Link
