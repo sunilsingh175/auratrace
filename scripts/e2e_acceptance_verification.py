@@ -1,7 +1,7 @@
 """
-AuraTrace End-to-End Acceptance Test & Deep Verification
+AutoTrace End-to-End Acceptance Test & Deep Verification
 Executes the full developer flow:
-1. Create a brand-new AuraTrace Project.
+1. Create a brand-new AutoTrace Project.
 2. Obtain generated 16-character alphanumeric Project API Key.
 3. Run Node.js microservice SDK demo with that Project Key.
 4. Verify auto-discovery, telemetry logs, anomaly detection, pgvector similarity, and AI Doctor diagnosis.
@@ -82,7 +82,7 @@ def banner(title):
     print("=" * 70)
 
 def main():
-    banner("AURATRACE END-TO-END ACCEPTANCE VERIFICATION")
+    banner("AUTOTRACE END-TO-END ACCEPTANCE VERIFICATION")
 
     # Step 1: Check System Health
     print("\n[Step 1] Checking Ingestion & Microservice Cluster Health...")

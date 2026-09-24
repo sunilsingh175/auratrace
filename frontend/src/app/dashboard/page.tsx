@@ -44,7 +44,7 @@ export default function DashboardPage() {
   // Real-time WebSocket listener: new crashes update instantly without page refresh
   const handleRealtimeAlert = useCallback(
     (alert: AnomalyAlertEvent) => {
-      console.log("[AuraTrace Dashboard] Real-time crash alert received:", alert);
+      console.log("[AutoTrace Dashboard] Real-time crash alert received:", alert);
       void loadDashboardData();
     },
     [loadDashboardData]

@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["auratrace", "trace_sdk"]
+packages = ["autotrace", "auratrace", "trace_sdk"]
 
 [project.urls]
 "Homepage" = "https://github.com/sunilsingh175/auratrace"

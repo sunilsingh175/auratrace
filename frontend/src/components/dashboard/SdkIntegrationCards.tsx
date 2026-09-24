@@ -8,16 +8,16 @@ export function SdkIntegrationCards() {
   const [copiedPython, setCopiedPython] = useState(false);
   const [copiedNode, setCopiedNode] = useState(false);
 
-  const pythonCode = `import auratrace
+  const pythonCode = `import autotrace
 
 # Zero-config service auto-discovery & crash capture
-auratrace.init(api_key=os.environ["AURATRACE_API_KEY"])`;
+autotrace.init(api_key=os.environ["AUTOTRACE_API_KEY"])`;
 
-  const nodeCode = `import { AuraTrace } from '@auratrace/node';
+  const nodeCode = `import { AutoTrace } from '@autotrace/node';
 
 // Auto-detects package.json name & captures unhandled exceptions
-AuraTrace.init({ apiKey: process.env.AURATRACE_API_KEY });
-app.use(AuraTrace.expressMiddleware());`;
+AutoTrace.init({ apiKey: process.env.AUTOTRACE_API_KEY });
+app.use(AutoTrace.expressMiddleware());`;
 
   const copyToClipboard = (text: string, isPython: boolean) => {
     navigator.clipboard.writeText(text);
@@ -47,7 +47,7 @@ app.use(AuraTrace.expressMiddleware());`;
               </div>
             </div>
             <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600 font-heading font-mono">
-              npm i @auratrace/node
+              npm i @autotrace/node
             </span>
           </div>
 
@@ -68,19 +68,19 @@ app.use(AuraTrace.expressMiddleware());`;
             <pre>
               <code>
                 <span className="text-purple-400">import</span> &#123;{" "}
-                <span className="text-amber-300">AuraTrace</span> &#125;{" "}
+                <span className="text-amber-300">AutoTrace</span> &#125;{" "}
                 <span className="text-purple-400">from</span>{" "}
-                <span className="text-emerald-300">&apos;@auratrace/node&apos;</span>;
+                <span className="text-emerald-300">&apos;@autotrace/node&apos;</span>;
                 {"\n\n"}
                 <span className="text-slate-500">// Auto-detects application name &amp; unhandled crashes</span>
                 {"\n"}
-                <span className="text-amber-300">AuraTrace</span>.
+                <span className="text-amber-300">AutoTrace</span>.
                 <span className="text-blue-400">init</span>(&#123; apiKey: process.env.
-                <span className="text-emerald-300">AURATRACE_API_KEY</span> &#125;);
+                <span className="text-emerald-300">AUTOTRACE_API_KEY</span> &#125;);
                 {"\n"}
                 <span className="text-slate-300">app.</span>
                 <span className="text-blue-400">use</span>(
-                <span className="text-amber-300">AuraTrace</span>.
+                <span className="text-amber-300">AutoTrace</span>.
                 <span className="text-blue-400">expressMiddleware</span>());
               </code>
             </pre>
@@ -114,7 +114,7 @@ app.use(AuraTrace.expressMiddleware());`;
               </div>
             </div>
             <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600 font-heading font-mono">
-              pip install auratrace
+              pip install autotrace
             </span>
           </div>
 
@@ -135,13 +135,13 @@ app.use(AuraTrace.expressMiddleware());`;
             <pre>
               <code>
                 <span className="text-purple-400">import</span>{" "}
-                <span className="text-blue-300">auratrace</span>
+                <span className="text-blue-300">autotrace</span>
                 {"\n\n"}
                 <span className="text-slate-500"># Zero-config application auto-discovery &amp; crash capture</span>
                 {"\n"}
-                <span className="text-blue-300">auratrace</span>.
+                <span className="text-blue-300">autotrace</span>.
                 <span className="text-blue-400">init</span>(api_key=os.environ[
-                <span className="text-emerald-300">&quot;AURATRACE_API_KEY&quot;</span>])
+                <span className="text-emerald-300">&quot;AUTOTRACE_API_KEY&quot;</span>])
               </code>
             </pre>
           </div>

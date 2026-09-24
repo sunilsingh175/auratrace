@@ -609,7 +609,7 @@ export function AuthForm({ initialTab = "login" }: AuthFormProps) {
                   <p className="font-bold font-heading text-sm text-emerald-900 mb-1">
                     Password Reset Complete
                   </p>
-                  <p>You can now sign in to AuraTrace with your new password.</p>
+                  <p>You can now sign in to AutoTrace with your new password.</p>
                 </div>
                 <button
                   type="button"

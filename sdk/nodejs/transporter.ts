@@ -37,8 +37,8 @@ export class BatchTransporter {
   private version: string;
 
   constructor(config: TransporterConfig) {
-    this.endpoint = (config.endpoint || process.env.AURATRACE_ENDPOINT || "http://localhost:8000").replace(/\/$/, "");
-    this.apiKey = config.apiKey || process.env.AURATRACE_API_KEY || "";
+    this.endpoint = (config.endpoint || process.env.AUTOTRACE_ENDPOINT || process.env.AURATRACE_ENDPOINT || "http://localhost:8000").replace(/\/$/, "");
+    this.apiKey = config.apiKey || process.env.AUTOTRACE_API_KEY || process.env.AURATRACE_API_KEY || "";
     this.serviceId = config.serviceId || "node-app";
     this.runtime = config.runtime || "node";
     this.environment = config.environment || process.env.NODE_ENV || "production";

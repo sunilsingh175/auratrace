@@ -38,7 +38,7 @@ async function handler(request: NextRequest, context: { params: { path: string[]
     });
   } catch (error) {
     return NextResponse.json(
-      { detail: "Unable to reach AuraTrace backend.", error: error instanceof Error ? error.message : "Unknown error" },
+      { detail: "Unable to reach AutoTrace backend.", error: error instanceof Error ? error.message : "Unknown error" },
       { status: 502 }
     );
   }

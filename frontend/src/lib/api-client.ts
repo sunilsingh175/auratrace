@@ -133,7 +133,7 @@ export async function fetchProjects(): Promise<Project[]> {
   const data = await res.json();
   if (!Array.isArray(data)) return [];
   return data.map((p: any) => {
-    const cachedKey = typeof window !== "undefined" ? localStorage.getItem(`auratrace_key_${p.id}`) : null;
+    const cachedKey = typeof window !== "undefined" ? (localStorage.getItem(`autotrace_key_${p.id}`) || localStorage.getItem(`auratrace_key_${p.id}`)) : null;
     return {
       id: p.id,
       name: p.name,
@@ -150,6 +150,7 @@ export async function createProject(data: { name: string }): Promise<Project> {
   ensureOk(res, path);
   const project = await res.json();
   if (project?.id && project?.api_key && typeof window !== "undefined") {
+    localStorage.setItem(`autotrace_key_${project.id}`, project.api_key);
     localStorage.setItem(`auratrace_key_${project.id}`, project.api_key);
   }
   return project;
@@ -161,6 +162,7 @@ export async function regenerateProjectKey(projectId: string): Promise<{ id: str
   ensureOk(res, path);
   const result = await res.json();
   if (result?.id && result?.api_key && typeof window !== "undefined") {
+    localStorage.setItem(`autotrace_key_${result.id}`, result.api_key);
     localStorage.setItem(`auratrace_key_${result.id}`, result.api_key);
   }
   return result;
@@ -171,6 +173,7 @@ export async function deleteProject(projectId: string): Promise<{ success: boole
   const res = await request(path, { method: "DELETE" });
   ensureOk(res, path);
   if (typeof window !== "undefined") {
+    localStorage.removeItem(`autotrace_key_${projectId}`);
     localStorage.removeItem(`auratrace_key_${projectId}`);
   }
   return res.json();

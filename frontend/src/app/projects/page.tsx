@@ -44,7 +44,7 @@ export default function ProjectsPage() {
       setProjects(data);
     } catch (err) {
       console.error(err);
-      setError("Unable to load AuraTrace projects.");
+      setError("Unable to load AutoTrace projects.");
     } finally {
       setLoading(false);
     }
@@ -131,17 +131,17 @@ export default function ProjectsPage() {
     }
   };
 
-  const nodeInitCode = `import AuraTrace from "@auratrace/node";
+  const nodeInitCode = `import AutoTrace from "@autotrace/node";
 
-AuraTrace.init({
-  apiKey: process.env.AURATRACE_API_KEY
+AutoTrace.init({
+  apiKey: process.env.AUTOTRACE_API_KEY
 });`;
 
-  const pythonInitCode = `import auratrace
+  const pythonInitCode = `import autotrace
 import os
 
-auratrace.init(
-  api_key=os.getenv("AURATRACE_API_KEY")
+autotrace.init(
+  api_key=os.getenv("AUTOTRACE_API_KEY")
 )`;
 
   return (
@@ -162,7 +162,7 @@ auratrace.init(
               Projects &amp; Setup
             </h1>
             <p className="mt-1 text-xs text-slate-500 font-sans">
-              Install the SDK once. AuraTrace automatically discovers your application and captures crashes, stack traces, and telemetry.
+              Install the SDK once. AutoTrace automatically discovers your application and captures crashes, stack traces, and telemetry.
             </p>
           </div>
 
@@ -207,7 +207,7 @@ auratrace.init(
                 type="text"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="e.g. AuraTrace Demo"
+                placeholder="e.g. AutoTrace Demo"
                 className="flex-1 rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-2.5 text-xs font-semibold text-slate-900 outline-none transition focus:border-red-500 focus:bg-white"
               />
               <button
@@ -233,7 +233,7 @@ auratrace.init(
           <div className="space-y-4">
             <div>
               <p className="text-base font-bold text-slate-900 font-heading">
-                {loading ? "Loading..." : activeProject?.name || "AuraTrace Demo"}
+                {loading ? "Loading..." : activeProject?.name || "AutoTrace Demo"}
               </p>
             </div>
 
@@ -286,10 +286,10 @@ auratrace.init(
           </div>
         </div>
 
-        {/* 2. Install AuraTrace */}
+        {/* 2. Install AutoTrace */}
         <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-4">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading border-b border-slate-100 pb-3">
-            Install AuraTrace
+            Install AutoTrace
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -299,10 +299,10 @@ auratrace.init(
                 Node.js
               </span>
               <div className="flex items-center justify-between rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 font-mono text-xs text-slate-200">
-                <code>npm install @auratrace/node</code>
+                <code>npm install @autotrace/node</code>
                 <button
                   type="button"
-                  onClick={() => copyText("npm install @auratrace/node", "node-install")}
+                  onClick={() => copyText("npm install @autotrace/node", "node-install")}
                   className="text-slate-400 hover:text-white transition cursor-pointer ml-2"
                   title="Copy command"
                 >
@@ -321,10 +321,10 @@ auratrace.init(
                 Python
               </span>
               <div className="flex items-center justify-between rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 font-mono text-xs text-slate-200">
-                <code>pip install auratrace</code>
+                <code>pip install autotrace</code>
                 <button
                   type="button"
-                  onClick={() => copyText("pip install auratrace", "python-install")}
+                  onClick={() => copyText("pip install autotrace", "python-install")}
                   className="text-slate-400 hover:text-white transition cursor-pointer ml-2"
                   title="Copy command"
                 >
@@ -418,7 +418,7 @@ auratrace.init(
               </h3>
             </div>
             <p className="text-xs text-slate-300 font-sans max-w-lg leading-relaxed">
-              Install the SDK once. AuraTrace automatically discovers your application and captures crashes, stack traces, and telemetry.
+              Install the SDK once. AutoTrace automatically discovers your application and captures crashes, stack traces, and telemetry.
             </p>
           </div>
 

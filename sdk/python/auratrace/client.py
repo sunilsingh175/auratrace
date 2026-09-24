@@ -24,7 +24,8 @@ except ImportError:
 def auto_detect_service_name() -> str:
     """Auto-detects the service identifier from environment variables or running script."""
     name = (
-        os.getenv("AURATRACE_SERVICE_NAME")
+        os.getenv("AUTOTRACE_SERVICE_NAME")
+        or os.getenv("AURATRACE_SERVICE_NAME")
         or os.getenv("SERVICE_NAME")
         or os.getenv("APP_NAME")
     )
@@ -54,7 +55,7 @@ def _sanitize_stack_trace(trace_str: str) -> str:
     return re.sub(r'File "([^"]+)"', _clean_path, trace_str)
 
 
-class AuraTrace:
+class AutoTrace:
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -66,9 +67,20 @@ class AuraTrace:
         flush_interval_seconds: float = 1.0,
         install_global_hook: bool = True,
     ):
-        self.api_key = api_key or os.getenv("AURATRACE_API_KEY") or os.getenv("AURA_MASTER_API_KEY") or ""
+        self.api_key = (
+            api_key
+            or os.getenv("AUTOTRACE_API_KEY")
+            or os.getenv("AURATRACE_API_KEY")
+            or os.getenv("AURA_MASTER_API_KEY")
+            or ""
+        )
         self.service_name = service_name or auto_detect_service_name()
-        self.endpoint = (endpoint or os.getenv("AURATRACE_ENDPOINT") or "http://localhost:8000").rstrip("/")
+        self.endpoint = (
+            endpoint
+            or os.getenv("AUTOTRACE_ENDPOINT")
+            or os.getenv("AURATRACE_ENDPOINT")
+            or "http://localhost:8000"
+        ).rstrip("/")
         self.environment = environment or os.getenv("ENV") or os.getenv("ENVIRONMENT") or "production"
         self.version = version or os.getenv("APP_VERSION") or "1.0.0"
         self.runtime = "python"
@@ -246,7 +258,8 @@ class AuraTrace:
             self._worker_thread.join(timeout=1.0)
 
 
-# Backward compatibility aliases
-TraceClient = AuraTrace
-Trace = AuraTrace
-AutomaticBackendDetection = AuraTrace
+# Backward compatibility & ergonomic aliases
+AuraTrace = AutoTrace
+TraceClient = AutoTrace
+Trace = AutoTrace
+AutomaticBackendDetection = AutoTrace

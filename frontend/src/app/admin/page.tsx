@@ -158,7 +158,7 @@ export default function AdminPage() {
             Administrator Access Required
           </h2>
           <p className="text-xs text-slate-500 font-sans mt-2 leading-relaxed">
-            The Administration Control Panel is restricted to AuraTrace administrator accounts. Your current role is{" "}
+            The Administration Control Panel is restricted to AutoTrace administrator accounts. Your current role is{" "}
             <span className="font-semibold text-slate-700">{user?.role || "Guest"}</span>.
           </p>
           <div className="mt-6">
