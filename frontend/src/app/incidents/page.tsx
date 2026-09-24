@@ -47,19 +47,8 @@ export default function IncidentsPage() {
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
                 <AlertTriangle className="h-4 w-4" />
               </span>
-
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
                 Crash Triage
-              </span>
-
-              <span
-                className={`ml-2 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                  isConnected
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    : "bg-slate-100 text-slate-600 border border-slate-200"
-                }`}
-              >
-                {isConnected ? "Live" : "Offline"}
               </span>
             </div>
 
