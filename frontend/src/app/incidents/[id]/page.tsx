@@ -19,7 +19,6 @@ import {
 
 import {
   fetchIncidentById,
-  regenerateIncidentDiagnosis,
   updateIncidentStatus,
 } from "@/lib/api-client";
 
@@ -42,7 +41,6 @@ export default function IncidentDetailsPage() {
 
   const [incident, setIncident] = useState<Incident | null>(null);
   const [loading, setLoading] = useState(true);
-  const [regenerating, setRegenerating] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedPatch, setCopiedPatch] = useState(false);
@@ -157,53 +155,6 @@ export default function IncidentDetailsPage() {
     };
   }, [incidentId, loadIncident]);
 
-  const handleRegenerate = useCallback(async () => {
-    if (!incident?.id || regenerating) return;
-
-    setRegenerating(true);
-    setError(null);
-
-    try {
-      await regenerateIncidentDiagnosis(incident.id);
-
-      for (let attempt = 0; attempt < 15; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-
-        try {
-          const freshIncident = await fetchIncidentById(incident.id);
-          if (!freshIncident) continue;
-
-          const fData = freshIncident as any;
-          const fRoot = String(fData.ai_root_cause || "").trim();
-          const fPatch = String(
-            fData.ai_suggested_patch ||
-              fData.ai_recommended_fix ||
-              fData.code_diff ||
-              ""
-          ).trim();
-
-          const isNowDiagnosed = Boolean(
-            fData.is_diagnosed && (fRoot || fPatch) && !fRoot.includes("processing in background")
-          );
-
-          if (isNowDiagnosed || fRoot || fPatch) {
-            setIncident(freshIncident);
-            if (isNowDiagnosed) {
-              break;
-            }
-          }
-        } catch (pollError) {
-          console.error("Crash diagnosis polling error:", pollError);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to regenerate diagnosis:", err);
-      setError("Unable to regenerate AI diagnosis.");
-    } finally {
-      setRegenerating(false);
-    }
-  }, [incident, regenerating]);
-
   const handleStatusChange = useCallback(
     async (newStatus: "OPEN" | "INVESTIGATING" | "RESOLVED") => {
       if (!incident?.id || updatingStatus) return;
@@ -277,7 +228,7 @@ export default function IncidentDetailsPage() {
   return (
     <AppShell hideHeaderTitle>
       <div className="max-w-5xl mx-auto space-y-6 pb-16">
-        {/* Navigation Bar */}
+        {/* Navigation & Action Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <Link
             href="/incidents"
@@ -288,26 +239,12 @@ export default function IncidentDetailsPage() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              disabled={regenerating}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100 transition font-heading disabled:opacity-50 cursor-pointer"
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${
-                  regenerating ? "animate-spin text-red-600" : ""
-                }`}
-              />
-              <span>{regenerating ? "Diagnosing..." : "Re-Diagnose with AI"}</span>
-            </button>
-
             {status !== "RESOLVED" ? (
               <button
                 type="button"
                 onClick={() => handleStatusChange("RESOLVED")}
                 disabled={updatingStatus}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition font-heading cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition font-heading cursor-pointer disabled:opacity-50 shadow-xs"
               >
                 {updatingStatus ? (
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -321,13 +258,9 @@ export default function IncidentDetailsPage() {
                 type="button"
                 onClick={() => handleStatusChange("OPEN")}
                 disabled={updatingStatus}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition font-heading cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition font-heading cursor-pointer disabled:opacity-50 shadow-xs"
               >
-                {updatingStatus ? (
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-500" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
-                )}
+                <RefreshCw className={`h-3.5 w-3.5 text-slate-500 ${updatingStatus ? "animate-spin" : ""}`} />
                 <span>{updatingStatus ? "Updating..." : "Re-open Crash"}</span>
               </button>
             )}
@@ -344,7 +277,7 @@ export default function IncidentDetailsPage() {
           <div className="panel p-16 text-center bg-white border-slate-100">
             <RefreshCw className="mx-auto h-8 w-8 animate-spin text-slate-400" />
             <p className="mt-3 text-sm font-bold text-slate-700 font-heading">
-              Loading Crash Details &amp; AI Analysis...
+              Loading Crash Details &amp; AI Diagnosis...
             </p>
           </div>
         ) : !incident ? (
@@ -359,7 +292,7 @@ export default function IncidentDetailsPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* 1. Crash Header Card */}
+            {/* 1. WHAT CRASHED: Crash Header Card */}
             <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <SeverityBadge severity={data?.severity || "high"} />
@@ -374,103 +307,161 @@ export default function IncidentDetailsPage() {
                     ACTIVE CRASH
                   </span>
                 )}
-                <span className="text-slate-300">•</span>
-                <span className="text-[11px] text-slate-400 font-sans">
-                  Detected at {formatTime(data?.created_at)}
-                </span>
-                <span className="text-slate-300">•</span>
-                <span className="text-[11px] text-slate-500 font-medium">
-                  Application: <strong className="text-slate-800">{appName}</strong> (Auto-detected)
-                </span>
               </div>
 
               <h1 className="text-xl sm:text-2xl font-bold font-heading text-slate-900 tracking-tight mt-1">
                 {crashTitle}
               </h1>
 
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500 font-sans border-t border-slate-100 pt-3">
-                <div className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1 text-slate-700 font-mono text-[11px] border border-slate-200/60">
-                  <Terminal className="h-3.5 w-3.5 text-slate-400" />
-                  <span>Error: {errorType}</span>
+              <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-600 font-sans border-t border-slate-100 pt-3.5">
+                <div>
+                  Application: <strong className="text-slate-900 font-semibold">{appName}</strong>{" "}
+                  <span className="text-slate-400 font-normal">(Auto-detected)</span>
                 </div>
-                <div className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1 text-slate-700 font-mono text-[11px] border border-slate-200/60">
-                  <span>Crash ID: {data?.id?.substring(0, 8)}</span>
+                <span className="text-slate-300">•</span>
+                <div>
+                  Detected: <strong className="text-slate-900 font-semibold">{formatTime(data?.created_at)}</strong>
+                </div>
+                <span className="text-slate-300">•</span>
+                <div className="inline-flex items-center gap-1.5 font-mono text-[11px] text-slate-700">
+                  <Terminal className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Error: <strong className="font-semibold text-slate-900">{errorType}</strong></span>
                 </div>
               </div>
             </div>
 
-            {/* 2. What Happened & Why (AI Root Cause) */}
-            <div className="panel p-6 bg-white border-red-100 shadow-[0_4px_20px_-4px_rgba(220,38,38,0.05)]">
+            {/* 2. WHY IT CRASHED: AI Diagnosis — What Happened & Why */}
+            <div className="panel p-6 bg-white border-purple-100 shadow-[0_4px_20px_-4px_rgba(168,85,247,0.05)]">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                 <div className="flex items-center gap-2">
-                  <Sparkles className={`h-5 w-5 text-red-600 ${!diagnosed ? "animate-pulse" : ""}`} />
-                  <h2 className="text-sm font-bold font-heading text-slate-900 uppercase tracking-wider">
-                    AI Diagnosis: What Happened &amp; Why
+                  <Sparkles className="h-5 w-5 text-purple-600" />
+                  <h2 className="text-xs font-bold font-heading text-slate-900 uppercase tracking-wider">
+                    AI Diagnosis — What Happened &amp; Why
                   </h2>
                 </div>
+
                 {diagnosed ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                    <CheckCircle2 className="h-3 w-3" />
-                    pgvector + Gemini Analysis
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200/80 px-3 py-1 rounded-full font-heading">
+                    <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                    AI Diagnosis: Ready
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
-                    <RefreshCw className="h-3 w-3 animate-spin" />
-                    Gemini AI Analyzing...
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full font-heading">
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    AI Diagnosing...
                   </span>
                 )}
               </div>
 
               {diagnosed && rootCause ? (
-                <div className="rounded-xl bg-red-50/30 border border-red-100/80 p-4 text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-wrap animate-fadeIn">
-                  {rootCause}
+                <div className="space-y-3">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-heading block">
+                    Root Cause
+                  </span>
+                  <div className="rounded-xl bg-purple-50/40 border border-purple-100/80 p-4 text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
+                    {rootCause}
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-xl bg-slate-50 border border-slate-100 p-6 text-center text-xs font-sans">
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-red-50 text-red-600 border border-red-100">
-                      <Sparkles className="h-5 w-5 animate-spin text-red-600" />
+                    <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 border border-purple-100">
+                      <Sparkles className="h-5 w-5 animate-spin text-purple-600" />
                     </div>
                     <p className="font-bold text-slate-800 font-heading text-sm mt-1">
                       AI Doctor is diagnosing root cause...
                     </p>
                     <p className="text-slate-500 text-xs max-w-md">
-                      Retrieving similar historical crashes via pgvector and synthesizing Gemini recovery patch. Auto-refreshing in real-time...
+                      Retrieving similar historical crashes via pgvector and synthesizing Gemini remediation patch.
                     </p>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* 3. Recommended Code Fix & Patch */}
-            {diagnosed && recoveryPatch ? (
-              <div className="panel p-6 bg-slate-950 border-slate-900 text-white shadow-xl animate-fadeIn">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+            {/* 3. HISTORICAL MATCHES: Historical Fixes (pgvector RAG) */}
+            {historicalMatches.length > 0 && (
+              <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                   <div className="flex items-center gap-2">
-                    <FileCode className="h-5 w-5 text-emerald-400" />
-                    <div>
-                      <h2 className="text-sm font-bold font-heading text-white">
+                    <Database className="h-4 w-4 text-slate-500" />
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-heading">
+                      Historical Fixes
+                    </h2>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {historicalMatches.map((match: any, idx: number) => {
+                    const score = typeof match.similarity_score === "number" ? match.similarity_score : null;
+                    const matchPercent = score !== null ? (score <= 1 ? (score * 100).toFixed(1) : score.toFixed(1)) : null;
+
+                    return (
+                      <div
+                        key={idx}
+                        className="p-3.5 rounded-xl border border-slate-100 bg-[#f8fafc] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className="font-bold text-slate-400 font-mono text-[11px] mt-0.5">
+                            {idx + 1}.
+                          </span>
+                          <div>
+                            <p className="font-bold text-slate-900 font-heading">
+                              {match.title || match.fix_summary}
+                            </p>
+                            {match.fix_summary && match.title !== match.fix_summary && (
+                              <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+                                {match.fix_summary}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {matchPercent !== null && (
+                          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700 shrink-0 font-mono">
+                            {matchPercent}%
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p className="text-[11px] text-slate-400 font-sans mt-3.5">
+                  Retrieved using pgvector semantic search.
+                </p>
+              </div>
+            )}
+
+            {/* 4. WHAT CODE TO CHANGE: Recommended Code Fix & Patch */}
+            {diagnosed && recoveryPatch ? (
+              <div className="panel p-6 bg-slate-950 border-slate-900 text-white shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <FileCode className="h-4 w-4 text-emerald-400" />
+                      <h2 className="text-xs font-bold font-heading text-white uppercase tracking-wider">
                         Recommended Code Fix
                       </h2>
-                      <p className="text-[11px] text-slate-400 font-sans">
-                        Generated fix patch ready to apply to your application
-                      </p>
                     </div>
+                    <p className="text-[11px] text-slate-400 font-sans mt-0.5">
+                      Generated remediation patch
+                    </p>
                   </div>
 
                   <button
                     type="button"
                     onClick={copyPatchToClipboard}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs font-bold text-white transition font-heading cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-900 px-4 py-2 text-xs font-bold transition font-heading cursor-pointer shrink-0 self-start sm:self-auto shadow-xs"
                   >
                     {copiedPatch ? (
                       <>
-                        <Check className="h-3.5 w-3.5 text-emerald-400" />
-                        <span className="text-emerald-400">Patch Copied</span>
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                        <span className="text-emerald-700">Code Fix Copied</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="h-3.5 w-3.5 text-slate-300" />
+                        <Copy className="h-3.5 w-3.5 text-slate-600" />
                         <span>Copy Code Fix</span>
                       </>
                     )}
@@ -485,63 +476,24 @@ export default function IncidentDetailsPage() {
               <div className="panel p-6 bg-slate-950 border-slate-900 text-white shadow-xl">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
                   <div className="flex items-center gap-2">
-                    <FileCode className="h-5 w-5 text-slate-400 animate-pulse" />
+                    <FileCode className="h-4 w-4 text-slate-400 animate-pulse" />
                     <div>
-                      <h2 className="text-sm font-bold font-heading text-white">
+                      <h2 className="text-xs font-bold font-heading text-white uppercase tracking-wider">
                         Recommended Code Fix
                       </h2>
-                      <p className="text-[11px] text-slate-400 font-sans">
-                        Generating remediation patch in background...
+                      <p className="text-[11px] text-slate-400 font-sans mt-0.5">
+                        Generating remediation patch...
                       </p>
                     </div>
                   </div>
                 </div>
                 <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 font-mono text-xs text-slate-400 text-center animate-pulse">
-                  // Remediation patch will appear here automatically when Gemini completes analysis...
+                  // Remediation patch will appear here automatically when AI diagnosis completes...
                 </div>
               </div>
             ) : null}
 
-            {/* 4. Similar Historical Errors (pgvector RAG) */}
-            {historicalMatches.length > 0 && (
-              <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] animate-fadeIn">
-                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
-                  <Database className="h-4 w-4 text-slate-500" />
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-heading">
-                    Similar Historical Errors ({historicalMatches.length} Matches Found)
-                  </h2>
-                </div>
-
-                <div className="space-y-3">
-                  {historicalMatches.map((match: any, idx: number) => {
-                    const score = typeof match.similarity_score === "number" ? match.similarity_score : null;
-                    return (
-                      <div
-                        key={idx}
-                        className="p-3.5 rounded-xl border border-slate-100 bg-[#f8fafc] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                      >
-                        <div>
-                          <p className="font-bold text-slate-900 font-heading">
-                            {match.title || match.fix_summary}
-                          </p>
-                          <p className="text-[11px] text-slate-500 font-sans mt-0.5">
-                            {match.fix_summary}
-                          </p>
-                        </div>
-
-                        {score !== null && (
-                          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 shrink-0 font-heading">
-                            {Math.round(score * 100)}% match
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* 5. Stack Trace Block */}
+            {/* 5. EVIDENCE: Stack Trace & Error Context (at the bottom) */}
             <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
                 <div className="flex items-center gap-2">
