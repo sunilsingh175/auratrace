@@ -220,11 +220,44 @@ export default function IncidentDetailsPage() {
 
   const status = String(data?.status || "OPEN");
 
-  // Clean diagnosis and distinct What Happened & Root Cause
-  const rawDiagnosis = rootCause
-    .replace(/^Synthesized RAG Analysis:\s*/i, "")
-    .replace(/^Automated Anomaly Analysis:\s*/i, "")
-    .trim();
+  // Parse diagnosis sections truthfully from incident data without generic assumptions
+  const fullDiagnosis = String(data?.ai_root_cause || data?.root_cause || "").trim();
+  const rawLogMessage = String(data?.message || data?.log_message || "").trim();
+
+  let whatHappenedText = "";
+  let identifiedRootCause = "";
+
+  if (fullDiagnosis.includes("WHAT HAPPENED:") && fullDiagnosis.includes("ROOT CAUSE:")) {
+    const whatIndex = fullDiagnosis.indexOf("WHAT HAPPENED:");
+    const rootIndex = fullDiagnosis.indexOf("ROOT CAUSE:");
+    if (rootIndex > whatIndex) {
+      whatHappenedText = fullDiagnosis.slice(whatIndex + "WHAT HAPPENED:".length, rootIndex).trim();
+      identifiedRootCause = fullDiagnosis.slice(rootIndex + "ROOT CAUSE:".length).trim();
+    }
+  } else if (fullDiagnosis.includes("ROOT CAUSE:")) {
+    const rootIndex = fullDiagnosis.indexOf("ROOT CAUSE:");
+    whatHappenedText = fullDiagnosis.slice(0, rootIndex).replace(/^WHAT HAPPENED:\s*/i, "").trim();
+    identifiedRootCause = fullDiagnosis.slice(rootIndex + "ROOT CAUSE:".length).trim();
+  }
+
+  if (!whatHappenedText) {
+    if (rawLogMessage && rawLogMessage !== errorType && rawLogMessage.length > 10) {
+      whatHappenedText = `The application ${appName} encountered an unhandled exception: ${rawLogMessage}`;
+    } else {
+      whatHappenedText = `The application ${appName} encountered an unhandled ${errorType} runtime exception during execution.`;
+    }
+  }
+
+  if (!identifiedRootCause) {
+    if (fullDiagnosis && !fullDiagnosis.toLowerCase().includes("processing in background")) {
+      identifiedRootCause = fullDiagnosis
+        .replace(/^Synthesized RAG Analysis:\s*/i, "")
+        .replace(/^Automated Anomaly Analysis:\s*/i, "")
+        .trim();
+    } else {
+      identifiedRootCause = "Root cause could not be determined from the available diagnostic context.";
+    }
+  }
 
   const copyPatchToClipboard = async () => {
     if (!recoveryPatch) return;
@@ -371,13 +404,8 @@ export default function IncidentDetailsPage() {
                     <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider font-heading mb-1.5">
                       What Happened &amp; Why
                     </h3>
-                    <div className="rounded-xl bg-purple-50/30 border border-purple-100/70 p-4 text-xs text-slate-800 leading-relaxed font-sans">
-                      A fatal <span className="font-mono font-semibold text-purple-900 bg-purple-100/60 px-1 py-0.5 rounded">{errorType}</span> runtime exception occurred in the <span className="font-semibold text-slate-900">{appName}</span> service, interrupting active transaction processing.
-                      {rawDiagnosis && (
-                        <p className="mt-2 text-slate-700 leading-relaxed">
-                          {rawDiagnosis}
-                        </p>
-                      )}
+                    <div className="rounded-xl bg-purple-50/30 border border-purple-100/70 p-4 text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
+                      {whatHappenedText}
                     </div>
                   </div>
 
@@ -386,8 +414,7 @@ export default function IncidentDetailsPage() {
                       Root Cause
                     </h3>
                     <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3.5 text-xs font-medium text-slate-800 font-sans">
-                      <span className="font-bold text-slate-900">Identified Fault: </span>
-                      <span>{rawDiagnosis || `Unhandled ${errorType} exception in ${appName}. Missing connection resilience or socket reconnect logic.`}</span>
+                      {identifiedRootCause}
                     </div>
                   </div>
                 </div>
@@ -399,14 +426,14 @@ export default function IncidentDetailsPage() {
                       AI Diagnosis: Analyzing...
                     </p>
                     <p className="text-slate-500 text-xs max-w-md">
-                      Analyzing stack trace and retrieving historical failure contexts with pgvector.
+                      Analyzing stack trace and retrieving historical failure patterns.
                     </p>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* 3. HISTORICAL MATCHES: pgvector RAG matches */}
+            {/* 3. HISTORICAL MATCHES: Similar Incident Matches */}
             {historicalMatches.length > 0 && (
               <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -416,7 +443,7 @@ export default function IncidentDetailsPage() {
                       Historical Matches
                     </h2>
                   </div>
-                  <span className="text-[11px] text-slate-400 font-sans">pgvector semantic search</span>
+                  <span className="text-[11px] text-slate-400 font-sans">Historical pattern matching</span>
                 </div>
 
                 <div className="space-y-3">

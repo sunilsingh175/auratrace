@@ -121,7 +121,7 @@ You are Trace AI Doctor, an expert software observability and incident-response 
 
 Your task is to diagnose the incident using ONLY the information provided below.
 
-Service ID:
+Application / Microservice:
 {service_id}
 
 Error Type:
@@ -138,11 +138,14 @@ Historical incidents retrieved by RAG:
 
 Return exactly this format:
 
+WHAT HAPPENED:
+<concise, factual explanation of what the application attempted and why it failed>
+
 ROOT CAUSE:
-<concise technical explanation grounded in the supplied evidence>
+<specific underlying technical root cause grounded in the supplied stack trace and telemetry>
 
 RECOVERY PATCH:
-<numbered, safe and actionable recovery steps>
+<safe and actionable remediation code diff or recovery steps>
 """
 
         raw_response = await self.generate_diagnosis(prompt)
@@ -151,15 +154,15 @@ RECOVERY PATCH:
             # High quality fallback grounded in the RAG similar records
             if similar_records and isinstance(similar_records, list) and len(similar_records) > 0:
                 top_match = similar_records[0]
-                root_cause = top_match.get("root_cause") or f"Anomaly pattern matched historical {error_type} profile."
+                hist_root = top_match.get("root_cause") or f"Historical pattern matched {error_type} profile."
                 code_patch = top_match.get("code_patch") or top_match.get("fix_description") or "Apply verified context management and connection recovery patch."
                 return (
-                    f"Synthesized RAG Analysis: {root_cause}",
+                    f"WHAT HAPPENED:\nThe application encountered an unhandled {error_type} while executing operations.\n\nROOT CAUSE:\n{hist_root}",
                     f"Recommended Remediation Patch:\n{code_patch}",
                 )
 
             return (
-                f"Automated Anomaly Analysis: Detected anomalous performance spike or exception in {service_id} ({error_type}).",
+                f"WHAT HAPPENED:\nDetected anomalous exception in {service_id} ({error_type}).\n\nROOT CAUSE:\nRoot cause could not be determined from the available diagnostic context.",
                 "Review recent deployments, check service database/network connections, and inspect service logs.",
             )
 
@@ -168,14 +171,9 @@ RECOVERY PATCH:
 
         if marker in lower:
             index = lower.index(marker)
-            root_cause = (
-                raw_response[:index]
-                .replace("ROOT CAUSE:", "")
-                .replace("Root Cause:", "")
-                .strip()
-            )
+            diagnosis_text = raw_response[:index].strip()
             patch = raw_response[index + len(marker):].strip()
-            return (root_cause, patch)
+            return (diagnosis_text, patch)
 
         return (
             raw_response.strip(),

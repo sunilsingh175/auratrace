@@ -1367,12 +1367,9 @@ async def clean_test_data(
             res = await conn.execute(
                 text("""
                     DELETE FROM projects
-                    WHERE name LIKE 'Demo%'
-                       OR name LIKE 'Test%'
-                       OR name LIKE 'E2E%'
-                       OR name LIKE 'Sample%'
-                       OR name = 'sdfghjk'
-                       OR name = 'startuphub'
+                    WHERE name LIKE 'Demo E-Commerce Core Platform %'
+                       OR name LIKE 'E2E Test Workspace %'
+                       OR name LIKE 'AuraTrace Automated Test Suite %'
                 """)
             )
             count = res.rowcount

@@ -150,9 +150,8 @@ export function IncidentTable({ incidents }: IncidentTableProps) {
         {/* Filter Pills */}
         <div className="flex flex-wrap items-center gap-1.5">
           {[
-            { id: "ALL", label: "All Crashes" },
+            { id: "ALL", label: "All" },
             { id: "ACTIVE", label: "Active" },
-            { id: "DIAGNOSED", label: "Diagnosis Ready" },
             { id: "RESOLVED", label: "Resolved" },
           ].map((item) => (
             <button
