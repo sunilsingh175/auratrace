@@ -39,7 +39,7 @@ export default function IncidentsPage() {
 
   return (
     <AppShell hideHeaderTitle>
-      <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      <div className="page-container max-w-6xl">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -77,7 +77,7 @@ export default function IncidentsPage() {
         </div>
 
         {/* 4 Clean Metric Cards */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="panel border-rose-200 bg-rose-50/40 p-5">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700 font-heading">
