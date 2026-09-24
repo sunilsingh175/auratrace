@@ -48,9 +48,6 @@ class LLMDoctor:
         model_candidates = [
             GEMINI_MODEL,
             "gemini-3.6-flash",
-            "gemini-2.5-flash",
-            "gemini-1.5-flash",
-            "gemini-2.0-flash",
         ]
         unique_models = list(dict.fromkeys(model_candidates))
 
@@ -63,16 +60,22 @@ class LLMDoctor:
                         attempt,
                     )
 
-                    response = await asyncio.to_thread(
-                        self.client.models.generate_content,
-                        model=model_name,
-                        contents=prompt,
+                    response = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            self.client.models.generate_content,
+                            model=model_name,
+                            contents=prompt,
+                        ),
+                        timeout=12.0,
                     )
 
                     text = (getattr(response, "text", "") or "").strip()
                     if text:
                         return text
 
+                except asyncio.TimeoutError:
+                    logger.warning("Gemini %s attempt %s timed out after 12s", model_name, attempt)
+                    break
                 except Exception as exc:
                     error_text = str(exc)
                     logger.warning(
@@ -82,6 +85,10 @@ class LLMDoctor:
                         error_text,
                     )
 
+                    if "404" in error_text or "not_found" in error_text.lower():
+                        logger.warning("Model %s not found on API, skipping.", model_name)
+                        break
+
                     if (
                         "429" in error_text
                         or "too_many_requests" in error_text.lower()
@@ -90,7 +97,7 @@ class LLMDoctor:
                         logger.error("Gemini quota reached for %s", model_name)
                         break
 
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.5)
 
         return ""
 
