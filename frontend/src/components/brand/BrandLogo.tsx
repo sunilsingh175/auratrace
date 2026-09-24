@@ -25,15 +25,15 @@ export function BrandLogo({
   };
 
   const titleSizes = {
-    sm: "text-xs",
-    md: "text-sm sm:text-base",
-    lg: "text-base sm:text-lg",
+    sm: "text-[11px]",
+    md: "text-xs sm:text-[13px]",
+    lg: "text-sm sm:text-base",
   };
 
   const subSizes = {
-    sm: "text-[11px]",
-    md: "text-xs sm:text-sm",
-    lg: "text-sm sm:text-base",
+    sm: "text-[9px]",
+    md: "text-[10px] sm:text-[11px]",
+    lg: "text-xs sm:text-sm",
   };
 
   const content = (
@@ -86,19 +86,17 @@ export function BrandLogo({
       {/* Typography */}
       {showText && (
         <div className="min-w-0">
-          <div className="flex flex-col leading-tight">
-            <div className="flex items-baseline">
-              <span
-                className={`font-heading font-extrabold text-slate-900 ${titleSizes[size]} tracking-tight group-hover:text-red-700 transition-colors block truncate`}
-              >
-                Aura
-              </span>
-              <span
-                className={`font-heading font-black text-[#dc2626] ${titleSizes[size]} tracking-tight block truncate`}
-              >
-                Trace
-              </span>
-            </div>
+          <div className="flex flex-col leading-none">
+            <span
+              className={`font-heading font-extrabold text-slate-900 ${titleSizes[size]} tracking-tight group-hover:text-red-700 transition-colors block truncate`}
+            >
+              Automatic Backend
+            </span>
+            <span
+              className={`font-heading font-black text-[#dc2626] ${subSizes[size]} tracking-wider uppercase block truncate mt-0.5`}
+            >
+              DETECTION
+            </span>
           </div>
 
           {showTagline && (
