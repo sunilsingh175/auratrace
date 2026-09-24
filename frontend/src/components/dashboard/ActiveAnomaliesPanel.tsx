@@ -96,11 +96,10 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
 
                   <Link
                     href={`/incidents/${incident.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#dc2626] hover:bg-[#b91c1c] text-white px-3 py-1.5 text-xs font-bold font-heading shadow-xs transition"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#dc2626] hover:bg-[#b91c1c] text-white px-3.5 py-1.5 text-xs font-bold font-heading shadow-xs transition cursor-pointer"
                   >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>Analyze</span>
-                    <ArrowRight className="h-3 w-3" />
+                    <span>View Crash &amp; Fix</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
               </div>
