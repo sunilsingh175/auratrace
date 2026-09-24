@@ -90,6 +90,12 @@ export function AuthForm({ initialTab = "login" }: AuthFormProps) {
       }
     }
 
+    // Verification check for login (Remember me required)
+    if (activeTab === "login" && !rememberMe) {
+      setErrorMessage("Please check 'Remember me' to confirm and preserve your login session.");
+      return;
+    }
+
     setLoading(true);
 
     // OTP Verification Flow (Only for registration confirmation)
@@ -482,10 +488,27 @@ export function AuthForm({ initialTab = "login" }: AuthFormProps) {
                     <input
                       type="checkbox"
                       checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-[#b91c1c] focus:ring-red-500 accent-[#b91c1c] cursor-pointer"
+                      onChange={(e) => {
+                        setRememberMe(e.target.checked);
+                        if (errorMessage && errorMessage.includes("Remember me")) {
+                          setErrorMessage(null);
+                        }
+                      }}
+                      className={`h-4 w-4 rounded border-slate-300 text-[#b91c1c] focus:ring-red-500 accent-[#b91c1c] cursor-pointer transition ${
+                        !rememberMe && errorMessage?.includes("Remember me")
+                          ? "ring-2 ring-red-500/50 border-red-500"
+                          : ""
+                      }`}
                     />
-                    <span>Remember me</span>
+                    <span
+                      className={`transition-colors ${
+                        !rememberMe && errorMessage?.includes("Remember me")
+                          ? "text-red-700 font-semibold"
+                          : ""
+                      }`}
+                    >
+                      Remember me
+                    </span>
                   </label>
 
                   <button
