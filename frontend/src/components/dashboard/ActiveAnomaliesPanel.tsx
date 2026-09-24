@@ -55,10 +55,10 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
                 key={incident.id}
                 className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200 transition-all"
               >
-                {/* Left: Status Badge, Service, Title */}
+                {/* Left: Severity Badge, Service, Title */}
                 <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
                   <div className="shrink-0">
-                    <SeverityBadge status={incident.status || "OPEN"} />
+                    <SeverityBadge severity={incident.severity || "high"} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
