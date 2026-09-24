@@ -94,9 +94,7 @@ export default function DashboardPage() {
 
   // 3. Total Crashes
   const totalCrashes =
-    stats?.total_logs_ingested !== undefined && stats.total_logs_ingested > 0
-      ? stats.total_logs_ingested
-      : stats?.total_incidents_count !== undefined && stats.total_incidents_count > 0
+    stats?.total_incidents_count !== undefined
       ? stats.total_incidents_count
       : incidents.length;
 

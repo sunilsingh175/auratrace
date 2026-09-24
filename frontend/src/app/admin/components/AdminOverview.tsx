@@ -22,7 +22,7 @@ export function AdminOverview({
 }: AdminOverviewProps) {
   const totalUsersCount = users.length;
   const totalProjectsCount = projects.length;
-  const totalCrashesCount = stats?.total_incidents_count ?? stats?.total_logs_ingested ?? 0;
+  const totalCrashesCount = stats?.total_incidents_count ?? 0;
 
   return (
     <div className="space-y-3">
