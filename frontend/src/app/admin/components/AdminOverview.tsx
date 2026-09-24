@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Users, FolderKanban, Activity, CheckCircle2, RefreshCw } from "lucide-react";
+import { Users, FolderKanban, Activity, Sparkles, RefreshCw } from "lucide-react";
 import { UserAccount, Project, InfrastructureStatus, SystemStats } from "@/types";
 
 interface AdminOverviewProps {
@@ -16,107 +16,93 @@ interface AdminOverviewProps {
 export function AdminOverview({
   users,
   projects,
-  health,
   stats,
   refreshing,
   onRefresh,
 }: AdminOverviewProps) {
-  const isSystemHealthy =
-    health?.api_status === "healthy" &&
-    health?.postgres_status === "healthy" &&
-    health?.redis_status === "healthy";
-
+  const totalUsersCount = users.length;
+  const totalProjectsCount = projects.length;
   const totalCrashesCount = stats?.total_incidents_count ?? 0;
-  const telemetryLogsCount = stats?.total_logs_ingested ?? 0;
+  const diagnosedCrashesCount =
+    stats?.diagnosed_incidents_count ??
+    (totalCrashesCount > 0 ? Math.max(0, totalCrashesCount - (stats?.open_incidents_count ?? 0)) : 0);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
           Platform Overview
         </h2>
         <button
           type="button"
           onClick={onRefresh}
-          className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-900 transition font-heading cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-900 transition font-heading cursor-pointer"
         >
           <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin text-[#dc2626]" : ""}`} />
           <span>Refresh Metrics</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="panel p-5 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Total Users */}
+        <div className="panel p-5 bg-white border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-heading">
               Total Users
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <Users className="h-4 w-4" />
-            </div>
+            <Users className="h-4 w-4 text-blue-500" />
           </div>
-          <p className="mt-2 text-2xl font-bold font-heading text-slate-900">{users.length}</p>
+          <p className="mt-2 font-mono text-2xl font-bold text-slate-900">
+            {totalUsersCount}
+          </p>
           <p className="mt-1 text-[11px] text-slate-400 font-sans">Registered accounts</p>
         </div>
 
-        <div className="panel p-5 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
+        {/* Card 2: Total Projects */}
+        <div className="panel p-5 bg-white border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
-              Active Projects
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-heading">
+              Total Projects
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
-              <FolderKanban className="h-4 w-4" />
-            </div>
+            <FolderKanban className="h-4 w-4 text-purple-500" />
           </div>
-          <p className="mt-2 text-2xl font-bold font-heading text-slate-900">{projects.length}</p>
-          <p className="mt-1 text-[11px] text-slate-400 font-sans">Workspaces provisioned</p>
+          <p className="mt-2 font-mono text-2xl font-bold text-slate-900">
+            {totalProjectsCount}
+          </p>
+          <p className="mt-1 text-[11px] text-slate-400 font-sans">Active workspaces</p>
         </div>
 
-        <div className="panel p-5 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
+        {/* Card 3: Total Crashes */}
+        <div className="panel p-5 bg-white border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-heading">
               Total Crashes
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-[#dc2626]">
-              <Activity className="h-4 w-4" />
-            </div>
+            <Activity className="h-4 w-4 text-rose-500" />
           </div>
-          <p className="mt-2 text-2xl font-bold font-heading text-slate-900">
+          <p className="mt-2 font-mono text-2xl font-bold text-slate-900">
             {totalCrashesCount}
           </p>
           <p className="mt-1 text-[11px] text-slate-400 font-sans">
-            {stats?.open_incidents_count ?? 0} active &bull; {telemetryLogsCount} telemetry events
+            {stats?.open_incidents_count ?? 0} active
           </p>
         </div>
 
-        <div className="panel p-5 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)]">
+        {/* Card 4: Diagnosed Crashes */}
+        <div className="panel p-5 bg-purple-50/40 border-purple-200/80 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
-              System Status
+            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700 font-heading">
+              Diagnosed Crashes
             </span>
-            <div
-              className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-                isSystemHealthy ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-              }`}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-            </div>
+            <Sparkles className="h-4 w-4 text-purple-600" />
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${
-                isSystemHealthy ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
-              }`}
-            />
-            <p className="text-xl font-bold font-heading text-slate-900">
-              {isSystemHealthy ? "All Healthy" : "Degraded"}
-            </p>
-          </div>
-          <p className="mt-1 text-[11px] text-slate-400 font-sans">
-            {health?.active_ws_clients ?? 0} live stream consumers
+          <p className="mt-2 font-mono text-2xl font-bold text-purple-700">
+            {diagnosedCrashesCount}
           </p>
+          <p className="mt-1 text-[11px] text-purple-600/80 font-sans">AI &amp; RAG root-cause verified</p>
         </div>
       </div>
     </div>
   );
 }
+

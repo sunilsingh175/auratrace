@@ -26,7 +26,6 @@ import { AdminOverview } from "./components/AdminOverview";
 import { UserManagement } from "./components/UserManagement";
 import { ProjectManagement } from "./components/ProjectManagement";
 import { SystemHealth } from "./components/SystemHealth";
-import { AdminTools } from "./components/AdminTools";
 
 export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -178,10 +177,10 @@ export default function AdminPage() {
 
   return (
     <AppShell
-      title="AuraTrace Administration"
-      subtitle="Platform governance, user access, project lifecycle &amp; system health"
+      title="Admin Console"
+      subtitle="Platform governance, user accounts, project workspaces &amp; system health"
     >
-      <div className="space-y-8 max-w-[1600px] mx-auto pb-12">
+      <div className="space-y-8 max-w-6xl mx-auto pb-16">
         {/* Top Feedback Alerts */}
         {actionSuccess && (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800 font-sans shadow-xs animate-fadeIn">
@@ -210,7 +209,10 @@ export default function AdminPage() {
           }}
         />
 
-        {/* 2. User Management */}
+        {/* 2. System Health */}
+        <SystemHealth health={health} stats={stats} />
+
+        {/* 3. User Management */}
         <UserManagement
           users={users}
           currentUserId={user.id}
@@ -218,26 +220,12 @@ export default function AdminPage() {
           onDeleteUser={handleDeleteUser}
         />
 
-        {/* 3. Project Management */}
+        {/* 4. Project Management */}
         <ProjectManagement
           projects={projects}
           cleaning={cleaning}
           onCleanTestData={handleCleanTestData}
           onDeleteProject={handleDeleteProject}
-        />
-
-        {/* 4. System Health & Infrastructure */}
-        <SystemHealth health={health} stats={stats} />
-
-        {/* 5. Operational Admin Tools */}
-        <AdminTools
-          onRefreshHealth={() => {
-            setRefreshing(true);
-            void loadAdminData();
-          }}
-          isRefreshing={refreshing}
-          onSuccess={showSuccess}
-          onError={showError}
         />
       </div>
     </AppShell>
