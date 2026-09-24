@@ -72,9 +72,12 @@ Desktop.ini
 *.swp
 *.swo
 
-# Datasets & Large Data
-scripts/datasets/
-*.npz
+# Large Datasets (>100MB GitHub limit)
+scripts/datasets/**/HDFS.log
+scripts/datasets/**/Event_traces.csv
+scripts/datasets/**/Event_occurrence_matrix.csv
+scripts/datasets/**/HDFS.npz
+scripts/datasets/**/anomaly_label.csv
 *.parquet
 *.h5
 
