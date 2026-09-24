@@ -1,5 +1,6 @@
 import asyncio
 import os
+from typing import Any, Optional
 
 try:
     from backend.shared.logger import get_logger
@@ -12,9 +13,10 @@ except ImportError:
 
 logger = get_logger("llm-pipeline")
 
+genai: Any = None
 try:
-    from google import genai
-except ImportError:
+    from google import genai  # type: ignore
+except (ImportError, Exception):
     genai = None
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -26,11 +28,12 @@ else:
 
 
 class LLMDoctor:
+    client: Optional[Any] = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.client = None
 
-        if GEMINI_API_KEY and genai:
+        if GEMINI_API_KEY and genai is not None:
             try:
                 self.client = genai.Client(api_key=GEMINI_API_KEY)
                 logger.info("Gemini client initialized with model %s", GEMINI_MODEL)
