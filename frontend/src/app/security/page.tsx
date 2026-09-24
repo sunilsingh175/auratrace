@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   ShieldCheck,
   Shield,
-  Cpu,
   Lock,
   KeyRound,
   Server,
@@ -13,27 +12,11 @@ import {
   CheckCircle2,
   ArrowLeft,
   Mail,
-  Zap,
-  Layers,
-  Database,
-  Terminal,
-  ArrowDown,
 } from "lucide-react";
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { AuthFooter } from "@/components/auth/AuthFooter";
 
 export default function SecurityArchitecturePage() {
-  const pipelineSteps = [
-    { title: "Application", desc: "User application running Node.js or Python backend services" },
-    { title: "Automatic Backend Detection SDK", desc: "Captures unhandled exceptions, runtime telemetry, and rolling metric windows" },
-    { title: "API Authentication", desc: "Validates project API keys and enforces project-level tenant isolation" },
-    { title: "FastAPI Ingestion Service", desc: "High-throughput asynchronous telemetry receiver and schema validator" },
-    { title: "Redis Stream Buffer", desc: "In-memory operational queue decoupling telemetry ingestion from ML evaluation" },
-    { title: "ML Anomaly Detection", desc: "Unsupervised Isolation Forest model detecting system & latency anomalies" },
-    { title: "PostgreSQL + pgvector", desc: "Persistent incident store and high-dimensional embeddings for similarity search" },
-    { title: "RAG / AI Diagnosis", desc: "Retrieval-augmented root cause analysis and contextual code fix synthesis" },
-  ];
-
   const securityFeatures = [
     {
       title: "API-Key Authentication",
@@ -99,44 +82,6 @@ export default function SecurityArchitecturePage() {
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-sans">
             Automatic Backend Detection is designed with multi-tier service isolation, API authentication, and read-only telemetry diagnostics to ensure secure observability for backend applications.
           </p>
-        </div>
-
-        {/* Implemented System Architecture Pipeline */}
-        <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] mb-8 space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-heading">
-              Implemented Telemetry & Diagnostic Pipeline
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              End-to-end data flow from client application to AI diagnosis
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            {pipelineSteps.map((step, idx) => (
-              <React.Fragment key={idx}>
-                <div className="p-3.5 rounded-2xl bg-[#f8fafc] border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-slate-800 text-xs font-bold font-mono">
-                      {idx + 1}
-                    </span>
-                    <span className="font-bold text-slate-900 text-xs sm:text-sm font-heading">
-                      {step.title}
-                    </span>
-                  </div>
-                  <span className="text-xs text-slate-600 font-sans sm:text-right">
-                    {step.desc}
-                  </span>
-                </div>
-
-                {idx < pipelineSteps.length - 1 && (
-                  <div className="flex justify-center py-0.5">
-                    <ArrowDown className="h-4 w-4 text-slate-300" />
-                  </div>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
         </div>
 
         {/* Implemented Security Measures Grid */}

@@ -115,7 +115,7 @@ export default function ContactPage() {
             <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-100 space-y-1">
               <div className="flex items-center gap-2 font-bold text-slate-900 font-heading">
                 <Mail className="w-4 h-4 text-[#dc2626]" />
-                <span>Project Email</span>
+                <span>Contact Email</span>
               </div>
               <a
                 href="mailto:startuphub695@gmail.com"
