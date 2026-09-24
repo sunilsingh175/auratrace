@@ -19,25 +19,25 @@ export function BrandLogo({
   className = "",
 }: BrandLogoProps) {
   const iconSizes = {
-    sm: "h-8 w-8",
-    md: "h-10 w-10",
-    lg: "h-12 w-12",
+    sm: "h-7 w-7",
+    md: "h-8 w-8 sm:h-9 sm:w-9",
+    lg: "h-11 w-11",
   };
 
   const titleSizes = {
-    sm: "text-[11px]",
-    md: "text-xs sm:text-[13px]",
-    lg: "text-sm sm:text-base",
+    sm: "text-xs",
+    md: "text-[13px] sm:text-[14px]",
+    lg: "text-base sm:text-lg",
   };
 
   const subSizes = {
-    sm: "text-[9px]",
-    md: "text-[10px] sm:text-[11px]",
+    sm: "text-[10px]",
+    md: "text-[11px] sm:text-[12px]",
     lg: "text-xs sm:text-sm",
   };
 
   const content = (
-    <div className={`flex items-center gap-3 group shrink-0 ${className}`}>
+    <div className={`flex items-center gap-2.5 sm:gap-3 group shrink-0 ${className}`}>
       {/* Shield Emblem with Telemetry Waveform */}
       <div className={`relative ${iconSizes[size]} shrink-0 transition-transform duration-200 group-hover:scale-105`}>
         <svg
@@ -85,15 +85,15 @@ export function BrandLogo({
 
       {/* Typography */}
       {showText && (
-        <div className="min-w-0">
-          <div className="flex flex-col leading-none">
+        <div className="min-w-0 flex flex-col justify-center">
+          <div className="flex flex-col leading-[1.15]">
             <span
-              className={`font-heading font-extrabold text-slate-900 ${titleSizes[size]} tracking-tight group-hover:text-red-700 transition-colors block truncate`}
+              className={`font-heading font-extrabold text-[#0f172a] ${titleSizes[size]} tracking-tight group-hover:text-red-700 transition-colors block whitespace-nowrap`}
             >
               Automatic Backend
             </span>
             <span
-              className={`font-heading font-black text-[#dc2626] ${subSizes[size]} tracking-wider uppercase block truncate mt-0.5`}
+              className={`font-heading font-black text-[#dc2626] ${subSizes[size]} tracking-widest uppercase block whitespace-nowrap`}
             >
               DETECTION
             </span>
