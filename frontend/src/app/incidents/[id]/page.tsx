@@ -277,7 +277,7 @@ export default function IncidentDetailsPage() {
           <div className="panel p-16 text-center bg-white border-slate-100">
             <RefreshCw className="mx-auto h-8 w-8 animate-spin text-slate-400" />
             <p className="mt-3 text-sm font-bold text-slate-700 font-heading">
-              Loading Crash Details &amp; AI Diagnosis...
+              Loading Crash Details...
             </p>
           </div>
         ) : !incident ? (
@@ -369,10 +369,10 @@ export default function IncidentDetailsPage() {
                       <Sparkles className="h-5 w-5 animate-spin text-purple-600" />
                     </div>
                     <p className="font-bold text-slate-800 font-heading text-sm mt-1">
-                      AI Doctor is diagnosing root cause...
+                      AI diagnosis is in progress...
                     </p>
                     <p className="text-slate-500 text-xs max-w-md">
-                      Retrieving similar historical crashes via pgvector and synthesizing Gemini remediation patch.
+                      Retrieving historical matches and preparing a developer-reviewable fix.
                     </p>
                   </div>
                 </div>
