@@ -959,7 +959,7 @@ async def custom_swagger_ui_html():
 async def custom_redoc_html():
     """Serves clean Redoc documentation."""
     return get_redoc_html(
-        openapi_url=app.openapi_url,
+        openapi_url=app.openapi_url or "/openapi.json",
         title="Trace Telemetry Specs | ReDoc",
         redoc_favicon_url="/favicon.ico",
     )
@@ -967,6 +967,7 @@ async def custom_redoc_html():
 @app.get("/scalar", include_in_schema=False)
 async def scalar_docs():
     """Serves ultra-modern interactive Scalar API documentation."""
+    openapi_url = app.openapi_url or "/openapi.json"
     return HTMLResponse(f"""
 <!doctype html>
 <html>
@@ -979,7 +980,7 @@ async def scalar_docs():
   <body>
     <script
       id="api-reference"
-      data-url="{app.openapi_url}"
+      data-url="{openapi_url}"
       data-proxy-url="https://api.scalar.com/request-proxy"
       data-theme="purple"
       src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
@@ -1270,7 +1271,8 @@ async def regenerate_project_key(
                 raise HTTPException(status_code=404, detail="Project not found.")
 
             is_admin = current_user.get("role") == "Admin" if current_user else False
-            if not is_admin and proj["owner_id"] and str(proj["owner_id"]) != str(current_user.get("id")):
+            user_id = str(current_user.get("id")) if current_user and current_user.get("id") else None
+            if not is_admin and proj["owner_id"] and str(proj["owner_id"]) != user_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Forbidden: You do not have permission to rotate the API key for this project.",
@@ -1326,7 +1328,8 @@ async def delete_project(
                 raise HTTPException(status_code=404, detail="Project not found.")
 
             is_admin = current_user.get("role") == "Admin" if current_user else False
-            if not is_admin and proj["owner_id"] and str(proj["owner_id"]) != str(current_user.get("id")):
+            user_id = str(current_user.get("id")) if current_user and current_user.get("id") else None
+            if not is_admin and proj["owner_id"] and str(proj["owner_id"]) != user_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Forbidden: You do not have permission to delete this project.",
@@ -1659,9 +1662,9 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
 
             row = metrics.first()
 
-            total_events = int(row[0] or 0)
-            p95_latency = float(row[1] or 0)
-            error_count = int(row[2] or 0)
+            total_events = int(row[0] or 0) if row else 0
+            p95_latency = float(row[1] or 0) if row else 0.0
+            error_count = int(row[2] or 0) if row else 0
 
             # If no events occurred in the last 5-minute sliding window,
             # calculate cluster metrics from all available telemetry logs for consistency
@@ -1688,10 +1691,10 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
                 """))
                 at_row = all_time_metrics.first()
                 if at_row and at_row[0]:
-                    at_total = int(at_row[0] or 0)
+                    total_events = int(at_row[0] or 0)
                     p95_latency = float(at_row[1] or 0)
                     error_count = int(at_row[2] or 0)
-                    error_rate = ((error_count / at_total) * 100) if at_total else 0
+                    error_rate = ((error_count / total_events) * 100) if total_events else 0
                 else:
                     error_rate = 0
             else:
@@ -2183,7 +2186,7 @@ async def get_incident(
             # This matches the ML worker's rolling-window concept.
             # ========================================================
 
-            system_metrics = {
+            system_metrics: Dict[str, Any] = {
                 "cpu_percent": None,
                 "memory_percent": None,
                 "p95_latency_ms": None,
@@ -2697,10 +2700,10 @@ async def list_services(api_key: str = Depends(verify_api_key)):
                     """), {"service_id": row[0], "service_id_str": str(row[1] or row[0])})
 
                     metric = service_metrics.first()
-                    requests = int(metric[0] or 0)
-                    latency = float(metric[1] or 0)
-                    errors = int(metric[2] or 0)
-                    last_activity = metric[3]
+                    requests = int(metric[0] or 0) if metric else 0
+                    latency = float(metric[1] or 0) if metric else 0.0
+                    errors = int(metric[2] or 0) if metric else 0
+                    last_activity = metric[3] if metric else None
 
                     if requests == 0:
                         all_time = await conn.execute(text("""
