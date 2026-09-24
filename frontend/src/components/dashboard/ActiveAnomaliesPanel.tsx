@@ -38,10 +38,13 @@ export function ActiveAnomaliesPanel({ incidents }: ActiveAnomaliesPanelProps) {
         <div className="divide-y divide-slate-100">
           {incidents.slice(0, 6).map((incident) => {
             const serviceName = incident.service_id || "Unknown application";
-            const incidentTitle =
+            let incidentTitle =
               incident.title ||
               incident.error_type ||
               `Unhandled Exception in ${serviceName}`;
+            if (incidentTitle.endsWith(` in ${serviceName}`)) {
+              incidentTitle = incidentTitle.replace(` in ${serviceName}`, "").trim();
+            }
 
             return (
               <div

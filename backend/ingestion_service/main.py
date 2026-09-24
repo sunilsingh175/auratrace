@@ -1367,8 +1367,10 @@ async def clean_test_data(
             res = await conn.execute(
                 text("""
                     DELETE FROM projects
-                    WHERE name LIKE 'E2E Test Workspace%'
+                    WHERE name LIKE 'Demo%'
                        OR name LIKE 'Test%'
+                       OR name LIKE 'E2E%'
+                       OR name LIKE 'Sample%'
                        OR name = 'sdfghjk'
                        OR name = 'startuphub'
                 """)

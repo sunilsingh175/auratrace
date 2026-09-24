@@ -50,10 +50,13 @@ export function IncidentTable({ incidents }: IncidentTableProps) {
   const renderCrashCard = (inc: Incident) => {
     const score = inc.anomaly_score;
     const appName = inc.service_id || "Unknown application";
-    const crashTitle =
+    let crashTitle =
       inc.title ||
       inc.error_type ||
       `Unhandled Exception in ${appName}`;
+    if (crashTitle.endsWith(` in ${appName}`)) {
+      crashTitle = crashTitle.replace(` in ${appName}`, "").trim();
+    }
 
     const isDiagnosed = Boolean(
       inc.is_diagnosed || (inc as any).ai_root_cause || (inc as any).suggested_patch

@@ -177,7 +177,7 @@ export default function IncidentDetailsPage() {
 
   const appName = String(data?.service_id || "Unknown application");
   const errorType = String(data?.error_type || "ApplicationException");
-  const crashTitle =
+  let crashTitle =
     data?.title ||
     (errorType === "PoolTimeout" || errorType === "ConnectionPoolTimeout"
       ? "Database connection pool exhausted"
@@ -186,6 +186,9 @@ export default function IncidentDetailsPage() {
       : errorType === "OutOfMemoryError"
       ? "Node process heap out of memory"
       : errorType);
+  if (crashTitle.endsWith(` in ${appName}`)) {
+    crashTitle = crashTitle.replace(` in ${appName}`, "").trim();
+  }
 
   const stackTrace = String(
     data?.stack_trace || data?.raw_stack_trace || "No stack trace available for this event."
@@ -216,6 +219,12 @@ export default function IncidentDetailsPage() {
       : defaultHistoricalMatches;
 
   const status = String(data?.status || "OPEN");
+
+  // Clean diagnosis and distinct What Happened & Root Cause
+  const rawDiagnosis = rootCause
+    .replace(/^Synthesized RAG Analysis:\s*/i, "")
+    .replace(/^Automated Anomaly Analysis:\s*/i, "")
+    .trim();
 
   const copyPatchToClipboard = async () => {
     if (!recoveryPatch) return;
@@ -362,8 +371,13 @@ export default function IncidentDetailsPage() {
                     <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider font-heading mb-1.5">
                       What Happened &amp; Why
                     </h3>
-                    <div className="rounded-xl bg-purple-50/30 border border-purple-100/70 p-4 text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
-                      {rootCause}
+                    <div className="rounded-xl bg-purple-50/30 border border-purple-100/70 p-4 text-xs text-slate-800 leading-relaxed font-sans">
+                      A fatal <span className="font-mono font-semibold text-purple-900 bg-purple-100/60 px-1 py-0.5 rounded">{errorType}</span> runtime exception occurred in the <span className="font-semibold text-slate-900">{appName}</span> service, interrupting active transaction processing.
+                      {rawDiagnosis && (
+                        <p className="mt-2 text-slate-700 leading-relaxed">
+                          {rawDiagnosis}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -372,7 +386,8 @@ export default function IncidentDetailsPage() {
                       Root Cause
                     </h3>
                     <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3.5 text-xs font-medium text-slate-800 font-sans">
-                      {rootCause.split("\n")[0] || "Root cause identified from application stack trace and telemetry."}
+                      <span className="font-bold text-slate-900">Identified Fault: </span>
+                      <span>{rawDiagnosis || `Unhandled ${errorType} exception in ${appName}. Missing connection resilience or socket reconnect logic.`}</span>
                     </div>
                   </div>
                 </div>
