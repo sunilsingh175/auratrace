@@ -1,3 +1,16 @@
+"""
+AuraTrace Production ML Anomaly Detection Model Trainer
+Trains the production unsupervised Isolation Forest model on AuraTrace 8-feature
+application telemetry windows for real-time live stream inference.
+
+Architecture Note:
+- Production Model (this script): Operates on 8 rolling-window application telemetry
+  features (request_rate, error_rate, p95_latency, 5xx_rate, cpu, memory, error_count,
+  connection_load) to score incoming live microservice telemetry streams.
+- Research Benchmark Model (train_hdfs_model.py): Operates on 29 log-event frequency
+  features from the LogHub HDFS_v1 dataset for offline thesis benchmarking.
+"""
+
 import logging
 import sys
 from pathlib import Path
@@ -24,7 +37,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
 )
 
-logger = logging.getLogger("trace-model-training")
+logger = logging.getLogger("trace-production-model-training")
 
 
 BASE_DIR = Path(__file__).resolve().parent
