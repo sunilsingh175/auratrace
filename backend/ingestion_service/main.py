@@ -424,34 +424,46 @@ async def get_request_auth(
         except Exception:
             pass
 
+    # 2. Fall back to API Key verification
+    return await verify_api_key(
+        x_api_key=x_api_key,
+        x_project_key=x_project_key,
+        authorization=authorization,
+    )
+
+
 def sanitize_stack_trace_string(trace_str: Optional[str]) -> str:
     """Sanitizes file system paths in stack traces to present clean, relative project paths."""
     if not trace_str:
         return ""
     import re
+
     def _clean_path(match):
         full_path = match.group(1).replace("\\", "/")
         parts = full_path.split("/")
         for marker in ["scripts", "app", "backend", "services", "controllers", "models", "workers", "src"]:
             if marker in parts:
                 idx = parts.index(marker)
-                return f'File "{ "/".join(parts[idx:]) }"'
+                rel_path = "/".join(parts[idx:])
+                return f'File "{rel_path}"'
         if len(parts) > 1:
-            return f'File "{ "/".join(parts[-2:]) }"'
-        return f'File "{ parts[-1] }"'
-    
+            rel_path = "/".join(parts[-2:])
+            return f'File "{rel_path}"'
+        return f'File "{parts[-1]}"'
+
     # Handle Python File "..." and Node.js at ... (...)
     cleaned = re.sub(r'File "([^"]+)"', _clean_path, trace_str)
-    
+
     def _clean_node_path(match):
         full_path = match.group(1).replace("\\", "/")
         parts = full_path.split("/")
         for marker in ["scripts", "app", "backend", "services", "controllers", "models", "workers", "src"]:
             if marker in parts:
                 idx = parts.index(marker)
-                return f'({"/" + "/".join(parts[idx:])}'
+                rel_path = "/" + "/".join(parts[idx:])
+                return f'({rel_path}'
         return f'({parts[-1]}'
-    
+
     cleaned = re.sub(r'\(([A-Za-z]:[^\)]+)', _clean_node_path, cleaned)
     return cleaned
 
@@ -1210,13 +1222,24 @@ async def create_project(
                 {"name": payload.name.strip(), "hash": key_hash, "owner_id": owner_id},
             )
             row = res.mappings().first()
+            if not row:
+                raise HTTPException(status_code=500, detail="Failed to provision project record.")
+
+            created_at_str = (
+                row["created_at"].isoformat()
+                if row["created_at"]
+                else datetime.now(timezone.utc).isoformat()
+            )
+
             return {
                 "id": str(row["id"]),
-                "name": row["name"],
+                "name": str(row["name"]),
                 "api_key": new_api_key,
-                "created_at": row["created_at"].isoformat() if row["created_at"] else datetime.now(timezone.utc).isoformat(),
+                "created_at": created_at_str,
                 "message": "Project created successfully. Save your API key: it will not be shown again in full.",
             }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"Error creating project: {exc}")
         raise HTTPException(status_code=500, detail="Failed to create project.")
