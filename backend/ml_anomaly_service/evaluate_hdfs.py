@@ -29,6 +29,7 @@ from sklearn.metrics import (
     confusion_matrix,
     roc_auc_score,
     average_precision_score,
+    accuracy_score,
     f1_score,
     precision_score,
     recall_score,
@@ -173,6 +174,7 @@ def evaluate_hdfs_benchmark(
     infer_time = time.perf_counter() - t3
 
     # Compute Test Metrics
+    test_accuracy = accuracy_score(y_test, y_test_pred)
     test_precision = precision_score(y_test, y_test_pred, zero_division=0)
     test_recall = recall_score(y_test, y_test_pred, zero_division=0)
     test_f1 = f1_score(y_test, y_test_pred, zero_division=0)
@@ -189,6 +191,7 @@ def evaluate_hdfs_benchmark(
     print("\n" + "=" * 72)
     print(" 📊 OUT-OF-SAMPLE TEST SET EVALUATION METRICS (Held-Out 30%)")
     print("=" * 72)
+    print(f"  • Test Accuracy:        {test_accuracy:.4f} ({test_accuracy*100:.2f}%)")
     print(f"  • Test ROC-AUC Score:   {test_roc_auc:.4f} ({test_roc_auc*100:.2f}%)")
     print(f"  • PR-AUC (Avg Prec):    {test_pr_auc:.4f} ({test_pr_auc*100:.2f}%)")
     print(f"  • Precision:            {test_precision:.4f} ({test_precision*100:.2f}%)")
