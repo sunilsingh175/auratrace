@@ -27,6 +27,24 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   .panel {
     @apply rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition;
   }
+  .page-container {
+    @apply mx-auto w-full max-w-6xl space-y-6 pb-12;
+  }
+  .section-label {
+    @apply text-[11px] font-bold uppercase tracking-wider text-slate-500 font-heading;
+  }
+  .section-heading {
+    @apply text-lg font-extrabold tracking-tight text-slate-900 font-heading;
+  }
+  .status-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold font-heading;
+  }
+  .empty-state {
+    @apply rounded-2xl border border-slate-100 bg-white p-12 text-center shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)];
+  }
+  .skeleton {
+    @apply animate-pulse rounded-xl bg-slate-100;
+  }
   .panel-header {
     @apply flex items-center justify-between border-b border-slate-100 pb-4 mb-4;
   }
