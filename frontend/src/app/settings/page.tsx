@@ -123,11 +123,8 @@ function ProfileSettingsContent() {
     : "A";
 
   return (
-    <AppShell
-      title="Profile & Security Settings"
-      subtitle="Manage your personal account credentials, profile details, and security configuration."
-    >
-      <div className="max-w-6xl mx-auto space-y-6">
+    <AppShell hideHeaderTitle>
+      <div className="w-full space-y-6">
         {/* Profile Banner */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl p-6 text-white shadow-sm flex flex-col md:flex-row justify-between items-center md:items-start gap-4">
           <div className="flex items-center gap-4">

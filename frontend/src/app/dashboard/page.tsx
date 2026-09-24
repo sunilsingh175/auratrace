@@ -99,11 +99,8 @@ export default function DashboardPage() {
       : incidents.length;
 
   return (
-    <AppShell
-      title="Dashboard"
-      subtitle="Application health, active crashes &amp; automated AI diagnosis"
-    >
-      <div className="page-container max-w-6xl space-y-8">
+    <AppShell hideHeaderTitle>
+      <div className="w-full space-y-6">
         {/* Application Health - 3 Deliberately Simple Cards */}
         <div>
           <div className="mb-3">

@@ -146,30 +146,19 @@ autotrace.init(
 
   return (
     <AppShell hideHeaderTitle>
-      <div className="page-container max-w-4xl space-y-8 pb-16">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                <FolderKanban className="h-4 w-4" />
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
-                Zero-Config SDK Integration
-              </span>
-            </div>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 font-heading sm:text-3xl">
-              Projects &amp; Setup
-            </h1>
-            <p className="mt-1 text-xs text-slate-500 font-sans">
-              Install the SDK once. AutoTrace automatically discovers your application and captures crashes, stack traces, and telemetry.
-            </p>
+      <div className="w-full space-y-6 pb-16">
+        {/* Top Header Controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
+              SDK Setup &amp; Workspaces
+            </span>
           </div>
 
           <button
             type="button"
             onClick={() => setShowCreateForm(!showCreateForm)}
-            className="button-secondary active:scale-95 transition-all cursor-pointer font-heading flex items-center gap-2 self-start sm:self-auto"
+            className="button-secondary active:scale-95 transition-all cursor-pointer font-heading flex items-center gap-2"
           >
             <Plus className="h-4 w-4 text-slate-600" />
             <span>{showCreateForm ? "Cancel" : "New Project"}</span>

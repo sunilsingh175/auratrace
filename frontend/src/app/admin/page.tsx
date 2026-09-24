@@ -135,7 +135,7 @@ export default function AdminPage() {
 
   if (authLoading || loading) {
     return (
-      <AppShell title="Administration" subtitle="System overview and control panel">
+      <AppShell hideHeaderTitle>
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="flex flex-col items-center gap-3 text-slate-500">
             <RefreshCw className="h-6 w-6 animate-spin text-[#dc2626]" />
@@ -149,7 +149,7 @@ export default function AdminPage() {
   // Role Gate: Only Admin allowed
   if (user?.role !== "Admin") {
     return (
-      <AppShell title="Administration" subtitle="Access restricted">
+      <AppShell hideHeaderTitle>
         <div className="max-w-xl mx-auto mt-12 p-8 bg-white rounded-2xl border border-slate-200 shadow-sm text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-[#dc2626] mx-auto mb-4 border border-rose-100">
             <Shield className="h-6 w-6" />
@@ -176,11 +176,8 @@ export default function AdminPage() {
   }
 
   return (
-    <AppShell
-      title="Admin Console"
-      subtitle="Platform governance, user accounts, project workspaces &amp; system health"
-    >
-      <div className="space-y-8 max-w-6xl mx-auto pb-16">
+    <AppShell hideHeaderTitle>
+      <div className="w-full space-y-6 pb-16">
         {/* Top Feedback Alerts */}
         {actionSuccess && (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800 font-sans shadow-xs animate-fadeIn">

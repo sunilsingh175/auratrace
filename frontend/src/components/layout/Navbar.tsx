@@ -128,7 +128,7 @@ export function Navbar() {
   return (
     <>
       <nav className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)]">
-        <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-20 items-center justify-between gap-4">
             {/* 1. Left: Brand Logo & Title */}
             <div className="flex items-center gap-6">

@@ -44,21 +44,7 @@ export function AppShell({
       <Navbar />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Page Header (Title & Subtitle) */}
-        {!hideHeaderTitle && title && (
-          <div className="mb-6">
-            <h1 className="font-heading text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {title}
-            </h1>
-            {subtitle && (
-              <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
-                {subtitle}
-              </p>
-            )}
-          </div>
-        )}
-
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {!isAuthorized ? (
           <div className="bg-white rounded-3xl border border-slate-100 p-12 text-center max-w-lg mx-auto mt-12 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.05)]">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 mx-auto border border-red-100 mb-4">

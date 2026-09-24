@@ -38,25 +38,13 @@ export default function IncidentsPage() {
 
   return (
     <AppShell hideHeaderTitle>
-      <div className="page-container max-w-6xl space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                <AlertTriangle className="h-4 w-4" />
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
-                Crash Triage
-              </span>
-            </div>
-
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 font-heading md:text-3xl">
-              Crashes
-            </h1>
-            <p className="mt-0.5 text-xs text-slate-500 font-sans">
-              Real-time exception monitoring, anomaly scores &amp; automated AI fixes
-            </p>
+      <div className="w-full space-y-6">
+        {/* Top Header Controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading">
+              Crash Triage &amp; Monitoring
+            </span>
           </div>
 
           <button
