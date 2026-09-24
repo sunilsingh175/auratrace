@@ -180,22 +180,6 @@ export function Navbar() {
 
             {/* 2. Right Controls */}
             <div className="flex items-center gap-3">
-              {/* Live WebSocket Status Indicator */}
-              <div
-                className={`hidden lg:flex items-center gap-2 text-xs font-bold px-3 py-1 rounded-full font-heading border transition-colors ${
-                  isConnected
-                    ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                    : "text-slate-600 bg-slate-50 border-slate-200"
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
-                  }`}
-                />
-                <span>{isConnected ? "Real-Time Live" : "Offline"}</span>
-              </div>
-
               {/* Real-time Notification Bell */}
               <div className="relative">
                 <button
@@ -265,7 +249,7 @@ export function Navbar() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex items-center gap-2">
                                 {notif.type === "critical" ? (
-                                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                                   <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
                                 ) : notif.type === "success" ? (
                                   <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                                 ) : (
@@ -360,6 +344,14 @@ export function Navbar() {
                         <FolderKanban className="h-3.5 w-3.5 text-slate-500" />
                         <span>Projects &amp; Keys</span>
                       </Link>
+                      <Link
+                        href="/settings"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-50 transition font-medium"
+                      >
+                        <Settings className="h-3.5 w-3.5 text-slate-500" />
+                        <span>Settings</span>
+                      </Link>
                       <button
                         type="button"
                         onClick={() => {
@@ -424,6 +416,22 @@ export function Navbar() {
                   </Link>
                 );
               })}
+              {user && (
+                <Link
+                  href="/settings"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold transition ${
+                    pathname === "/settings"
+                      ? "bg-red-50 text-[#dc2626]"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Settings className={`h-4 w-4 ${pathname === "/settings" ? "text-[#dc2626]" : "text-slate-400"}`} />
+                    <span>Settings</span>
+                  </div>
+                </Link>
+              )}
             </div>
           </div>
         )}
