@@ -24,8 +24,33 @@ if sys.platform.startswith("win"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
+def _load_env():
+    candidates = [
+        ".env",
+        os.path.join(os.path.dirname(__file__), "..", ".env"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            with open(candidate, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k not in os.environ:
+                            os.environ[k] = v
+
+_load_env()
+
 BASE_URL = os.getenv("AURA_API_URL", "http://127.0.0.1:8000")
-MASTER_KEY = os.getenv("AURA_MASTER_API_KEY", "aura_secret_key_123")
+MASTER_KEY = os.getenv("AURA_MASTER_API_KEY")
+
+if not MASTER_KEY:
+    raise RuntimeError(
+        "AURA_MASTER_API_KEY is required for acceptance verification. "
+        "Please configure it in your environment or .env file."
+    )
 
 def request(path, method="GET", data=None, headers=None):
     url = f"{BASE_URL}{path}"

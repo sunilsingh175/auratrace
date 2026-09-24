@@ -1,75 +1,82 @@
-# Trace: AI-Powered Application Observability & Crash Diagnostics Platform
+# AuraTrace: AI-Powered Application Observability & Crash Diagnostics Platform
 
-Trace is a decoupled, event-driven observability and automated root-cause analysis platform. It ingests continuous telemetry streams, detects system anomalies using unsupervised machine learning (Isolation Forest), and generates step-by-step diagnostic and recovery reports using Retrieval-Augmented Generation (RAG) and an LLM.
-
----
-
-## Key Capabilities
-
-* **Non-Blocking Telemetry Ingestion:** FastAPI accepts telemetry and writes it to Redis Streams (XADD) before returning HTTP 202. Client latency depends on the runtime environment and load; see the measured stress-test results below.
-* **Unsupervised Anomaly Detection:** Rolling-window analysis via scikit-learn Isolation Forest to detect latency degradation, error-rate spikes, and other anomalous telemetry patterns.
-* **Contextual RAG Diagnosis:** Stack traces are embedded and matched against historical fixes stored in PostgreSQL with pgvector; the retrieved context is supplied to the configured Gemini model for diagnosis and recovery steps.
-* **Live WebSocket Telemetry:** Real-time telemetry and anomaly events are streamed to the Next.js dashboard.
-* **SDG Goal 9 Alignment:** Supports software infrastructure resilience and reliability.
+AuraTrace is a modern, event-driven observability and automated root-cause analysis platform. It ingests continuous telemetry streams, detects system anomalies using unsupervised machine learning (Isolation Forest), performs semantic incident matching using `pgvector`, and generates actionable diagnostic and recovery patches using Retrieval-Augmented Generation (RAG) with Google Gemini.
 
 ---
 
-## Architectural Data Flow
+## Architecture Overview
 
 ```text
-[ External Service / SDK ]
-          │  1. POST /api/v1/telemetry
-          ▼
- [ FastAPI Gateway ] ──► 2. XADD ──► [ Redis Stream Queue ]
-                                            │
-                                            ▼
-                                  [ ML Anomaly Worker ]
-                                  (5-minute window)
-                                            │
-                              3. Flag anomaly
-                                            ▼
-                                  [ PostgreSQL Incident ]
-                                            │
-                                            ▼
-                                      [ RAG AI Doctor ]
-                                      ├──► 4. Embed stack trace
-                                      ├──► 5. pgvector similarity search
-                                      └──► 6. Gemini diagnosis
-                                            │
-                                            ▼
-                                  [ Redis Pub/Sub ]
-                                            │
-                                            ▼
-                                  [ WebSocket Gateway ]
-                                            │
-                                            ▼
-                                  [ Next.js Dashboard ]
+Python SDK ──┐
+             ├──► [ FastAPI Gateway ] ──► [ Redis Stream Buffer ]
+Node.js SDK ─┘             │                       │
+                           ▼                       ▼
+                   [ WebSocket Pub/Sub ]   [ ML Anomaly Worker ]
+                           │               (Isolation Forest)
+                           │                       │
+                           │                       ▼
+                           │             [ PostgreSQL Incident ]
+                           │                       │
+                           │                       ▼
+                           │               [ RAG AI Doctor ]
+                           │               ├── pgvector Semantic Search
+                           │               └── Gemini Diagnosis & Patch
+                           │                       │
+                           ▼                       ▼
+                   [ Next.js Real-Time Observability Dashboard ]
 ```
 
-Telemetry persistence is performed by the backend worker pipeline into PostgreSQL; Redis is the asynchronous stream buffer and event broker rather than a separate long-term archival store.
+### End-to-End Workflow
+
+1. **SDK-First Zero-Configuration Auto-Discovery**: Applications integrate via the AuraTrace Python or Node.js SDK using a project API key (`at_live_...`). Service metadata, environment, runtime, and version are automatically discovered upon first telemetry emission.
+2. **High-Throughput Redis Stream Ingestion**: The FastAPI gateway accepts telemetry events with sub-millisecond asynchronous handoff to Redis Streams (`XADD`) and immediately returns HTTP 202.
+3. **Unsupervised ML Anomaly Detection**: A dedicated worker consumes the telemetry stream in real time, calculating rolling 5-minute statistical windows (error rate, 5xx ratio, latency distributions, unique errors) evaluated by an Isolation Forest model.
+4. **pgvector Historical Knowledge Retrieval**: When an incident is flagged, its error pattern and stack trace are vectorized using semantic embeddings (`sentence-transformers`) and queried against verified historical fixes.
+5. **RAG AI Doctor (Gemini)**: The incident context and top pgvector semantic matches are synthesized and passed to Gemini to generate root-cause explanations and concrete recovery patches.
+6. **Live WebSocket Telemetry & Dashboard**: Telemetry logs and newly diagnosed incidents are broadcast in real time to the Next.js frontend.
 
 ---
 
-## Machine Learning Architecture & Benchmark Validation
+## Key Features
 
-Trace implements two complementary Isolation Forest workflows:
+* **Zero-Config SDKs**: Native Python (`auratrace`) and Node.js (`@auratrace/node`) client libraries with automatic unhandled exception interceptors and background queue flushing.
+* **Non-Blocking Telemetry Ingestion**: Redis-buffered queue decouples client logging from long-term database persistence.
+* **Unsupervised Anomaly Scoring**: Real-time sliding window telemetry evaluation using Isolation Forest with heuristic fallback scoring.
+* **Contextual RAG Diagnostics**: Semantic vector search on PostgreSQL (`pgvector`) combined with Gemini LLM for automated post-mortem insights and remediation steps.
+* **Role-Based Access Control**: Secure user authentication (Admin, Developer) with JWT sessions, API key hashing, and optional email OTP delivery.
+* **Production-Ready Dashboard**: Next.js 14 App Router UI with real-time incident timelines, live telemetry feeds, project management, and system metrics.
 
-1. **Online Production Anomaly Detection:**
-   * Operates on **8 operational telemetry features** (error_count, request_count, error_rate, avg_latency_ms, max_latency_ms, p95_latency_ms, status_5xx_rate, unique_error_types) aggregated over 5-minute per-service sliding windows.
-   * Processes live telemetry from the Redis Stream.
-   * An anomaly triggers incident creation and the RAG diagnostic pipeline.
+---
 
-2. **Offline Research Benchmark (LogHub HDFS_v1):**
-   * Evaluates unsupervised Isolation Forest on **29 log event template counts (E1–E29)** across **575,061 block sessions** from the LogHub HDFS dataset (Xu et al., SOSP 2009).
-   * Evaluated using a **stratified 70% Train / 30% Held-Out Test split** with zero label leakage.
-   * **Full Dataset (575,061 sessions / 172,519 held-out test sessions) Empirical Results:**
-     * **Held-out ROC-AUC:** 0.9597 (95.97%)
-     * **PR-AUC (Average Precision):** 0.7147 (71.47%)
-     * **Precision:** 0.6922 (69.22%)
-     * **Recall:** 0.6076 (60.76%)
-     * **F1-Score:** 0.6471 (64.71%)
-     * **Inference Throughput:** 72,687 sessions/sec
-   * *To reproduce:* python backend/ml_anomaly_service/evaluate_hdfs.py --samples 0
+## Repository Structure
+
+```text
+auratrace/
+├── docker-compose.yml               # Multi-container orchestration
+├── .env.example                     # Environment configuration template
+├── README.md                        # Documentation & setup guide
+├── pytest.ini                       # Test configuration
+├── database/                        # PostgreSQL + pgvector initialization
+│   ├── 01-init.sql                  # Schema & table definitions
+│   ├── 02-seed.sql                  # Historical knowledge base & seed data
+│   └── 03-service-ownership.sql     # Service mappings
+├── backend/
+│   ├── ingestion_service/           # FastAPI gateway & WebSocket broadcaster
+│   ├── ml_anomaly_service/          # Isolation Forest anomaly worker
+│   ├── rag-diagnostic-service/      # pgvector RAG & Gemini AI Doctor
+│   └── shared/                      # Database models & logging
+├── frontend/                        # Next.js 14 React observability portal
+├── sdk/
+│   ├── nodejs/                      # @auratrace/node TypeScript SDK
+│   └── python/                      # auratrace Python SDK
+└── scripts/                         # Verification & simulation utilities
+    ├── demo_python_app.py           # Demo Python microservice with SDK
+    ├── demo_node_app.js             # Demo Node.js microservice with SDK
+    ├── simulate_crash.py            # Crash burst & anomaly simulator
+    ├── reset_demo_db.py             # Safe database reset utility
+    ├── stress_test.py               # Redis ingestion load test
+    └── e2e_acceptance_verification.py # Full stack acceptance test suite
+```
 
 ---
 
@@ -85,7 +92,12 @@ cd auratrace
 ```bash
 cp .env.example .env
 ```
-*(Review and update .env with your credentials and configuration.)*
+Update `.env` with your desired configuration, database credentials, master API key, and Gemini API key:
+```env
+AURA_MASTER_API_KEY=your_secure_master_key
+GEMINI_API_KEY=your_gemini_api_key
+POSTGRES_PASSWORD=your_postgres_password
+```
 
 ### 3. Launch Services with Docker Compose
 ```bash
@@ -93,90 +105,95 @@ docker compose up -d --build
 ```
 
 ### 4. Access Platform Interfaces
-* **Live Monitoring Dashboard:** http://localhost:3000
-* **Ingestion Gateway OpenAPI Docs:** http://localhost:8000/docs
-* **Canonical WebSocket Stream:** ws://localhost:8000/ws/telemetry (aliases: /ws, /api/v1/ws)
-* **PostgreSQL pgvector Database:** localhost:5432 (trace_db)
-* **Redis Stream Broker:** localhost:6379 (telemetry_stream)
+* **Web Dashboard**: [http://localhost:3000](http://localhost:3000)
+* **Ingestion Gateway OpenAPI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+* **WebSocket Endpoint**: `ws://localhost:8000/ws/telemetry`
+* **PostgreSQL (pgvector)**: `localhost:5432` (`trace_db`)
+* **Redis Stream**: `localhost:6379` (`telemetry_stream`)
 
 ---
 
-## Gateway Stress-Test Validation
+## Developer Usage & SDK Integration
 
-The repository contains scripts/stress_test.py for the current Redis-buffered ingestion test.
+### 1. Python SDK
 
-A recorded run dispatched **1,000 requests with concurrency 50**:
-* **HTTP 202:** 1,000 / 1,000
-* **HTTP errors:** 0
-* **Duration:** 10.562 s
-* **Throughput:** 94.68 requests/sec
-* **Mean latency:** 521.96 ms
-* **P50 latency:** 318.95 ms
-* **P95 latency:** 1,692.39 ms
-* **P99 latency:** 2,856.42 ms
-* **Redis Stream:** 7,016 → 8,016 entries (+1,000)
-* **Persisted PostgreSQL records:** +1,000
+Install the SDK or add it to your project:
+```python
+import auratrace
 
-These measurements demonstrate asynchronous Redis buffering and eventual persistence under the tested burst. They should not be interpreted as a guaranteed sub-20 ms client-latency SLA.
+# Initialize with zero-config (runtime and service name auto-detected)
+client = auratrace.init(
+    api_key="your_project_or_master_api_key",
+    endpoint="http://localhost:8000",
+    service_name="payment-service",
+    environment="production"
+)
 
----
+# Stream operational telemetry
+client.capture_message("Payment batch processed", metadata={"count": 50})
 
-## 2-Minute Live Demo & Verification Sequence
-
-1. **Start the Platform:**
-   ```bash
-   docker compose up -d
-   ```
-2. **Access Web Portal & Authenticate:**
-   * Open `http://localhost:3000` (Dashboard).
-   * Register or log in via `http://localhost:3000/login` as **Developer** or **Admin**.
-3. **Provision a Microservice & Receive One-Time API Key:**
-   * Navigate to `/services` and click **Register Service**.
-   * Copy the returned one-time API key (`at_live_...`).
-4. **Simulate Live Telemetry & Crash Burst:**
-   ```bash
-   python scripts/simulate_crash.py
-   ```
-5. **Observe Real-Time Anomaly Detection & AI Diagnosis:**
-   * Watch the **Live Telemetry** stream at `/telemetry`.
-   * Open `/incidents` to inspect the newly opened incident, anomaly confidence score, and AI root-cause analysis with suggested code patch.
-6. **Run Automated Full Stack Verification:**
-   ```bash
-   python scripts/verify_full_live_stack.py
-   ```
-
----
-
-## Repository Structure
-
-```text
-trace/
-├── docker-compose.yml
-├── .env.example
-├── README.md
-├── database/
-│   ├── 01-init.sql
-│   ├── 02-seed.sql
-│   └── 03-service-ownership.sql
-├── backend/
-│   ├── ingestion_service/
-│   ├── ml_anomaly_service/
-│   ├── rag-diagnostic-service/
-│   └── shared/
-├── frontend/
-├── sdk/
-│   └── nodejs/
-└── scripts/
-    ├── benchmark_ingestion.py
-    ├── evaluate_hdfs.py
-    ├── simulate_crash.py
-    ├── stress_test.py
-    ├── test_pipeline_integration.py
-    └── verify_full_live_stack.py
+# Capture exceptions with automated triage
+try:
+    process_payment()
+except Exception as exc:
+    client.capture_exception(exc, metadata={"customer_id": "cus_12345"})
 ```
+
+### 2. Node.js SDK
+
+```typescript
+import { AuraTrace } from "@auratrace/node";
+
+AuraTrace.init({
+  apiKey: process.env.AURATRACE_API_KEY!,
+  endpoint: "http://localhost:8000",
+  serviceName: "order-service",
+  environment: "production",
+});
+
+// Capture messages or caught exceptions
+await AuraTrace.captureMessage("Order dispatched", { order_id: "ord_991" });
+```
+
+---
+
+## Verification & Acceptance Testing
+
+### 1. Run Backend Unit Tests
+```bash
+pytest
+```
+*Executes all authentication, Isolation Forest model inference, and sliding-window aggregation tests.*
+
+### 2. Run Autonomous Crash Simulation
+```bash
+python scripts/simulate_crash.py
+```
+*Injects synthetic microservice telemetry bursts and crashes to trigger live ML anomaly detection and WebSocket updates.*
+
+### 3. Run Microservice SDK Demos
+```bash
+# Node.js microservice SDK demo
+node scripts/demo_node_app.js
+
+# Python microservice SDK demo
+python scripts/demo_python_app.py
+```
+
+### 4. Run End-to-End Acceptance Verification
+```bash
+python scripts/e2e_acceptance_verification.py
+```
+*Performs full lifecycle validation: provisions a project, runs SDK microservices, verifies anomaly detection, confirms pgvector semantic matches, checks Gemini AI Doctor diagnoses, and inspects PostgreSQL records.*
+
+### 5. Reset Database for Clean Demos
+```bash
+python scripts/reset_demo_db.py
+```
+*Clears active telemetry and incidents while preserving user accounts, registered projects, and the vectorized knowledge base.*
 
 ---
 
 ## Author & Maintainer
 
-* **GitHub:** [@sunilsingh175](https://github.com/sunilsingh175)
+* **GitHub**: [@sunilsingh175](https://github.com/sunilsingh175)
