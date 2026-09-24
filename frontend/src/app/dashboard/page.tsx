@@ -115,7 +115,7 @@ export default function DashboardPage() {
       title="Dashboard"
       subtitle="Real-time application health, crash telemetry, and AI diagnosis"
     >
-      <div className="space-y-6 max-w-[1600px] mx-auto pb-6">
+      <div className="page-container max-w-6xl">
         {/* Application Health - 3 Clean Cards */}
         <div>
           <div className="mb-3">
