@@ -1,12 +1,12 @@
 /**
- * AutoTrace Demo Node.js Application
+ * AuraTrace Demo Node.js Application
  * Demonstrates zero-config auto-discovery, telemetry streaming, and automated exception capture.
  */
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { AutoTrace } from "../sdk/nodejs/dist/index.js";
+import { AuraTrace } from "../sdk/nodejs/dist/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,27 +33,27 @@ function loadEnv() {
 loadEnv();
 
 const API_KEY =
-  process.env.AUTOTRACE_API_KEY ||
   process.env.AURATRACE_API_KEY ||
+  process.env.AUTOTRACE_API_KEY ||
   process.env.AURA_MASTER_API_KEY;
 if (!API_KEY) {
   console.error(
-    "❌ Error: AUTOTRACE_API_KEY or AURATRACE_API_KEY environment variable is required."
+    "❌ Error: AURATRACE_API_KEY environment variable is required."
   );
   process.exit(1);
 }
 
 const ENDPOINT =
-  process.env.AUTOTRACE_ENDPOINT ||
   process.env.AURATRACE_ENDPOINT ||
+  process.env.AUTOTRACE_ENDPOINT ||
   "http://127.0.0.1:8000";
 
 console.log("==================================================");
-console.log("🚀 Starting Demo Node.js Microservice with AutoTrace");
+console.log("🚀 Starting Demo Node.js Microservice with AuraTrace");
 console.log("==================================================");
 
-// 1. Initialize AutoTrace with zero-config (serviceName is automatically detected if omitted)
-AutoTrace.init({
+// 1. Initialize AuraTrace
+AuraTrace.init({
   apiKey: API_KEY,
   endpoint: ENDPOINT,
   serviceName: "payment-gateway-node",
@@ -61,8 +61,8 @@ AutoTrace.init({
   environment: "production",
 });
 
-const client = AutoTrace.getClient();
-console.log(`✅ AutoTrace SDK Initialized!`);
+const client = AuraTrace.getClient();
+console.log(`✅ AuraTrace SDK Initialized!`);
 console.log(`   • Service Name: ${client.serviceName}`);
 console.log(`   • Runtime: node`);
 console.log(`   • Version: ${client.version}`);
@@ -72,7 +72,7 @@ console.log(`   • Project Key: ${API_KEY.slice(0, 12)}...`);
 async function runDemo() {
   console.log("\n📡 1. Emitting normal operational telemetry...");
   for (let i = 1; i <= 3; i++) {
-    await AutoTrace.captureMessage(`Processed payment batch #${i} successfully`, {
+    await AuraTrace.captureMessage(`Processed payment batch #${i} successfully`, {
       batch_id: `batch-${i}`,
       processed_count: 50,
       latency_ms: 45 + Math.floor(Math.random() * 20),
@@ -89,8 +89,8 @@ async function runDemo() {
       "    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
     );
   } catch (err) {
-    console.log("   ⚠️ Intercepted error. Dispatching to AutoTrace AI Doctor...");
-    await AutoTrace.captureException(err, {
+    console.log("   ⚠️ Intercepted error. Dispatching to AuraTrace AI Doctor...");
+    await AuraTrace.captureException(err, {
       route: "/api/v2/checkout/charge",
       method: "POST",
       customer_id: "cus_99182391",

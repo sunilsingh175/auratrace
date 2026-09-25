@@ -21,8 +21,10 @@ export interface TelemetryPayload {
 
 export interface TransporterConfig {
   endpoint?: string;
-  apiKey: string;
+  apiKey?: string;
+  projectKey?: string;
   serviceId?: string;
+  serviceName?: string;
   runtime?: string;
   environment?: string;
   version?: string;
@@ -31,6 +33,7 @@ export interface TransporterConfig {
 export class BatchTransporter {
   private endpoint: string;
   private apiKey: string;
+  private projectKey: string;
   private serviceId: string;
   private runtime: string;
   private environment: string;
@@ -39,7 +42,8 @@ export class BatchTransporter {
   constructor(config: TransporterConfig) {
     this.endpoint = (config.endpoint || process.env.AUTOTRACE_ENDPOINT || process.env.AURATRACE_ENDPOINT || "http://localhost:8000").replace(/\/$/, "");
     this.apiKey = config.apiKey || process.env.AUTOTRACE_API_KEY || process.env.AURATRACE_API_KEY || "";
-    this.serviceId = config.serviceId || "node-app";
+    this.projectKey = config.projectKey || process.env.AUTOTRACE_PROJECT_KEY || process.env.AURATRACE_PROJECT_KEY || this.apiKey;
+    this.serviceId = config.serviceId || config.serviceName || "node-app";
     this.runtime = config.runtime || "node";
     this.environment = config.environment || process.env.NODE_ENV || "production";
     this.version = config.version || "1.0.0";
@@ -49,6 +53,7 @@ export class BatchTransporter {
     try {
       const fullPayload = {
         service_id: payload.service_id || this.serviceId,
+        service_name: payload.service_id || this.serviceId,
         runtime: payload.runtime || this.runtime,
         environment: payload.environment || this.environment,
         version: payload.version || this.version,
@@ -56,13 +61,24 @@ export class BatchTransporter {
         ...payload,
       };
 
+      const key = this.apiKey || this.projectKey;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (this.apiKey) {
+        headers["X-API-Key"] = this.apiKey;
+      }
+      if (this.projectKey) {
+        headers["X-Project-Key"] = this.projectKey;
+      }
+      if (key) {
+        headers["Authorization"] = `Bearer ${key}`;
+      }
+
       const response = await fetch(`${this.endpoint}/api/v1/telemetry`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": this.apiKey,
-          "X-Project-Key": this.apiKey,
-        },
+        headers,
         body: JSON.stringify(fullPayload),
       });
 

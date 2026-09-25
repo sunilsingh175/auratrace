@@ -159,7 +159,7 @@ function ProfileSettingsContent() {
                 </span>
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 truncate">
-                <span className="truncate">{user?.email || "developer@autotrace.dev"}</span>
+                <span className="truncate">{user?.email || "developer@auratrace.dev"}</span>
                 <span className="text-slate-300">•</span>
                 <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-[11px]">
                   <CheckCircle2 className="h-3 w-3 text-emerald-600" />
@@ -239,7 +239,7 @@ function ProfileSettingsContent() {
                 <input
                   type="email"
                   disabled
-                  value={user?.email || "developer@autotrace.dev"}
+                  value={user?.email || "developer@auratrace.dev"}
                   className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2 text-xs font-mono text-slate-500 cursor-not-allowed"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">

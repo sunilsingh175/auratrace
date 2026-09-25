@@ -1,11 +1,11 @@
 """
-AutoTrace Python SDK
+AuraTrace Python SDK
 """
 
 from typing import Optional
-from .client import AutoTrace, AuraTrace, TraceClient, Trace, AutomaticBackendDetection
+from .client import AuraTrace, AutoTrace, TraceClient, Trace, AutomaticBackendDetection
 
-_default_client: Optional[AutoTrace] = None
+_default_client: Optional[AuraTrace] = None
 
 def init(
     api_key: Optional[str] = None,
@@ -16,9 +16,9 @@ def init(
     batch_size: int = 50,
     flush_interval_seconds: float = 1.0,
     install_global_hook: bool = True,
-) -> AutoTrace:
+) -> AuraTrace:
     global _default_client
-    _default_client = AutoTrace(
+    _default_client = AuraTrace(
         api_key=api_key,
         service_name=service_name,
         endpoint=endpoint,

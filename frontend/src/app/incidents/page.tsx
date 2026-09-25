@@ -18,7 +18,7 @@ export default function IncidentsPage() {
 
   const handleRealtimeAlert = useCallback(
     (alert: AnomalyAlertEvent) => {
-      console.log("[AutoTrace Crashes] Realtime crash alert:", alert);
+      console.log("[AuraTrace Crashes] Realtime crash alert:", alert);
       void refresh();
     },
     [refresh]

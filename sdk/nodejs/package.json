@@ -5,8 +5,20 @@
   "description": "Official Node.js Telemetry & Crash Diagnostic SDK for AuraTrace Autonomous Backend Diagnostics",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "test": "tsx test-sdk.ts"
   },
   "keywords": [

@@ -84,7 +84,7 @@ export default function TermsOfServicePage() {
               <span>Project Isolation & API Key Management</span>
             </h2>
             <p>
-              Each application workspace is assigned a dedicated API Key (e.g., <code className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-800">AUTOTRACE_API_KEY</code>). You are responsible for keeping your API keys secure and regenerating keys if an unauthorized disclosure occurs.
+              Each application workspace is assigned a dedicated API Key (e.g., <code className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-800">AURATRACE_API_KEY</code>). You are responsible for keeping your API keys secure and regenerating keys if an unauthorized disclosure occurs.
             </p>
           </section>
 

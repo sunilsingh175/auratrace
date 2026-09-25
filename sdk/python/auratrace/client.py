@@ -55,7 +55,7 @@ def _sanitize_stack_trace(trace_str: str) -> str:
     return re.sub(r'File "([^"]+)"', _clean_path, trace_str)
 
 
-class AutoTrace:
+class AuraTrace:
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -69,16 +69,16 @@ class AutoTrace:
     ):
         self.api_key = (
             api_key
-            or os.getenv("AUTOTRACE_API_KEY")
             or os.getenv("AURATRACE_API_KEY")
+            or os.getenv("AUTOTRACE_API_KEY")
             or os.getenv("AURA_MASTER_API_KEY")
             or ""
         )
         self.service_name = service_name or auto_detect_service_name()
         self.endpoint = (
             endpoint
-            or os.getenv("AUTOTRACE_ENDPOINT")
             or os.getenv("AURATRACE_ENDPOINT")
+            or os.getenv("AUTOTRACE_ENDPOINT")
             or "http://localhost:8000"
         ).rstrip("/")
         self.environment = environment or os.getenv("ENV") or os.getenv("ENVIRONMENT") or "production"
@@ -259,7 +259,7 @@ class AutoTrace:
 
 
 # Backward compatibility & ergonomic aliases
-AuraTrace = AutoTrace
-TraceClient = AutoTrace
-Trace = AutoTrace
-AutomaticBackendDetection = AutoTrace
+AutoTrace = AuraTrace
+TraceClient = AuraTrace
+Trace = AuraTrace
+AutomaticBackendDetection = AuraTrace

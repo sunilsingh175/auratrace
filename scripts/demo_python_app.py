@@ -1,5 +1,5 @@
 """
-AutoTrace Demo Python Application
+AuraTrace Demo Python Application
 Demonstrates zero-config auto-discovery, telemetry streaming, and automated exception capture in Python.
 """
 
@@ -13,7 +13,7 @@ sdk_dir = os.path.join(os.path.dirname(current_dir), "sdk", "python")
 if sdk_dir not in sys.path:
     sys.path.insert(0, sdk_dir)
 
-import autotrace
+import auratrace
 
 # Ensure UTF-8 output on Windows consoles
 if sys.platform.startswith("win"):
@@ -41,24 +41,24 @@ def _load_env():
 _load_env()
 
 API_KEY = (
-    os.getenv("AUTOTRACE_API_KEY")
-    or os.getenv("AURATRACE_API_KEY")
+    os.getenv("AURATRACE_API_KEY")
+    or os.getenv("AUTOTRACE_API_KEY")
     or os.getenv("AURA_MASTER_API_KEY")
 )
 if not API_KEY:
     raise RuntimeError(
-        "AUTOTRACE_API_KEY or AURATRACE_API_KEY is required. "
+        "AURATRACE_API_KEY or AUTOTRACE_API_KEY is required. "
         "Please set it in your environment or in a .env file."
     )
 
-ENDPOINT = os.getenv("AUTOTRACE_ENDPOINT", os.getenv("AURATRACE_ENDPOINT", "http://127.0.0.1:8000"))
+ENDPOINT = os.getenv("AURATRACE_ENDPOINT", os.getenv("AUTOTRACE_ENDPOINT", "http://127.0.0.1:8000"))
 
 print("==================================================")
-print("🚀 Starting Demo Python Microservice with AutoTrace")
+print("🚀 Starting Demo Python Microservice with AuraTrace")
 print("==================================================")
 
-# 1. Initialize AutoTrace with zero-config
-client = autotrace.init(
+# 1. Initialize AuraTrace
+client = auratrace.init(
     api_key=API_KEY,
     endpoint=ENDPOINT,
     service_name="order-fulfillment-python",
@@ -66,7 +66,7 @@ client = autotrace.init(
     environment="production",
 )
 
-print(f"✅ AutoTrace SDK Initialized!")
+print(f"✅ AuraTrace SDK Initialized!")
 print(f"   • Service Name: {client.service_name}")
 print(f"   • Runtime: {client.runtime}")
 print(f"   • Version: {client.version}")
@@ -91,7 +91,7 @@ def run_demo():
             "for session lock key: 'sess:user:918231'"
         )
     except Exception as exc:
-        print("   ⚠️ Intercepted error. Dispatching to AutoTrace AI Doctor...")
+        print("   ⚠️ Intercepted error. Dispatching to AuraTrace AI Doctor...")
         client.capture_exception(
             exc,
             metadata={

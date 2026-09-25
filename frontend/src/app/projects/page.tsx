@@ -131,17 +131,17 @@ export default function ProjectsPage() {
     }
   };
 
-  const nodeInitCode = `import AutoTrace from "@autotrace/node";
+  const nodeInitCode = `import { AuraTrace } from "@auratrace/node";
 
-AutoTrace.init({
-  apiKey: process.env.AUTOTRACE_API_KEY
+AuraTrace.init({
+  apiKey: process.env.AURATRACE_API_KEY
 });`;
 
-  const pythonInitCode = `import autotrace
+  const pythonInitCode = `import auratrace
 import os
 
-autotrace.init(
-  api_key=os.getenv("AUTOTRACE_API_KEY")
+auratrace.init(
+  api_key=os.getenv("AURATRACE_API_KEY")
 )`;
 
   return (
@@ -196,7 +196,7 @@ autotrace.init(
                 type="text"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="e.g. AutoTrace Demo"
+                placeholder="e.g. AuraTrace Demo"
                 className="flex-1 rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-2.5 text-xs font-semibold text-slate-900 outline-none transition focus:border-red-500 focus:bg-white"
               />
               <button
@@ -222,7 +222,7 @@ autotrace.init(
           <div className="space-y-4">
             <div>
               <p className="text-base font-bold text-slate-900 font-heading">
-                {loading ? "Loading..." : activeProject?.name || "AutoTrace Demo"}
+                {loading ? "Loading..." : activeProject?.name || "AuraTrace Demo"}
               </p>
             </div>
 
@@ -275,10 +275,10 @@ autotrace.init(
           </div>
         </div>
 
-        {/* 2. Install AutoTrace */}
+        {/* 2. Install AuraTrace */}
         <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-4">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-heading border-b border-slate-100 pb-3">
-            Install AutoTrace
+            Install AuraTrace
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -288,10 +288,10 @@ autotrace.init(
                 Node.js
               </span>
               <div className="flex items-center justify-between rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 font-mono text-xs text-slate-200">
-                <code>npm install @autotrace/node</code>
+                <code>npm install @auratrace/node</code>
                 <button
                   type="button"
-                  onClick={() => copyText("npm install @autotrace/node", "node-install")}
+                  onClick={() => copyText("npm install @auratrace/node", "node-install")}
                   className="text-slate-400 hover:text-white transition cursor-pointer ml-2"
                   title="Copy command"
                 >
@@ -310,10 +310,10 @@ autotrace.init(
                 Python
               </span>
               <div className="flex items-center justify-between rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 font-mono text-xs text-slate-200">
-                <code>pip install autotrace</code>
+                <code>pip install auratrace-sdk</code>
                 <button
                   type="button"
-                  onClick={() => copyText("pip install autotrace", "python-install")}
+                  onClick={() => copyText("pip install auratrace-sdk", "python-install")}
                   className="text-slate-400 hover:text-white transition cursor-pointer ml-2"
                   title="Copy command"
                 >
@@ -403,11 +403,11 @@ autotrace.init(
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
               <h3 className="text-base font-bold font-heading text-white">
-                Zero Configuration
+                Automatic Service Discovery
               </h3>
             </div>
             <p className="text-xs text-slate-300 font-sans max-w-lg leading-relaxed">
-              Install the SDK once. Automatic Backend Detection automatically discovers your application and captures crashes, stack traces, and telemetry.
+              Minimal configuration setup. Once initialized, AuraTrace automatically registers your microservice, captures unhandled exceptions, and streams AI diagnostics in real time.
             </p>
           </div>
 
