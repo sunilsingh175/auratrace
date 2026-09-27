@@ -36,8 +36,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 try:
     from .auth import router as auth_router, init_auth_table, require_admin, get_current_user
+    from backend.repair_engine.api import router as repair_router
 except ImportError:
     from auth import router as auth_router, init_auth_table, require_admin, get_current_user
+    from backend.repair_engine.api import router as repair_router
 
 # ============================================================
 # Logging Setup
@@ -180,6 +182,7 @@ Autonomous telemetry ingestion pipeline, real-time Isolation Forest anomaly dete
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(auth_router)
+app.include_router(repair_router)
 
 @app.on_event("startup")
 async def startup_event():
