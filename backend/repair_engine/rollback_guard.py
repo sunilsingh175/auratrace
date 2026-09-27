@@ -8,6 +8,10 @@ from typing import Dict, Any, List
 from shared.database import get_db_pool
 from repair_engine.git_client import GitHubClient
 from repair_engine.notifier import Notifier
+try:
+    from backend.repair_engine.rollback import regression_detected, validate_rollback_reason
+except (ImportError, ModuleNotFoundError):
+    from repair_engine.rollback import regression_detected, validate_rollback_reason
 
 log = logging.getLogger("repair.rollback")
 
@@ -44,7 +48,7 @@ class RollbackGuard:
             measurements.append({"check": i + 1, "error_rate": rate})
             log.info("📊 Health Check %d/%d: error_rate=%.4f (threshold=%.4f)", i + 1, checks, rate, threshold)
 
-            if rate > threshold and rate > 0.10:
+            if regression_detected(baseline_error_rate=baseline_error_rate, current_error_rate=rate, threshold=threshold) and rate > 0.10:
                 bad_checks += 1
                 if bad_checks >= 2:
                     log.error("🚨 Regression detected in consecutive checks — initiating auto-rollback for %s", incident_id[:8])
