@@ -1,236 +1,130 @@
+"""
+Isolation Forest anomaly detector wrapper.
+Loads a trained model from disk, or trains a baseline if none exists.
+"""
 import os
+import joblib
 import numpy as np
+from pathlib import Path
+from typing import Tuple, Optional
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
-try:
-    import joblib
-except ImportError:
-    joblib = None
+from shared.config import get_settings
+from ml_anomaly_service.feature_extractor import FEATURE_COLUMNS
+
+settings = get_settings()
+
+# Model persistence directory (supports both container and local runs)
+if os.path.exists("/app"):
+    MODEL_DIR = Path("/app/models")
+else:
+    MODEL_DIR = Path("models")
+
+MODEL_PATH = MODEL_DIR / "isolation_forest.pkl"
+SCALER_PATH = MODEL_DIR / "scaler.pkl"
 
 
 class AnomalyDetector:
-    """
-    Wrapper around the trained Isolation Forest model.
-
-    IsolationForest decision_function():
-        higher value  = more normal
-        lower value   = more anomalous
-
-    Trace converts this into:
-        0.0 = normal
-        1.0 = highly anomalous
-    """
-
     def __init__(self):
-        self.model_path_joblib = os.path.join(
-            os.path.dirname(__file__),
-            "isolation_forest.joblib",
-        )
+        self.model: Optional[IsolationForest] = None
+        self.scaler: Optional[StandardScaler] = None
+        self._load_or_train()
 
-        self.model = None
+    # ── Loading ───────────────────────────────────────────
 
-        self._load_model()
+    def _load_or_train(self):
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-    def _load_model(self):
-        """Load the trained Isolation Forest model."""
-
-        if joblib and os.path.exists(
-            self.model_path_joblib
-        ):
+        if MODEL_PATH.exists() and SCALER_PATH.exists():
             try:
-                self.model = joblib.load(
-                    self.model_path_joblib
-                )
-                if hasattr(self.model, "n_jobs"):
-                    self.model.n_jobs = 1
-
-                print(
-                    "Loaded Isolation Forest model from "
-                    f"{self.model_path_joblib}"
-                )
-
+                print("✅ Loading trained model from disk")
+                self.model = joblib.load(MODEL_PATH)
+                self.scaler = joblib.load(SCALER_PATH)
                 return
-
             except Exception as exc:
-                print(
-                    "Failed to load joblib model: "
-                    f"{exc}"
-                )
+                print(f"⚠️ Model load failed ({exc}) — retraining baseline")
 
-        print(
-            "No trained Isolation Forest model found. "
-            "Anomaly detection is running in failsafe mode."
-        )
+        print("⚠️  No model found — training baseline on synthetic data")
+        self._train_baseline()
 
-    def _prepare_features(
-        self,
-        features,
-    ) -> np.ndarray:
-        """Convert features into model-ready NumPy array."""
+    # ── Baseline training ─────────────────────────────────
 
-        return np.asarray(
-            features,
-            dtype=float,
-        ).reshape(
-            1,
-            -1,
-        )
-
-    def _heuristic_score(
-        self,
-        features,
-    ) -> float:
+    def _train_baseline(self, n_samples: int = 5000):
         """
-        Failsafe heuristic scoring when Isolation Forest model is unavailable.
-        Evaluates error rate, 5xx rate, latency, and error diversity.
+        Train on synthetic 'normal' traffic so the service works
+        out-of-the-box. Retrain with real data later.
         """
+        rng = np.random.default_rng(42)
+
+        normal = np.column_stack([
+            rng.integers(20, 200, n_samples),      # event_count
+            rng.integers(0, 5, n_samples),         # error_count
+            rng.integers(0, 2, n_samples),         # crash_count
+            rng.integers(1, 5, n_samples),         # unique_services
+            rng.normal(120, 30, n_samples),        # avg_latency
+            rng.normal(400, 100, n_samples),       # max_latency
+            rng.normal(300, 80, n_samples),        # p95_latency
+            rng.normal(50, 20, n_samples),         # std_latency
+            rng.normal(2.5, 0.8, n_samples),       # events_per_second
+            rng.uniform(0, 0.05, n_samples),       # error_rate
+        ])
+
+        self.scaler = StandardScaler().fit(normal)
+        contamination = getattr(settings, "ANOMALY_CONTAMINATION", 0.05) or 0.05
+        self.model = IsolationForest(
+            contamination=float(contamination),
+            n_estimators=200,
+            random_state=42,
+        ).fit(self.scaler.transform(normal))
+
+        # Persist
         try:
-            arr = np.asarray(
-                features,
-                dtype=float,
-            ).flatten()
-
-            if len(arr) < 8:
-                return 0.0
-
-            error_count = arr[0]
-            request_count = arr[1]
-            error_rate = arr[2]
-            avg_latency = arr[3]
-            max_latency = arr[4]
-            status_5xx_rate = arr[6]
-            unique_errors = arr[7]
-
-            score = 0.0
-            score += min(0.45, error_rate * 0.45)
-            score += min(0.35, status_5xx_rate * 0.35)
-
-            if avg_latency > 2000.0 or max_latency > 5000.0:
-                score += 0.15
-            elif avg_latency > 500.0:
-                score += 0.05
-
-            if error_count > 0:
-                score += min(0.10, 0.02 * error_count)
-            if unique_errors > 1:
-                score += 0.05
-
-            return round(
-                min(1.0, max(0.0, score)),
-                4,
-            )
-        except Exception:
-            return 0.0
-
-    def predict_score(
-        self,
-        features,
-    ) -> float:
-        """
-        Return a normalized anomaly score.
-
-        0.0 -> normal
-        1.0 -> highly anomalous
-        """
-
-        if self.model is None:
-            return self._heuristic_score(features)
-
-        try:
-
-            feature_array = (
-                self._prepare_features(
-                    features
-                )
-            )
-
-            decision_score = float(
-                self.model
-                .decision_function(
-                    feature_array
-                )[0]
-            )
-
-            # IsolationForest produces a decision
-            # score where higher values are more normal.
-            #
-            # Convert it to a Trace anomaly score.
-            anomaly_score = (
-                0.5 - decision_score
-            )
-
-            anomaly_score = max(
-                0.0,
-                min(
-                    1.0,
-                    anomaly_score,
-                ),
-            )
-
-            return round(
-                anomaly_score,
-                4,
-            )
-
+            joblib.dump(self.model, MODEL_PATH)
+            joblib.dump(self.scaler, SCALER_PATH)
+            print(f"✅ Baseline model trained ({n_samples} samples) and persisted to {MODEL_DIR}")
         except Exception as exc:
+            print(f"⚠️ Warning saving model to disk: {exc}")
 
-            print(
-                "Failed to calculate anomaly score: "
-                f"{exc}"
-            )
+    # ── Inference ─────────────────────────────────────────
 
-            return self._heuristic_score(features)
-
-    def predict(
-        self,
-        features,
-    ) -> bool:
+    def score(self, features: dict) -> Tuple[float, bool]:
         """
-        Return True when the Trace anomaly
-        score crosses the configured threshold.
+        Score a feature vector.
+        Returns:
+            anomaly_score: float in [0,1]  (1 = very anomalous)
+            is_anomaly: bool
         """
+        if self.model is None or self.scaler is None:
+            return 0.85, True
 
-        score = self.predict_score(
-            features
-        )
+        vec = np.array([[features.get(col, 0.0) for col in FEATURE_COLUMNS]])
+        scaled = self.scaler.transform(vec)
 
-        threshold = float(
-            os.getenv(
-                "ANOMALY_THRESHOLD",
-                "0.75",
-            )
-        )
+        # decision_function: negative = anomalous, positive = normal
+        raw = float(self.model.decision_function(scaled)[0])
+        pred = int(self.model.predict(scaled)[0])
 
-        return score >= threshold
+        # Convert to [0, 1] scale via sigmoid on negation
+        # Negative decision_function -> high anomaly score
+        anomaly_score = float(1.0 / (1.0 + np.exp(raw * 5.0)))
+        anomaly_score = min(max(anomaly_score, 0.0), 1.0)
 
-    def analyze(
-        self,
-        features,
-    ) -> dict:
-        """
-        Return the anomaly score and classification.
+        # If error_rate or crash_count is high, guarantee high score
+        if features.get("crash_count", 0) > 0 or features.get("error_rate", 0) > 0.5:
+            anomaly_score = max(anomaly_score, 0.85)
 
-        The same score is used for both values so that
-        Trace has one consistent anomaly decision.
-        """
+        return float(round(anomaly_score, 3)), (pred == -1 or anomaly_score >= 0.50)
 
-        anomaly_score = (
-            self.predict_score(
-                features
-            )
-        )
 
-        threshold = float(
-            os.getenv(
-                "ANOMALY_THRESHOLD",
-                "0.75",
-            )
-        )
+# ── Severity helpers ─────────────────────────────────────
 
-        is_anomaly = (
-            anomaly_score >= threshold
-        )
-
-        return {
-            "is_anomaly": is_anomaly,
-            "anomaly_score": anomaly_score,
-        }
+def severity_from_score(score: float) -> str:
+    """Map a numeric anomaly score to a severity label."""
+    if score >= 0.90:
+        return "critical"
+    if score >= 0.75:
+        return "high"
+    if score >= 0.50:
+        return "medium"
+    return "low"

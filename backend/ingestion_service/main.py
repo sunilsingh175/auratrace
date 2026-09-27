@@ -12,6 +12,8 @@ import time
 import hashlib
 import secrets
 import string
+import re
+import importlib
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -26,7 +28,7 @@ from fastapi import (
     WebSocketDisconnect,
     Query,
 )
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.security.api_key import APIKeyHeader
@@ -34,10 +36,47 @@ from pydantic import BaseModel, Field
 import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+
+PROMETHEUS_AVAILABLE = False
+CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
+Counter = None
+generate_latest = None
+
 try:
-    from .auth import router as auth_router, init_auth_table, require_admin, get_current_user
-except ImportError:
-    from auth import router as auth_router, init_auth_table, require_admin, get_current_user
+    _prom = importlib.import_module("prometheus_client")
+    Counter = getattr(_prom, "Counter", None)
+    generate_latest = getattr(_prom, "generate_latest", None)
+    CONTENT_TYPE_LATEST = getattr(_prom, "CONTENT_TYPE_LATEST", CONTENT_TYPE_LATEST)
+    if Counter is not None and generate_latest is not None:
+        PROMETHEUS_AVAILABLE = True
+except Exception:
+    PROMETHEUS_AVAILABLE = False
+try:
+    from backend.ingestion_service.auth import router as auth_router, init_auth_table, require_admin, get_current_user, authenticate_project
+    from backend.ingestion_service.settings_routes import router as settings_router
+    from backend.ingestion_service.schemas import EventPayload, CreateProjectRequest, CreateProjectResponse, IngestResponse, ProjectCreatePayload
+    from backend.ingestion_service.producer import publish_event
+except (ImportError, ModuleNotFoundError):
+    try:
+        from .auth import router as auth_router, init_auth_table, require_admin, get_current_user, authenticate_project
+        from .settings_routes import router as settings_router
+        from .schemas import EventPayload, CreateProjectRequest, CreateProjectResponse, IngestResponse, ProjectCreatePayload
+        from .producer import publish_event
+    except (ImportError, ModuleNotFoundError):
+        from auth import router as auth_router, init_auth_table, require_admin, get_current_user, authenticate_project
+        from settings_routes import router as settings_router
+        from schemas import EventPayload, CreateProjectRequest, CreateProjectResponse, IngestResponse, ProjectCreatePayload
+        from producer import publish_event
+
+try:
+    from backend.shared.sanitizer import error_signature, sanitize_dict
+    from backend.shared.security import generate_api_key, verify_api_key as verify_api_key_hash
+    from backend.shared.database import get_db_pool
+except (ImportError, ModuleNotFoundError):
+    from shared.sanitizer import error_signature, sanitize_dict
+    from shared.security import generate_api_key, verify_api_key as verify_api_key_hash
+    from shared.database import get_db_pool
+
 
 # ============================================================
 # Logging Setup
@@ -180,6 +219,8 @@ Autonomous telemetry ingestion pipeline, real-time Isolation Forest anomaly dete
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(auth_router)
+app.include_router(settings_router, prefix="/api")
+app.include_router(settings_router)
 
 @app.on_event("startup")
 async def startup_event():
@@ -207,6 +248,31 @@ async def startup_event():
                 await conn.execute(text("""
                     CREATE INDEX IF NOT EXISTS projects_api_key_hash_idx ON projects (api_key_hash);
                 """))
+
+                # Ensure project columns
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS slug VARCHAR(255);"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS api_key_prefix VARCHAR(32);"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS api_key_last_used TIMESTAMP WITH TIME ZONE;"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS projects_api_key_prefix_idx ON projects (api_key_prefix);"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS projects_slug_idx ON projects (slug);"))
+
+                # Ensure auto-merge & repair columns
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS auto_repair_enabled BOOLEAN DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS auto_merge_enabled BOOLEAN DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS github_repo VARCHAR(255);"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS github_base_branch VARCHAR(100) DEFAULT 'main';"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS github_token_encrypted TEXT;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS deploy_provider VARCHAR(50) DEFAULT 'webhook';"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS deploy_webhook TEXT;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS deploy_webhook_secret TEXT;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS deploy_config JSONB DEFAULT '{}'::jsonb;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS min_fix_confidence FLOAT DEFAULT 0.75;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS max_files_per_fix INT DEFAULT 5;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS max_merges_per_day INT DEFAULT 10;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS baseline_error_rate FLOAT DEFAULT 0.01;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS slack_webhook_url TEXT;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS discord_webhook_url TEXT;"))
+                await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS notify_webhook_url TEXT;"))
 
                 # 2. Ensure services auto-discovery columns
                 await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS project_id UUID;"))
@@ -252,6 +318,18 @@ async def startup_event():
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS telemetry_logs_project_idx ON telemetry_logs (project_id);"))
                 await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS source VARCHAR(32) DEFAULT 'sdk';"))
                 await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS similar_fixes JSONB DEFAULT '[]'::jsonb;"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS diagnosis JSONB DEFAULT '{}'::jsonb;"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS fix_explanation TEXT;"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS fix_confidence FLOAT;"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS pr_url TEXT;"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS pr_number INT;"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS test_result JSONB;"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS ci_status VARCHAR(50);"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS ci_result JSONB;"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS merge_sha VARCHAR(64);"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS deploy_status VARCHAR(50);"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS post_deploy_measurements JSONB;"))
+                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS reverted BOOLEAN DEFAULT FALSE;"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS incidents_source_idx ON incidents (source);"))
 
                 # 4. Seed default project and attach orphan services
@@ -1383,6 +1461,214 @@ async def clean_test_data(
     except Exception as exc:
         logger.error(f"Error cleaning test data: {exc}")
         raise HTTPException(status_code=500, detail="Failed to clean test data.")
+
+
+# ============================================================
+# V1 REST API (Projects, Telemetry Ingest, Incidents)
+# ============================================================
+
+def slugify(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
+
+
+@app.post(
+    "/v1/projects",
+    response_model=CreateProjectResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Projects & API Keys"],
+    summary="Create a new project (V1)",
+)
+async def create_project_v1(req: CreateProjectRequest):
+    """Create a new project + return its API key (once)."""
+    full_key, prefix, key_hash = generate_api_key()
+    project_id = str(uuid.uuid4())
+    slug = slugify(req.name) or f"project-{project_id[:8]}"
+
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        # Check if slug exists
+        existing = await conn.fetchrow(
+            "SELECT id FROM projects WHERE slug = $1", slug
+        )
+        if existing:
+            slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+
+        await conn.execute(
+            """
+            INSERT INTO projects (id, name, slug, api_key_hash, api_key_prefix)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            uuid.UUID(project_id),
+            req.name.strip(),
+            slug,
+            key_hash,
+            prefix,
+        )
+
+    return CreateProjectResponse(
+        id=project_id,
+        name=req.name.strip(),
+        slug=slug,
+        api_key=full_key,
+        api_key_prefix=prefix,
+        warning="Store this API key securely. It will not be shown again.",
+    )
+
+
+@app.post(
+    "/v1/ingest",
+    response_model=IngestResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Telemetry Ingestion"],
+    summary="Ingest single telemetry event (V1)",
+)
+async def ingest_v1(
+    payload: EventPayload,
+    project: dict = Depends(authenticate_project),
+):
+    """Ingest a single telemetry event."""
+    event_data = payload.model_dump(exclude_none=True)
+    event_id = await publish_event(
+        str(project["id"]),
+        event_data,
+    )
+
+    sig = None
+    if payload.error_type and (payload.error_message or payload.stack_trace):
+        sig = error_signature(
+            payload.error_type,
+            payload.error_message or "",
+            payload.stack_trace or "",
+        )
+
+    # Broadcast to live UI WebSocket connections
+    try:
+        log_event = {
+            "id": str(event_id),
+            "project_id": str(project["id"]),
+            "type": "TELEMETRY",
+            "service_id": str(payload.service_name or "unknown"),
+            "runtime": (payload.runtime.language if payload.runtime else "python") or "node",
+            "environment": payload.environment or "production",
+            "message": payload.error_message or "Telemetry event",
+            "level": "ERROR" if payload.error_type else "INFO",
+            "error_type": payload.error_type,
+            "stack_trace": payload.stack_trace or "",
+            "latency_ms": payload.latency_ms or 0.0,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        await manager.broadcast({
+            "type": "TELEMETRY_LOG",
+            "data": log_event,
+        })
+    except Exception:
+        pass
+
+    return IngestResponse(
+        status="accepted",
+        event_id=str(event_id),
+        incident_signature=sig,
+    )
+
+
+@app.post(
+    "/v1/ingest/batch",
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Telemetry Ingestion"],
+    summary="Ingest batch of telemetry events (V1)",
+)
+async def ingest_batch_v1(
+    events: List[EventPayload],
+    project: dict = Depends(authenticate_project),
+):
+    """Ingest multiple events in one request (max 500)."""
+    if not events:
+        raise HTTPException(status_code=400, detail="Empty batch")
+    if len(events) > 500:
+        raise HTTPException(status_code=400, detail="Batch too large (max 500)")
+
+    ids = []
+    for e in events:
+        event_id = await publish_event(
+            str(project["id"]),
+            e.model_dump(exclude_none=True),
+        )
+        ids.append(str(event_id))
+
+    return {"status": "accepted", "count": len(ids)}
+
+
+@app.get(
+    "/v1/incidents",
+    tags=["Incidents & Diagnostics"],
+    summary="List recent incidents for project (V1)",
+)
+async def list_incidents_v1(
+    project_id: str,
+    status: Optional[str] = None,
+    limit: int = 50,
+):
+    """List recent incidents for a project."""
+    pool = await get_db_pool()
+
+    q = """
+        SELECT id, error_type, 
+               COALESCE(error_message, root_cause, 'Unknown error') as error_message, 
+               COALESCE(service_name, (SELECT name FROM services WHERE services.id = incidents.service_id LIMIT 1), 'unknown') as service_name, 
+               severity, status, anomaly_score, pr_url, 
+               COALESCE(first_seen, created_at) as first_seen, 
+               COALESCE(last_seen, created_at) as last_seen, 
+               COALESCE(event_count, 1) as event_count
+        FROM incidents
+        WHERE project_id::text = $1 OR service_id::text IN (SELECT id::text FROM services WHERE project_id::text = $1)
+    """
+    args = [project_id]
+
+    if status:
+        q += f" AND status = ${len(args) + 1}"
+        args.append(status)
+
+    q += f" ORDER BY created_at DESC LIMIT ${len(args) + 1}"
+    args.append(limit)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(q, *args)
+
+    return {
+        "incidents": [
+            {
+                k: str(v) if isinstance(v, uuid.UUID) else (v.isoformat() if hasattr(v, "isoformat") else v)
+                for k, v in dict(r).items()
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }
+
+
+@app.get(
+    "/v1/incidents/{incident_id}",
+    tags=["Incidents & Diagnostics"],
+    summary="Full incident detail (V1)",
+)
+async def get_incident_v1(incident_id: str):
+    """Full incident detail (diagnosis, patch, etc.)."""
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM incidents WHERE id::text = $1", incident_id
+        )
+    if not row:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    res = {}
+    for k, v in dict(row).items():
+        if isinstance(v, uuid.UUID):
+            res[k] = str(v)
+        elif hasattr(v, "isoformat"):
+            res[k] = v.isoformat()
+        else:
+            res[k] = v
+    return res
 
 
 
@@ -3065,13 +3351,16 @@ async def health_check():
     # 384 is the correct constant but it is a model spec, not a runtime measurement.
     embedding_dimension = 384
 
+    redis_ok = (redis_status == "healthy")
     return {
-        "status": "online" if redis_status == "healthy" and postgres_status == "healthy" else "degraded",
+        "status": "ok" if redis_ok else "degraded",
+        "redis": redis_ok,
         "api_status": "healthy",
         "api_latency_ms": latency_ms,
         "service": "ingestion-service",
-        "version": "1.2.0",
+        "version": "2.0.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+
         "latency_ms": latency_ms,
         "redis_status": redis_status,
         "redis_stream_length": redis_stream_length,
@@ -3111,3 +3400,67 @@ async def health_check():
             },
         },
     }
+
+
+@app.get(
+    "/health/detailed",
+    tags=["System Health"],
+    summary="Detailed system health probe",
+)
+async def health_detailed():
+    import time
+    checks = {}
+    start = time.perf_counter()
+
+    # Redis probe
+    try:
+        await redis_client.ping()
+        stream_len = await redis_client.xlen(STREAM_KEY)
+        checks["redis"] = {
+            "status": "ok",
+            "stream_length": stream_len,
+            "latency_ms": round((time.perf_counter() - start) * 1000, 2),
+        }
+    except Exception as e:
+        checks["redis"] = {"status": "error", "error": str(e)}
+
+    # Postgres probe
+    try:
+        t0 = time.perf_counter()
+        pool = await get_db_pool()
+        async with pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+        checks["postgres"] = {
+            "status": "ok",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+        }
+    except Exception as e:
+        checks["postgres"] = {"status": "error", "error": str(e)}
+
+    all_ok = all(c.get("status") == "ok" for c in checks.values())
+    return {
+        "status": "ok" if all_ok else "degraded",
+        "checks": checks,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+if PROMETHEUS_AVAILABLE and Counter is not None and generate_latest is not None:
+    REQUEST_COUNT = Counter(
+        "auratrace_requests_total",
+        "Total HTTP requests handled by AuraTrace",
+        ["method", "endpoint", "status"],
+    )
+    INGEST_COUNT = Counter(
+        "auratrace_ingests_total",
+        "Total telemetry crash and metric events ingested",
+    )
+
+    @app.get("/metrics", tags=["System Health"], summary="Prometheus metrics exporter")
+    async def metrics():
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+else:
+    @app.get("/metrics", tags=["System Health"], summary="Prometheus metrics exporter")
+    async def metrics():
+        return Response("# Prometheus metrics exporter unavailable\n", media_type="text/plain")
+

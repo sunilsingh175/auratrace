@@ -1,1 +1,1 @@
-# Ingestion Service
+"""AuraTrace Ingestion Service Package."""

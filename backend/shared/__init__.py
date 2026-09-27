@@ -1,1 +1,1 @@
-# Shared package
+"""AuraTrace Shared Utilities Package."""

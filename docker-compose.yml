@@ -19,7 +19,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./database/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - ./database/02-seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
-      - ./database/03-service-ownership.sql:/docker-entrypoint-initdb.d/03-service-ownership.sql:ro
+      - ./database/03-auto-merge.sql:/docker-entrypoint-initdb.d/03-auto-merge.sql:ro
 
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
@@ -73,17 +73,22 @@ services:
 
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
 
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
-      REDIS_STREAM_KEY: ${REDIS_STREAM_KEY}
-
-      REDIS_ANOMALY_CHANNEL: ${REDIS_ANOMALY_CHANNEL}
+      REDIS_URL: ${REDIS_URL:-redis://redis-broker:6379/0}
+      REDIS_STREAM_KEY: ${REDIS_STREAM_KEY:-telemetry_stream}
+      STREAM_KEY: ${STREAM_KEY:-telemetry_stream}
+      REDIS_ANOMALY_CHANNEL: ${REDIS_ANOMALY_CHANNEL:-anomaly_events}
 
       AURA_MASTER_API_KEY: ${AURA_MASTER_API_KEY}
       AURA_AUTH_SECRET: ${AURA_AUTH_SECRET}
       AURA_ADMIN_REGISTRATION_KEY: ${AURA_ADMIN_REGISTRATION_KEY}
       ENABLE_API_AUTH: ${ENABLE_API_AUTH:-true}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
 
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -92,11 +97,13 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      PYTHONPATH: "/app:/app/backend:/app/backend/ingestion_service"
 
       INGESTION_SERVICE_PORT: ${INGESTION_SERVICE_PORT}
 
     ports:
       - "${INGESTION_SERVICE_PORT}:8000"
+
 
     volumes:
       - ./backend:/app/backend
@@ -124,29 +131,39 @@ services:
     environment:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
-
-      REDIS_STREAM_KEY: ${REDIS_STREAM_KEY}
-      REDIS_ANOMALY_CHANNEL: ${REDIS_ANOMALY_CHANNEL}
-      REDIS_CONSUMER_GROUP: ${REDIS_CONSUMER_GROUP}
+      REDIS_URL: ${REDIS_URL:-redis://redis-broker:6379/0}
+      REDIS_STREAM_KEY: ${REDIS_STREAM_KEY:-telemetry_stream}
+      STREAM_KEY: ${STREAM_KEY:-telemetry_stream}
+      DIAGNOSE_STREAM: ${DIAGNOSE_STREAM:-diagnose_stream}
+      REDIS_ANOMALY_CHANNEL: ${REDIS_ANOMALY_CHANNEL:-anomaly_events}
+      REDIS_CONSUMER_GROUP: ${REDIS_CONSUMER_GROUP:-trace_workers}
+      STREAM_GROUP_ML: ${STREAM_GROUP_ML:-ml-workers}
 
       # Redis pending-message recovery
       REDIS_PENDING_IDLE_TIME_MS: "1000"
 
       ANOMALY_THRESHOLD: ${ANOMALY_THRESHOLD:-0.75}
-      ANOMALY_CONTAMINATION: ${ANOMALY_CONTAMINATION}
-      ANOMALY_WINDOW_SIZE_SECONDS: ${ANOMALY_WINDOW_SIZE_SECONDS}
-      ANOMALY_POLL_INTERVAL_MS: ${ANOMALY_POLL_INTERVAL_MS}
+      ANOMALY_CONTAMINATION: ${ANOMALY_CONTAMINATION:-0.05}
+      ANOMALY_WINDOW_SIZE_SECONDS: ${ANOMALY_WINDOW_SIZE_SECONDS:-300}
+      WINDOW_SECONDS: ${WINDOW_SECONDS:-60}
+      ANOMALY_POLL_INTERVAL_MS: ${ANOMALY_POLL_INTERVAL_MS:-1000}
 
       DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PYTHONPATH: "/app:/app/backend:/app/backend/ml_anomaly_service"
 
     volumes:
       - ./backend:/app/backend
+      - ./models:/app/models
 
     depends_on:
       postgres-db:
         condition: service_healthy
       redis-broker:
         condition: service_healthy
+
 
     networks:
       - trace-net
@@ -154,27 +171,76 @@ services:
   # ============================================================================
   # RAG AI Diagnostic Doctor
   # ============================================================================
-  rag-diagnostic-service:
+  rag-service:
     build:
       context: .
-      dockerfile: backend/rag-diagnostic-service/Dockerfile
+      dockerfile: backend/rag_service/Dockerfile
 
     container_name: trace-rag-doctor
     restart: unless-stopped
 
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PYTHONPATH: "/app:/app/backend:/app/backend/rag_service"
 
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
-      REDIS_ANOMALY_CHANNEL: ${REDIS_ANOMALY_CHANNEL}
+      REDIS_URL: ${REDIS_URL:-redis://redis-broker:6379/0}
+      REDIS_STREAM_KEY: ${REDIS_STREAM_KEY:-telemetry_stream}
+      DIAGNOSE_STREAM: ${DIAGNOSE_STREAM:-diagnose_stream}
+      REPAIR_STREAM: ${REPAIR_STREAM:-repair_stream}
+      STREAM_GROUP_RAG: ${STREAM_GROUP_RAG:-rag-workers}
+      REDIS_ANOMALY_CHANNEL: ${REDIS_ANOMALY_CHANNEL:-anomaly_events}
 
-      LLM_PROVIDER: ${LLM_PROVIDER}
-
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash-exp}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash-exp}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
 
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+    volumes:
+      - ./backend:/app/backend
+      - huggingface_cache:/app/.cache/huggingface
+
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      redis-broker:
+        condition: service_healthy
+
+
+    networks:
+      - trace-net
+
+  # ============================================================================
+  # Autonomous Repair & Auto-Merge Worker (L2)
+  # ============================================================================
+  repair-worker:
+    build:
+      context: .
+      dockerfile: backend/repair_engine/Dockerfile
+
+    container_name: trace-repair-worker
+    restart: unless-stopped
+
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PYTHONPATH: "/app:/app/backend:/app/backend/repair_engine"
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_URL: ${REDIS_URL:-redis://redis-broker:6379/0}
+      REPAIR_STREAM: ${REPAIR_STREAM:-repair_stream}
+      STREAM_GROUP_REPAIR: ${STREAM_GROUP_REPAIR:-repair_workers}
+      AURA_AUTH_SECRET: ${AURA_AUTH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
 
     volumes:
       - ./backend:/app/backend
@@ -184,6 +250,7 @@ services:
         condition: service_healthy
       redis-broker:
         condition: service_healthy
+
 
     networks:
       - trace-net
@@ -234,3 +301,5 @@ networks:
 volumes:
   pgdata:
   redisdata:
+  huggingface_cache:
+

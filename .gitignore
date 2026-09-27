@@ -1,7 +1,15 @@
 # Environment Variables
 .env
+.env.*
 .env*.local
 !.env.example
+
+# Trained Machine Learning Models
+models/*.pkl
+*.pkl
+*.joblib
+!models/.gitkeep
+!models/README.md
 
 # Python
 __pycache__/

@@ -1,29 +1,63 @@
-# Trace Python SDK
+# AuraTrace Python SDK
 
-Official Python telemetry and unhandled crash diagnostics SDK for Trace.
+Zero-config crash capture for Python applications.
 
-## Quickstart
+## Install
+
+```bash
+pip install auratrace-sdk
+```
+
+## Quick Start
 
 ```python
-from trace_sdk import Trace, TraceMiddleware
+from auratrace import init
 
-# Initialize Trace Client
-trace = Trace(
-    service_id="payment-service",
-    api_key="trace_payment_secret_456",
-    endpoint="http://localhost:8000"
+init(api_key="aura_live_...")
+```
+
+That's it. Now every uncaught exception is automatically captured
+and sent to AuraTrace for AI diagnosis.
+
+## Optional configuration
+
+```python
+init(
+    api_key="aura_live_...",
+    endpoint="http://localhost:8000",   # default
+    service_name="payment-service",      # auto-detected if omitted
+    environment="production",            # or from AURATRACE_ENV
+    auto_capture=True,                   # install excepthook
 )
+```
 
-# 1. Log metrics & structured messages
-trace.info("User checkout initiated", latency_ms=45.2, metadata={"user_id": "usr_99"})
+## Manual capture
 
-# 2. Capture and report caught exceptions
+```python
+from auratrace import capture_exception, capture_event
+
 try:
     process_payment()
 except Exception as e:
-    trace.capture_exception(e, message="Payment processing failure")
+    capture_exception(e)
 
-# 3. Use as a FastAPI / Starlette middleware
-# Automatically records latency and reports unhandled exceptions
-app.add_middleware(TraceMiddleware, client=trace)
+# Custom events
+capture_event("latency", latency_ms=3500, endpoint="/api/checkout")
 ```
+
+## Frameworks supported
+
+- FastAPI (auto-instrumented)
+- Flask (auto-instrumented)
+- Django (auto-instrumented)
+- Plain Python (always)
+
+## Environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `AURATRACE_API_KEY` | API key (alternative to passing in code) |
+| `AURATRACE_ENDPOINT` | Override endpoint |
+| `AURATRACE_SERVICE` | Service name |
+| `AURATRACE_ENV` | Environment (production/staging/dev) |
+| `AURATRACE_DISABLED` | Set to `1` to disable the SDK |

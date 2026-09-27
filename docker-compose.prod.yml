@@ -1,0 +1,132 @@
+# Production overrides for AuraTrace
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  postgres-db:
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis-broker:
+    restart: always
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    volumes:
+      - redisdata:/data
+
+  ingestion-service:
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@trace-postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis-broker:6379/0
+      JWT_SECRET: ${JWT_SECRET:-${AURA_AUTH_SECRET}}
+      RATE_LIMIT_PER_MIN: 3000
+      PYTHONPATH: "/app:/app/backend"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+
+  ml-anomaly-service:
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@trace-postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis-broker:6379/0
+      PYTHONPATH: "/app:/app/backend"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  rag-service:
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@trace-postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis-broker:6379/0
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash-exp}
+      PYTHONPATH: "/app:/app/backend"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 3G
+
+  repair-worker:
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@trace-postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis-broker:6379/0
+      PYTHONPATH: "/app:/app/backend"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  frontend:
+    restart: always
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  nginx:
+    image: nginx:alpine
+    container_name: aura_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - ingestion-service
+    networks:
+      - trace-net
+
+volumes:
+  nginx_logs:

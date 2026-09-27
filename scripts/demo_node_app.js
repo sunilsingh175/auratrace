@@ -1,112 +1,67 @@
 /**
- * AuraTrace Demo Node.js Application
- * Demonstrates zero-config auto-discovery, telemetry streaming, and automated exception capture.
+ * AuraTrace — Node.js demo app.
+ * Express service with SDK installed. Trigger crashes at /crash.
+ *
+ * Usage:
+ *   node scripts/demo_node_app.js
  */
+const express = require('express');
+const auratrace = require('../sdk/nodejs/dist/index.js');
 
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { AuraTrace } from "../sdk/nodejs/dist/index.js";
+const API_KEY = process.env.AURATRACE_API_KEY || 'aura_live_master_auratrace_2026';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load .env if available
-function loadEnv() {
-  const envPath = path.resolve(__dirname, "..", ".env");
-  if (fs.existsSync(envPath)) {
-    const lines = fs.readFileSync(envPath, "utf-8").split("\n");
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith("#") && trimmed.includes("=")) {
-        const [k, ...v] = trimmed.split("=");
-        const key = k.trim();
-        const val = v.join("=").trim().replace(/^['"]|['"]$/g, "");
-        if (!process.env[key]) {
-          process.env[key] = val;
-        }
-      }
-    }
-  }
-}
-
-loadEnv();
-
-const API_KEY =
-  process.env.AURATRACE_API_KEY ||
-  process.env.AUTOTRACE_API_KEY ||
-  process.env.AURA_MASTER_API_KEY;
-if (!API_KEY) {
-  console.error(
-    "❌ Error: AURATRACE_API_KEY environment variable is required."
-  );
-  process.exit(1);
-}
-
-const ENDPOINT =
-  process.env.AURATRACE_ENDPOINT ||
-  process.env.AUTOTRACE_ENDPOINT ||
-  "http://127.0.0.1:8000";
-
-console.log("==================================================");
-console.log("🚀 Starting Demo Node.js Microservice with AuraTrace");
-console.log("==================================================");
-
-// 1. Initialize AuraTrace
-AuraTrace.init({
+auratrace.init({
   apiKey: API_KEY,
-  endpoint: ENDPOINT,
-  serviceName: "payment-gateway-node",
-  version: "2.4.1",
-  environment: "production",
+  endpoint: process.env.AURATRACE_ENDPOINT || 'http://localhost:8000',
+  serviceName: 'demo-express',
+  environment: 'production',
+});
+console.log('✅ AuraTrace SDK initialized');
+
+const app = express();
+const PORT = 9001;
+
+app.get('/', (req, res) => res.json({ status: 'ok', service: 'demo-express' }));
+
+app.get('/health', (req, res) => res.json({ status: 'healthy' }));
+
+app.get('/crash/null', (req, res) => {
+  const user = null;
+  res.json({ name: user.name }); // throws
 });
 
-const client = AuraTrace.getClient();
-console.log(`✅ AuraTrace SDK Initialized!`);
-console.log(`   • Service Name: ${client.serviceName}`);
-console.log(`   • Runtime: node`);
-console.log(`   • Version: ${client.version}`);
-console.log(`   • Endpoint: ${ENDPOINT}`);
-console.log(`   • Project Key: ${API_KEY.slice(0, 12)}...`);
+app.get('/crash/async', async (req, res) => {
+  await Promise.reject(new Error('Async operation failed: amount is undefined'));
+});
 
-async function runDemo() {
-  console.log("\n📡 1. Emitting normal operational telemetry...");
-  for (let i = 1; i <= 3; i++) {
-    await AuraTrace.captureMessage(`Processed payment batch #${i} successfully`, {
-      batch_id: `batch-${i}`,
-      processed_count: 50,
-      latency_ms: 45 + Math.floor(Math.random() * 20),
-    });
-    console.log(`   ✓ Streamed telemetry event #${i}`);
-  }
+app.get('/crash/throw', (req, res) => {
+  throw new Error('Intentional error for testing');
+});
 
-  console.log("\n💥 2. Simulating critical exception (PostgreSQL Connection Pool Exhaustion)...");
+app.get('/latency', (req, res) => {
+  const ms = parseInt(req.query.ms) || 3500;
+  setTimeout(() => res.json({ status: 'slow', latencyMs: ms }), ms);
+});
+
+app.get('/manual', (req, res) => {
   try {
-    throw new Error(
-      "ConnectionPoolExhaustedError: Timeout waiting for free connection in pool (max=20, timeout=5000ms)\n" +
-      "    at Pool.acquireConnection (/app/services/database.js:84:19)\n" +
-      "    at PaymentTransaction.execute (/app/controllers/payment.js:142:11)\n" +
-      "    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
-    );
+    throw new Error('Manual capture test');
   } catch (err) {
-    console.log("   ⚠️ Intercepted error. Dispatching to AuraTrace AI Doctor...");
-    await AuraTrace.captureException(err, {
-      route: "/api/v2/checkout/charge",
-      method: "POST",
-      customer_id: "cus_99182391",
-      active_connections: 20,
-      pool_max: 20,
-    });
-    console.log("   ✅ Error telemetry successfully dispatched to ingestion stream!");
+    auratrace.captureException(err, { tags: { endpoint: '/manual' } });
   }
+  res.json({ captured: true });
+});
 
-  // Allow transporter to flush queue
-  console.log("\n⏳ Flushing batch queue...");
-  await client.transporter.flush();
-  console.log("✨ Demo Node.js run completed successfully!");
-}
+app.listen(PORT, () => {
+  console.log(`\n🚀 Demo app running at http://localhost:${PORT}`);
+  console.log('   Test endpoints:');
+  console.log('     GET /crash/null');
+  console.log('     GET /crash/async');
+  console.log('     GET /latency?ms=5000');
+});
 
-runDemo().catch((err) => {
-  console.error("Demo failed:", err);
-  process.exit(1);
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n👋 Shutting down...');
+  process.exit(0);
 });

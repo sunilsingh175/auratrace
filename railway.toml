@@ -1,0 +1,6 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "docker compose -f docker-compose.yml -f docker-compose.prod.yml up"
+restartPolicyType = "always"

@@ -127,13 +127,31 @@ CREATE TABLE IF NOT EXISTS telemetry_logs (
 
 
 -- ==============================================================================
+-- TELEMETRY EVENTS (Raw Stream Store)
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS telemetry_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    event_type VARCHAR(64) NOT NULL DEFAULT 'error',
+    runtime JSONB DEFAULT '{}'::jsonb,
+    payload JSONB DEFAULT '{}'::jsonb,
+    received_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- ==============================================================================
 -- INCIDENTS
 -- ==============================================================================
 
 CREATE TABLE IF NOT EXISTS incidents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
-    service_id UUID NOT NULL,
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+
+    service_id UUID,
+
+    service_name VARCHAR(255),
 
     telemetry_id UUID,
 
@@ -145,13 +163,39 @@ CREATE TABLE IF NOT EXISTS incidents (
 
     error_type VARCHAR(255),
 
+    error_message TEXT,
+
+    error_signature VARCHAR(128),
+
     stack_trace TEXT,
 
     root_cause TEXT,
 
     suggested_patch TEXT,
 
+    suggested_fix TEXT,
+
+    fix_explanation TEXT,
+
+    fix_confidence DOUBLE PRECISION,
+
+    diagnosis JSONB DEFAULT '{}'::jsonb,
+
+    similar_fixes JSONB DEFAULT '[]'::jsonb,
+
+    embedding vector(384),
+
+    runtime JSONB DEFAULT '{}'::jsonb,
+
+    environment VARCHAR(50) DEFAULT 'production',
+
+    event_count INTEGER DEFAULT 1,
+
     is_diagnosed BOOLEAN NOT NULL DEFAULT FALSE,
+
+    first_seen TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    last_seen TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -165,16 +209,7 @@ CREATE TABLE IF NOT EXISTS incidents (
     CONSTRAINT incidents_telemetry_fk
         FOREIGN KEY (telemetry_id)
         REFERENCES telemetry_logs(id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT incidents_anomaly_score_check
-        CHECK (anomaly_score >= 0 AND anomaly_score <= 1),
-
-    CONSTRAINT incidents_severity_check
-        CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
-
-    CONSTRAINT incidents_status_check
-        CHECK (status IN ('OPEN', 'INVESTIGATING', 'RESOLVED', 'IGNORED'))
+        ON DELETE SET NULL
 );
 
 
@@ -185,7 +220,11 @@ CREATE TABLE IF NOT EXISTS incidents (
 CREATE TABLE IF NOT EXISTS historical_fixes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+
     service_id UUID,
+
+    title VARCHAR(255),
 
     error_type VARCHAR(255),
 
@@ -195,7 +234,13 @@ CREATE TABLE IF NOT EXISTS historical_fixes (
 
     fix_description TEXT,
 
+    fix_explanation TEXT,
+
     code_patch TEXT,
+
+    fix_diff TEXT,
+
+    did_fix_work BOOLEAN DEFAULT TRUE,
 
     embedding vector(384),
 

@@ -784,5 +784,84 @@ async def handle_contact_inquiry(payload: ContactInquiryPayload):
     }
 
 
+# ============================================================
+# PROJECT API KEY AUTHENTICATION DEPENDENCY
+# ============================================================
+
+async def authenticate_project(
+    x_api_key: str = Header(..., alias="X-API-Key"),
+) -> dict:
+    """
+    Authenticate a project by its API key.
+    Supports master API key bypass, prefix lookup, and bcrypt/SHA-256 verification.
+    """
+    if not x_api_key or len(x_api_key) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key format",
+        )
+
+    # Master API key bypass
+    try:
+        from shared.config import get_settings
+        app_settings = get_settings()
+        if app_settings.AURA_MASTER_API_KEY and x_api_key == app_settings.AURA_MASTER_API_KEY:
+            return {
+                "id": "00000000-0000-0000-0000-000000000000",
+                "name": "Master Project",
+                "slug": "master-project",
+                "api_key_hash": "master",
+            }
+    except Exception:
+        pass
+
+    from shared.database import get_db_pool
+    from shared.security import verify_api_key
+
+    prefix = x_api_key[:8]
+    pool = await get_db_pool()
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, name, COALESCE(slug, name) as slug, api_key_hash
+            FROM projects
+            WHERE api_key_prefix = $1 OR api_key_hash = $2
+            LIMIT 1
+            """,
+            prefix,
+            x_api_key,
+        )
+
+        if not row:
+            rows = await conn.fetch(
+                "SELECT id, name, COALESCE(slug, name) as slug, api_key_hash FROM projects LIMIT 100"
+            )
+            for r in rows:
+                if verify_api_key(x_api_key, r["api_key_hash"]):
+                    row = r
+                    break
+
+    if not row:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+    if not verify_api_key(x_api_key, row["api_key_hash"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+    # Update last-used timestamp (best-effort)
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE projects SET api_key_last_used = $1 WHERE id = $2",
+                datetime.utcnow(),
+                row["id"],
+            )
+    except Exception:
+        pass
+
+    return dict(row)
+
+
+
 
 

@@ -1,311 +1,117 @@
 """
-AuraTrace Production ML Anomaly Detection Model Trainer
-Trains the production unsupervised Isolation Forest model on AuraTrace 8-feature
-application telemetry windows for real-time live stream inference.
+Retrain the Isolation Forest on real telemetry data.
+Run manually after collecting enough production events.
 
-Architecture Note:
-- Production Model (this script): Operates on 8 rolling-window application telemetry
-  features (request_rate, error_rate, p95_latency, 5xx_rate, cpu, memory, error_count,
-  connection_load) to score incoming live microservice telemetry streams.
-- Research Benchmark Model (train_hdfs_model.py): Operates on 29 log-event frequency
-  features from the LogHub HDFS_v1 dataset for offline thesis benchmarking.
+Usage:
+    docker exec aura_ml_worker python -m ml_anomaly_service.train_model
 """
-
-import logging
-import sys
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent
-WORKSPACE_DIR = BASE_DIR.parent.parent
-if str(WORKSPACE_DIR) not in sys.path:
-    sys.path.insert(0, str(WORKSPACE_DIR))
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
-
-import joblib
+import asyncio
+from collections import defaultdict
+from datetime import datetime
 import numpy as np
+import joblib
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
-try:
-    from backend.ml_anomaly_service.window_buffer import FEATURE_NAMES
-except ImportError:
-    from window_buffer import FEATURE_NAMES
-
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
-
-logger = logging.getLogger("trace-production-model-training")
+from shared.database import get_db_pool
+from shared.config import get_settings
+from ml_anomaly_service.feature_extractor import FEATURE_COLUMNS
+from ml_anomaly_service.model import MODEL_PATH, SCALER_PATH, MODEL_DIR
 
 
-BASE_DIR = Path(__file__).resolve().parent
+async def fetch_training_data(min_samples: int = 50):
+    """Fetch recent feature windows from telemetry_events."""
+    pool = await get_db_pool()
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT payload, event_type
+                FROM telemetry_events
+                WHERE received_at > NOW() - INTERVAL '7 days'
+                LIMIT 50000
+                """
+            )
+    except Exception as e:
+        print(f"⚠️ Query error: {e}")
+        return None
 
-MODEL_JOBLIB = BASE_DIR / "isolation_forest.joblib"
-RANDOM_STATE = 42
-N_SAMPLES = 10000
+    if len(rows) < min_samples:
+        print(f"⚠️ Only {len(rows)} samples in database — need ≥{min_samples}")
+        return None
 
+    buckets = defaultdict(list)
+    for idx, r in enumerate(rows):
+        buckets[idx % 100].append(r)
 
-def generate_normal_training_data(
-    n_samples: int = N_SAMPLES,
-) -> np.ndarray:
-    """
-    Generate synthetic normal Trace telemetry windows.
+    # Build feature vectors
+    vectors = []
+    for bucket in buckets.values():
+        latencies = []
+        for r in bucket:
+            p = r["payload"]
+            if isinstance(p, dict):
+                latencies.append(float(p.get("latency_ms") or 0.0))
+        events = len(bucket)
+        errors = sum(1 for r in bucket if r["event_type"] in ("error", "exception"))
+        crashes = sum(1 for r in bucket if r["event_type"] in ("crash", "fatal"))
 
-    The project can later replace this with real historical
-    telemetry data. For the initial demo, we train on realistic
-    normal operating conditions.
-    """
+        if events == 0:
+            continue
 
-    rng = np.random.default_rng(RANDOM_STATE)
+        vectors.append([
+            float(events),
+            float(errors),
+            float(crashes),
+            1.0,
+            float(np.mean(latencies)) if latencies else 0.0,
+            float(np.max(latencies)) if latencies else 0.0,
+            float(np.percentile(latencies, 95)) if latencies else 0.0,
+            float(np.std(latencies)) if latencies else 0.0,
+            float(events / 60.0),
+            float((errors + crashes) / events),
+        ])
 
-    request_count = rng.poisson(
-        lam=120,
-        size=n_samples,
-    ) + 20
-
-    error_rate = rng.beta(
-        a=2,
-        b=300,
-        size=n_samples,
-    )
-
-    error_count = np.maximum(
-        0,
-        np.round(
-            request_count * error_rate
-        ),
-    )
-
-    error_rate = (
-        error_count
-        / request_count
-    )
-
-    avg_latency_ms = rng.lognormal(
-        mean=np.log(120),
-        sigma=0.30,
-        size=n_samples,
-    )
-
-    max_latency_ms = (
-        avg_latency_ms
-        * rng.uniform(
-            1.5,
-            3.0,
-            size=n_samples,
-        )
-    )
-
-    p95_latency_ms = (
-        avg_latency_ms
-        * rng.uniform(
-            1.15,
-            1.70,
-            size=n_samples,
-        )
-    )
-
-    status_5xx_rate = (
-        error_count
-        / request_count
-    )
-
-    unique_error_types = rng.choice(
-        [0, 1, 2, 3],
-        size=n_samples,
-        p=[0.50, 0.35, 0.12, 0.03],
-    )
-
-    features = np.column_stack(
-        [
-            error_count,
-            request_count,
-            error_rate,
-            avg_latency_ms,
-            max_latency_ms,
-            p95_latency_ms,
-            status_5xx_rate,
-            unique_error_types,
-        ]
-    ).astype(np.float32)
-
-    return features
+    return np.array(vectors) if vectors else None
 
 
-def generate_demo_anomalies() -> np.ndarray:
-    """
-    Generate deliberately abnormal windows for validation.
-    """
+async def retrain():
+    settings = get_settings()
+    print("📊 Fetching training data...")
+    X = await fetch_training_data()
 
-    return np.array(
-        [
-            # Database connection pool exhaustion
-            [
-                110,
-                130,
-                0.846,
-                1800,
-                4500,
-                3200,
-                0.846,
-                5,
-            ],
+    if X is None or len(X) < 10:
+        print("⚠️ Not enough real data — generating synthetic dataset for training...")
+        rng = np.random.default_rng(42)
+        X = np.column_stack([
+            rng.integers(20, 200, 2000),
+            rng.integers(0, 5, 2000),
+            rng.integers(0, 2, 2000),
+            rng.integers(1, 5, 2000),
+            rng.normal(120, 30, 2000),
+            rng.normal(400, 100, 2000),
+            rng.normal(300, 80, 2000),
+            rng.normal(50, 20, 2000),
+            rng.normal(2.5, 0.8, 2000),
+            rng.uniform(0, 0.05, 2000),
+        ])
 
-            # Severe latency spike
-            [
-                8,
-                150,
-                0.053,
-                2500,
-                6000,
-                4200,
-                0.053,
-                2,
-            ],
+    print(f"✅ Training Isolation Forest on {len(X)} samples")
 
-            # Massive 5xx spike
-            [
-                95,
-                120,
-                0.792,
-                300,
-                900,
-                650,
-                0.792,
-                6,
-            ],
-
-            # Memory-leak-like behaviour
-            [
-                15,
-                180,
-                0.083,
-                1800,
-                5000,
-                3500,
-                0.083,
-                3,
-            ],
-        ],
-        dtype=np.float32,
-    )
-
-
-def train_model() -> IsolationForest:
-
-    logger.info(
-        "Starting Trace Isolation Forest training"
-    )
-
-    logger.info(
-        "Feature count: %d",
-        len(FEATURE_NAMES),
-    )
-
-    logger.info(
-        "Features: %s",
-        ", ".join(FEATURE_NAMES),
-    )
-
-    X_train = generate_normal_training_data()
-
-    logger.info(
-        "Training dataset shape: %s",
-        X_train.shape,
-    )
-
+    scaler = StandardScaler().fit(X)
+    contamination = getattr(settings, "ANOMALY_CONTAMINATION", 0.05) or 0.05
     model = IsolationForest(
+        contamination=float(contamination),
         n_estimators=200,
-        max_samples=4096,
-        contamination=0.05,
-        random_state=RANDOM_STATE,
-        n_jobs=-1,
-    )
+        random_state=42,
+    ).fit(scaler.transform(X))
 
-    model.fit(X_train)
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, MODEL_PATH)
+    joblib.dump(scaler, SCALER_PATH)
 
-    joblib.dump(
-        model,
-        MODEL_JOBLIB,
-    )
-
-    logger.info(
-        "Saved model: %s",
-        MODEL_JOBLIB,
-    )
-
-    return model
-
-
-def validate_model(
-    model: IsolationForest,
-) -> None:
-
-    logger.info(
-        "Validating trained model..."
-    )
-
-    normal_samples = generate_normal_training_data(
-        n_samples=10,
-    )
-
-    anomaly_samples = generate_demo_anomalies()
-
-    normal_scores = model.decision_function(
-        normal_samples
-    )
-
-    anomaly_scores = model.decision_function(
-        anomaly_samples
-    )
-
-    logger.info(
-        "Normal decision scores: min=%.4f max=%.4f avg=%.4f",
-        normal_scores.min(),
-        normal_scores.max(),
-        normal_scores.mean(),
-    )
-
-    logger.info(
-        "Anomaly decision scores: min=%.4f max=%.4f avg=%.4f",
-        anomaly_scores.min(),
-        anomaly_scores.max(),
-        anomaly_scores.mean(),
-    )
-
-    logger.info(
-        "Model validation completed"
-    )
-
-
-def main():
-
-    logger.info(
-        "Trace feature schema:"
-    )
-
-    for index, name in enumerate(
-        FEATURE_NAMES,
-        start=1,
-    ):
-        logger.info(
-            "  %d. %s",
-            index,
-            name,
-        )
-
-    model = train_model()
-
-    validate_model(
-        model
-    )
-
-    logger.info(
-        "Training finished successfully"
-    )
+    print(f"✅ Model retrained and saved to {MODEL_PATH}")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(retrain())

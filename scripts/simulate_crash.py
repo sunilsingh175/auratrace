@@ -1,170 +1,126 @@
 """
-Autonomous Crash & Anomaly Simulation Script
-Streams real or synthetic microservice telemetry events and injects simulated crashes
-to test the ML anomaly pipeline, Redis stream buffering, and WebSocket notifications.
-"""
+AuraTrace — Crash burst simulator.
+Sends N crashes at configurable rate to trigger ML anomaly detection.
 
+Usage:
+    python scripts/simulate_crash.py --count 20 --rate 2
+"""
+import argparse
+import json
 import os
+import random
 import sys
 import time
-import random
-import requests
-from datetime import datetime, timezone
+import urllib.error
+import urllib.request
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
+API = os.getenv("AURATRACE_API", "http://localhost:8000")
+API_KEY = os.getenv("AURATRACE_API_KEY", "aura_live_master_auratrace_2026")
 
-def _load_env():
-    candidates = [
-        ".env",
-        os.path.join(os.path.dirname(__file__), "..", ".env"),
-    ]
-    for candidate in candidates:
-        if os.path.exists(candidate):
-            with open(candidate, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        k, v = line.split("=", 1)
-                        k = k.strip()
-                        v = v.strip().strip("'\"")
-                        if k not in os.environ:
-                            os.environ[k] = v
 
-_load_env()
-
-INGESTION_URL = os.getenv("INGESTION_URL", "http://127.0.0.1:8000/api/v1/telemetry")
-API_KEY = os.getenv("AURA_MASTER_API_KEY") or os.getenv("AURATRACE_API_KEY") or os.getenv("AURA_API_KEY") or ""
-
-SERVICES = [
-    "payment-service",
-    "auth-service",
-    "order-service",
-    "inventory-service",
-    "gateway-service",
-]
-
-CRASH_SCENARIOS = [
+CRASH_TEMPLATES = [
     {
-        "service_id": "payment-service",
-        "error_type": "ConnectionPoolTimeout",
-        "message": "sqlalchemy.exc.TimeoutError: QueuePool limit of size 10 overflow 10 reached, connection timed out",
-        "stack_trace": (
-            "Traceback (most recent call last):\n"
-            '  File "services/payment.py", line 142, in process_charge\n'
-            "    db = engine.connect()\n"
-            "sqlalchemy.exc.TimeoutError: QueuePool limit exceeded"
-        ),
-        "status_code": 503,
-        "latency_ms": 4200.0,
+        "error_type": "TypeError",
+        "error_message": "Cannot read property 'amount' of undefined",
+        "stack_trace": "at processPayment (src/payment.js:42)\n  at checkout (src/routes/checkout.js:18)",
+        "latency_ms": 3500,
     },
     {
-        "service_id": "auth-service",
-        "error_type": "RedisConnectionRefused",
-        "message": "redis.exceptions.ConnectionError: Error 111 connecting to redis-broker:6379. Connection refused.",
-        "stack_trace": (
-            "Traceback (most recent call last):\n"
-            '  File "services/session.py", line 88, in get_session\n'
-            "    user_data = redis_client.get(session_token)\n"
-            "redis.exceptions.ConnectionError: Connection refused"
-        ),
-        "status_code": 502,
-        "latency_ms": 3100.0,
+        "error_type": "NullPointerException",
+        "error_message": "User object was null when accessing profile",
+        "stack_trace": "at UserService.getProfile (services/UserService.java:88)",
+        "latency_ms": 1200,
     },
     {
-        "service_id": "order-service",
+        "error_type": "ConnectionTimeoutError",
+        "error_message": "Database connection timed out after 30000ms",
+        "stack_trace": "at Pool.connect (node_modules/pg-pool/index.js:412)",
+        "latency_ms": 30100,
+    },
+    {
+        "error_type": "ValidationError",
+        "error_message": "Invalid email format in request body",
+        "stack_trace": "at validateEmail (src/validators/email.js:15)",
+        "latency_ms": 45,
+    },
+    {
         "error_type": "OutOfMemoryError",
-        "message": "java.lang.OutOfMemoryError: Java heap space during batch checkout aggregation",
-        "stack_trace": (
-            "Exception in thread 'http-nio-8080-exec-4' java.lang.OutOfMemoryError: Java heap space\n"
-            "\tat com.trace.orders.BatchProcessor.process(BatchProcessor.java:94)\n"
-            "\tat com.trace.orders.CheckoutController.checkout(CheckoutController.java:42)"
-        ),
-        "status_code": 500,
-        "latency_ms": 5000.0,
+        "error_message": "Heap space exhausted during bulk processing",
+        "stack_trace": "at BulkProcessor.process (src/bulk.js:210)",
+        "latency_ms": 800,
     },
 ]
 
-
-def generate_synthetic_telemetry(idx: int):
-    # Crash anomaly burst between iterations 30-40 and 80-90
-    is_anomaly = (30 <= idx <= 40) or (80 <= idx <= 90)
-
-    if is_anomaly:
-        scenario = random.choice(CRASH_SCENARIOS)
-        return {
-            "service_id": scenario["service_id"],
-            "message": scenario["message"],
-            "error_type": scenario["error_type"],
-            "raw_stack_trace": scenario["stack_trace"],
-            "latency_ms": float(scenario["latency_ms"]) + random.uniform(-200, 500),
-            "status_code": scenario["status_code"],
-            "level": "ERROR",
-            "metadata": {"synthetic": True, "line_idx": idx, "scenario": scenario["error_type"]},
-        }, True
-
-    service = random.choice(SERVICES)
-    latency_ms = random.uniform(25.0, 180.0)
-    return {
-        "service_id": service,
-        "message": f"Processed request successfully on {service} route /api/v1/resource",
-        "error_type": None,
-        "raw_stack_trace": None,
-        "latency_ms": round(latency_ms, 2),
-        "status_code": 200,
-        "level": "INFO",
-        "metadata": {"synthetic": True, "line_idx": idx},
-    }, False
+SERVICES = ["payment-service", "user-service", "checkout-service", "notification-service"]
 
 
-def stream_logs(max_lines=150):
+def send_crash(template: dict, service: str) -> dict:
+    payload = {
+        "event_type": "crash",
+        "service_name": service,
+        "environment": "production",
+        "error_type": template["error_type"],
+        "error_message": template["error_message"],
+        "stack_trace": template["stack_trace"],
+        "latency_ms": template["latency_ms"],
+        "runtime": {
+            "language": random.choice(["nodejs", "python"]),
+            "version": "20.10.0",
+            "framework": random.choice(["express", "fastapi"]),
+        },
+    }
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(f"{API}/v1/ingest", data=body, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("X-API-Key", API_KEY)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}: {e.read().decode()[:200]}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--count", type=int, default=20, help="Number of crashes")
+    parser.add_argument("--rate", type=float, default=2.0, help="Crashes per second")
+    args = parser.parse_args()
+
     if not API_KEY:
-        print("[!] ERROR: No API key found.")
-        print("[!] Please configure AURA_MASTER_API_KEY or AURATRACE_API_KEY in environment or .env")
+        print("⚠️  Set AURATRACE_API_KEY env var")
         sys.exit(1)
 
-    headers = {
-        "Content-Type": "application/json",
-        "X-API-Key": API_KEY,
-    }
+    print(f"🚨 Sending {args.count} crashes at {args.rate}/sec to {API}")
+    print("=" * 60)
 
-    print(f"[*] Starting telemetry stream to {INGESTION_URL}")
-    print(f"[*] Mode: Standalone Synthetic Anomaly Generator")
+    interval = 1.0 / max(args.rate, 0.1)
+    ok_count = 0
+    err_count = 0
 
-    for idx in range(max_lines):
-        payload, is_error = generate_synthetic_telemetry(idx)
+    for i in range(args.count):
+        template = random.choice(CRASH_TEMPLATES)
+        service = random.choice(SERVICES)
+        result = send_crash(template, service)
 
-        try:
-            res = requests.post(
-                INGESTION_URL,
-                json=payload,
-                headers=headers,
-                timeout=5,
-            )
+        if "error" in result:
+            err_count += 1
+            print(f"  [{i+1:3d}] ❌ {result['error'][:80]}")
+        else:
+            ok_count += 1
+            print(f"  [{i+1:3d}] ✅ {template['error_type']:<24} @ {service}")
 
-            if res.status_code not in (200, 202):
-                print(f"[!] API returned status {res.status_code}: {res.text[:120]}")
-                time.sleep(1)
-                continue
+        time.sleep(interval)
 
-            if is_error:
-                print(
-                    f"🚨 [ANOMALY #{idx}] {payload['service_id']} | "
-                    f"{payload['status_code']} | {payload['latency_ms']:.0f}ms | {payload['error_type']}"
-                )
-            elif idx % 10 == 0:
-                print(f"✓ [NORMAL #{idx}] {payload['service_id']} | {payload['status_code']} | {payload['latency_ms']:.0f}ms")
-
-            time.sleep(0.08)
-
-        except requests.exceptions.ConnectionError:
-            print("[!] Ingestion API offline. Retrying in 2s...")
-            time.sleep(2)
-        except requests.exceptions.RequestException as exc:
-            print(f"[!] Request failed: {exc}")
-
-    print(f"[+] Finished streaming {max_lines} telemetry events.")
+    print("=" * 60)
+    print(f"✅ Sent: {ok_count}")
+    print(f"❌ Failed: {err_count}")
+    print()
+    print("Wait 60s, then check:")
+    print("  • Dashboard: http://localhost:3000")
+    print("  • DB:        docker exec trace-postgres psql -U postgres -d auratrace_db -c 'SELECT COUNT(*) FROM incidents;'")
 
 
 if __name__ == "__main__":
-    stream_logs()
+    main()

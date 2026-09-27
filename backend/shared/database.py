@@ -30,8 +30,10 @@ from pgvector.sqlalchemy import Vector
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres_password_123@localhost:5432/trace_db",
+    "postgresql+asyncpg://postgres:postgres_password_123@trace-postgres:5432/auratrace_db",
 )
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 
 # ============================================================
@@ -84,6 +86,95 @@ class Project(Base):
     )
 
     owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        nullable=True,
+    )
+
+    auto_repair_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    auto_merge_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    github_repo: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    github_base_branch: Mapped[str] = mapped_column(
+        String(100),
+        default="main",
+        nullable=False,
+    )
+
+    github_token_encrypted: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    deploy_provider: Mapped[str] = mapped_column(
+        String(50),
+        default="webhook",
+        nullable=False,
+    )
+
+    deploy_webhook: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    deploy_webhook_secret: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    deploy_config: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        default=dict,
+        nullable=False,
+    )
+
+    min_fix_confidence: Mapped[float] = mapped_column(
+        Double,
+        default=0.75,
+        nullable=False,
+    )
+
+    max_files_per_fix: Mapped[int] = mapped_column(
+        Integer,
+        default=5,
+        nullable=False,
+    )
+
+    max_merges_per_day: Mapped[int] = mapped_column(
+        Integer,
+        default=10,
+        nullable=False,
+    )
+
+    baseline_error_rate: Mapped[float] = mapped_column(
+        Double,
+        default=0.01,
+        nullable=False,
+    )
+
+    slack_webhook_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    discord_webhook_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    notify_webhook_url: Mapped[Optional[str]] = mapped_column(
+        Text,
         nullable=True,
     )
 
@@ -410,6 +501,77 @@ class Incident(Base):
         default=False,
     )
 
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey(
+            "projects.id",
+            ondelete="CASCADE",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    diagnosis: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=dict,
+    )
+
+    fix_explanation: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    fix_confidence: Mapped[Optional[float]] = mapped_column(
+        Double,
+        nullable=True,
+    )
+
+    pr_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    pr_number: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    test_result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    ci_status: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    ci_result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    merge_sha: Mapped[Optional[str]] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    deploy_status: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    post_deploy_measurements: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    reverted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -622,7 +784,36 @@ async def init_db() -> None:
 
 async def close_db() -> None:
     """
-    Dispose the async database engine.
+    Dispose the async database engine and asyncpg pool.
     """
-
+    global _asyncpg_pool
+    if _asyncpg_pool is not None:
+        await _asyncpg_pool.close()
+        _asyncpg_pool = None
     await engine.dispose()
+
+
+# ============================================================
+# ASYNCPG POOL FOR RAW HIGH-PERFORMANCE / REPAIR QUERIES
+# ============================================================
+
+_asyncpg_pool = None
+
+async def get_db_pool():
+    """
+    Provides an asyncpg connection pool compatible with raw SQL queries.
+    """
+    global _asyncpg_pool
+    if _asyncpg_pool is None:
+        import asyncpg
+        dsn = DATABASE_URL
+        if dsn.startswith("postgresql+asyncpg://"):
+            dsn = dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
+        _asyncpg_pool = await asyncpg.create_pool(dsn, min_size=2, max_size=20, command_timeout=30)
+    return _asyncpg_pool
+
+
+async def close_db_pool():
+    """Close the asyncpg connection pool."""
+    await close_db()
+

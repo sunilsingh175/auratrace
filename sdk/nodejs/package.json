@@ -1,40 +1,22 @@
 {
   "name": "@auratrace/node",
-  "version": "2.0.0",
-  "type": "module",
-  "description": "Official Node.js Telemetry & Crash Diagnostic SDK for AuraTrace Autonomous Backend Diagnostics",
+  "version": "1.0.0",
+  "description": "AuraTrace Node.js SDK — zero-config crash capture",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist",
-    "README.md"
-  ],
+  "files": ["dist", "README.md"],
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "npm run build",
-    "test": "tsx test-sdk.ts"
+    "prepublishOnly": "npm run build"
   },
-  "keywords": [
-    "auratrace",
-    "observability",
-    "apm",
-    "telemetry",
-    "tracing",
-    "anomaly-detection",
-    "ai-diagnostics"
-  ],
-  "author": "Sunil Singh <sunilsinghrajput192@gmail.com>",
+  "keywords": ["observability", "crash-reporting", "aiops", "monitoring"],
   "license": "MIT",
+  "engines": {
+    "node": ">=16"
+  },
   "devDependencies": {
-    "@types/node": "^26.6.2",
-    "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
-  }
+    "@types/node": "^20.9.0",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {}
 }
