@@ -222,7 +222,7 @@ function ProfileSettingsContent() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-bold text-slate-900 font-heading truncate">
-                  {user?.name || "Automatic Backend Detection Developer"}
+                  {user?.name || "—"}
                 </h2>
                 <span
                   className={`px-2 py-0.5 rounded-md text-[10px] font-bold font-heading border ${
@@ -251,7 +251,7 @@ function ProfileSettingsContent() {
                 Member Since
               </span>
               <span className="font-mono text-xs font-semibold text-slate-700">
-                {user?.created_at ? new Date(user.created_at).toLocaleDateString() : "2026-09-24"}
+                {user?.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}
               </span>
             </div>
             <div className="text-right">
@@ -260,7 +260,7 @@ function ProfileSettingsContent() {
               </span>
               <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-xs">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {user?.status || "Active"}
+                {user?.status || "—"}
               </span>
             </div>
           </div>
