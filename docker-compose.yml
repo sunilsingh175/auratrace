@@ -211,8 +211,6 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL}
 
-      AURA_MASTER_API_KEY: ${AURA_MASTER_API_KEY}
-
     depends_on:
       ingestion-service:
         condition: service_started

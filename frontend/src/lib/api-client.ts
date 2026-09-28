@@ -2,7 +2,6 @@ import {
   Incident,
   Service,
   Project,
-  ServiceRegistrationResponse,
   SystemStats,
   InfrastructureStatus,
   UserAccount,
@@ -229,49 +228,6 @@ export async function fetchServices(): Promise<Service[]> {
     created_at: s.created_at,
     owner_id: s.owner_id || undefined,
   }));
-}
-
-export async function registerService(data: { id: string; name: string; environment: string }): Promise<ServiceRegistrationResponse> {
-  const path = "services";
-  const res = await request(path, { method: "POST", body: JSON.stringify(data) });
-  ensureOk(res, path);
-  const created = await res.json();
-  return {
-    id: created.id || data.id,
-    project_id: created.project_id || undefined,
-    service_id: created.service_id || data.id,
-    name: created.name || data.name,
-    runtime: created.runtime || "node",
-    version: created.version || "1.0.0",
-    environment: created.environment || data.environment,
-    status: created.status || "healthy",
-    requests: Number(created.requests ?? 0),
-    error_rate: Number(created.error_rate ?? 0),
-    latency_ms: Number(created.latency_ms ?? 0),
-    incident_count: Number(created.incident_count ?? 0),
-    last_activity: created.last_activity || undefined,
-    api_key: created.api_key || "",
-    message: created.message,
-    created_at: created.created_at,
-    owner_id: created.owner_id || undefined,
-  };
-}
-
-export async function updateService(
-  serviceId: string,
-  data: { name?: string; description?: string; environment?: string; status?: string }
-): Promise<Service> {
-  const path = `services/${encodeURIComponent(serviceId)}`;
-  const res = await request(path, { method: "PATCH", body: JSON.stringify(data) });
-  ensureOk(res, path);
-  return res.json();
-}
-
-export async function deleteService(serviceId: string): Promise<{ success: boolean; message: string }> {
-  const path = `services/${encodeURIComponent(serviceId)}`;
-  const res = await request(path, { method: "DELETE" });
-  ensureOk(res, path);
-  return res.json();
 }
 
 

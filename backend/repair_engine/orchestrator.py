@@ -221,37 +221,14 @@ class RepairOrchestrator:
                 if row and row.get("project_id"):
                     project_id = row["project_id"]
 
-            # 2. Fetch Project Repair Settings
-            settings = None
-            if project_id:
-                settings_res = await session.execute(
-                    select(RepairSettings).where(RepairSettings.project_id == project_id)
-                )
-                settings = settings_res.scalar_one_or_none()
-
-            # If no settings or no token configured for this project, look for configured project
-            if not settings or not settings.encrypted_github_token:
-                # First check default platform project
-                default_uuid = uuid.UUID("00000000-0000-0000-0000-000000000001")
-                def_res = await session.execute(
-                    select(RepairSettings).where(RepairSettings.project_id == default_uuid)
-                )
-                def_settings = def_res.scalar_one_or_none()
-                if def_settings and def_settings.encrypted_github_token:
-                    settings = def_settings
-                    project_id = default_uuid
-                else:
-                    # Check any project with a token configured
-                    any_res = await session.execute(
-                        select(RepairSettings).where(RepairSettings.encrypted_github_token.is_not(None)).limit(1)
-                    )
-                    any_settings = any_res.scalar_one_or_none()
-                    if any_settings:
-                        settings = any_settings
-                        project_id = any_settings.project_id
-
+            # 2. Fetch Project Repair Settings for this specific project only
             if not project_id:
                 project_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+            settings_res = await session.execute(
+                select(RepairSettings).where(RepairSettings.project_id == project_id)
+            )
+            settings = settings_res.scalar_one_or_none()
 
             if not settings:
                 # Create default inactive settings if not present

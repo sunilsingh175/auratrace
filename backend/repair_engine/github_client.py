@@ -196,21 +196,50 @@ class GitHubClient:
                 branch=revert_branch,
             )
         else:
-            # Commit a rollback audit marker file so the revert branch has a commit diff
-            marker_path = f".auratrace/rollbacks/revert_{commit_sha[:8]}.json"
-            marker_content = json.dumps({
-                "action": "ROLLBACK",
-                "commit_sha": commit_sha,
-                "reason": reason,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }, indent=2)
-            await self.create_or_update_file(
-                repo=repo,
-                path=marker_path,
-                content=marker_content,
-                message=f"revert: record automated rollback for {commit_sha[:8]} [AuraTrace L3]",
-                branch=revert_branch,
-            )
+            # Look up commit details and restore actual source files from parent state
+            restored_any = False
+            try:
+                commit_info = await self._request("GET", f"/repos/{repo}/commits/{commit_sha}")
+                parents = commit_info.get("parents", [])
+                parent_sha = parents[0].get("sha") if parents else base_branch
+                files = commit_info.get("files", [])
+
+                for f in files:
+                    file_path = f.get("filename")
+                    if file_path:
+                        try:
+                            parent_content, _ = await self.get_file(repo, file_path, ref=parent_sha)
+                            _, cur_sha = await self.get_file(repo, file_path, ref=revert_branch)
+                            await self.create_or_update_file(
+                                repo=repo,
+                                path=file_path,
+                                content=parent_content,
+                                message=f"revert: restore {file_path} to baseline state ({commit_sha[:8]}) [AuraTrace L3]",
+                                branch=revert_branch,
+                                sha=cur_sha,
+                            )
+                            restored_any = True
+                        except Exception as file_err:
+                            logger.warning(f"Could not restore file {file_path} from parent commit: {file_err}")
+            except Exception as commit_err:
+                logger.warning(f"Failed to fetch commit {commit_sha} files: {commit_err}")
+
+            if not restored_any:
+                # Fallback audit marker file if commit history is unreachable
+                marker_path = f".auratrace/rollbacks/revert_{commit_sha[:8]}.json"
+                marker_content = json.dumps({
+                    "action": "ROLLBACK",
+                    "commit_sha": commit_sha,
+                    "reason": reason,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }, indent=2)
+                await self.create_or_update_file(
+                    repo=repo,
+                    path=marker_path,
+                    content=marker_content,
+                    message=f"revert: record automated rollback for {commit_sha[:8]} [AuraTrace L3]",
+                    branch=revert_branch,
+                )
 
         pr_title = f"fix(revert): rollback automated repair commit {commit_sha[:8]}"
         pr_body = (

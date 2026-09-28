@@ -11,6 +11,7 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import shlex
 import time
@@ -146,6 +147,8 @@ def run_sandbox_test(
             cmd_args = raw_args
         elif len(raw_args) >= 3 and raw_args[:3] == ["python", "-m", "pytest"]:
             cmd_args = raw_args
+        elif len(raw_args) >= 3 and raw_args[:3] == ["python3", "-m", "pytest"]:
+            cmd_args = raw_args
         elif raw_args[:2] == ["npm", "test"]:
             cmd_args = raw_args
         elif raw_args[:3] == ["npm", "run", "test"]:
@@ -159,6 +162,16 @@ def run_sandbox_test(
                 "stderr": "",
                 "duration_ms": int((time.time() - start_time) * 1000),
             }
+
+        # Resolve binary path safely
+        executable = shutil.which(cmd_args[0])
+        if not executable:
+            if cmd_args[0] == "pytest":
+                cmd_args = [sys.executable, "-m", "pytest"] + cmd_args[1:]
+            elif cmd_args[0] in ("python", "python3"):
+                cmd_args = [sys.executable] + cmd_args[1:]
+        else:
+            cmd_args = [executable] + cmd_args[1:]
 
         # shell=False prevents command chaining/redirection such as ';', '&&', '|', '$()'.
         test_proc = subprocess.run(

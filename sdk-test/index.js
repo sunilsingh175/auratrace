@@ -3,8 +3,8 @@ const { AuraTrace } = require("@auratrace/node");
 async function test() {
   console.log("Initializing AuraTrace client...");
   const client = AuraTrace.init({
-    apiKey: "at_live_master_auratrace_2026",
-    endpoint: "http://localhost:8000",
+    apiKey: process.env.AURATRACE_API_KEY || "at_test_local_key",
+    endpoint: process.env.AURATRACE_ENDPOINT || "http://localhost:8000",
     serviceName: "sdk-test-service",
     environment: "development",
   });

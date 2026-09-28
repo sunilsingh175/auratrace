@@ -1,25 +1,37 @@
 import { AuraTrace } from './index.js';
 
-// Initialize AuraTrace SDK
-AuraTrace.init({
-  apiKey: process.env.AURATRACE_API_KEY || process.env.AURA_MASTER_API_KEY || 'at_live_master_auratrace_2026',
-  endpoint: process.env.AURATRACE_ENDPOINT || 'http://localhost:8000',
-  serviceName: 'order-service',
-});
+async function runSdkTest() {
+  console.log("Initializing AuraTrace Node.js SDK...");
+  const client = AuraTrace.init({
+    apiKey: process.env.AURATRACE_API_KEY || 'at_test_local_key',
+    endpoint: process.env.AURATRACE_ENDPOINT || 'http://localhost:8000',
+    serviceName: 'order-service',
+    environment: 'test',
+  });
 
-async function runContinuousTest() {
-  console.log("⚡ Starting continuous AuraTrace telemetry stream...");
-  let count = 1;
+  console.log("Client initialized for service:", client.serviceName);
 
-  setInterval(async () => {
-    try {
-      const message = `Live telemetry event #${count++} from Node.js SDK`;
-      await AuraTrace.captureMessage(message, { timestamp: new Date().toISOString() });
-      console.log(`[AuraTrace SDK] Sent: ${message}`);
-    } catch (error) {
-      console.error("[AuraTrace SDK] Failed to send telemetry:", error);
-    }
-  }, 2000);
+  console.log("Testing captureMessage...");
+  await AuraTrace.captureMessage("Order dispatched for user_99", {
+    order_id: "ord_1002",
+    amount: 149.50,
+  });
+
+  console.log("Testing captureException...");
+  try {
+    throw new Error("SyntheticPaymentGatewayTimeout: Connection timed out after 3000ms");
+  } catch (error: any) {
+    await AuraTrace.captureException(error, {
+      route: "/api/v1/orders/checkout",
+      status_code: 504,
+    });
+  }
+
+  console.log("Node.js SDK test finished successfully!");
+  process.exit(0);
 }
 
-runContinuousTest();
+runSdkTest().catch((err) => {
+  console.error("Node.js SDK test failed:", err);
+  process.exit(1);
+});

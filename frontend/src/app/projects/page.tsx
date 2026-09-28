@@ -44,7 +44,7 @@ export default function ProjectsPage() {
       setProjects(data);
     } catch (err) {
       console.error(err);
-      setError("Unable to load Automatic Backend Detection projects.");
+      setError("Unable to load projects.");
     } finally {
       setLoading(false);
     }

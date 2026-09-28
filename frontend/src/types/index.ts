@@ -34,10 +34,6 @@ export interface Service {
   owner_id?: string;
 }
 
-export interface ServiceRegistrationResponse extends Service {
-  api_key: string;
-  message?: string;
-}
 
 export interface SystemMetrics {
   cpu_percent: number;
@@ -180,7 +176,12 @@ export interface RepairRun {
     passed?: boolean;
     total_checks?: number;
     completed_checks?: number;
+    tests_passed?: number;
+    tests_total?: number;
+    runs?: any[];
+    check_runs?: any[];
     details?: any[];
+    [key: string]: any;
   };
   logs?: Array<{
     stage: string;

@@ -2,8 +2,8 @@ const { AuraTrace } = require("@auratrace/node");
 
 // Initialize AuraTrace SDK for an anomaly scenario
 AuraTrace.init({
-  apiKey: "at_live_master_auratrace_2026",
-  endpoint: "http://localhost:8000",
+  apiKey: process.env.AURATRACE_API_KEY || "at_test_local_key",
+  endpoint: process.env.AURATRACE_ENDPOINT || "http://localhost:8000",
   serviceName: "payment-gateway",
   environment: "production",
 });

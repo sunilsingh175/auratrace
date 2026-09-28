@@ -32,6 +32,8 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+models/
+*.pkl
 
 # Node.js & Next.js
 node_modules/
