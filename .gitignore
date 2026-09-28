@@ -81,3 +81,6 @@ scripts/datasets/**/anomaly_label.csv
 *.parquet
 *.h5
 
+
+# AuraTrace runtime rollback artifacts
+.auratrace/rollbacks/*.json
