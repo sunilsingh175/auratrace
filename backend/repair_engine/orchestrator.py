@@ -37,26 +37,86 @@ logger = logging.getLogger("auratrace.repair.orchestrator")
 
 
 def apply_patch_to_text(original_text: str, file_path: str, patch_str: str) -> Optional[str]:
-    """Applies a unified diff patch to a source file string in an isolated temp directory using git apply."""
-    import tempfile, subprocess, os
-    with tempfile.TemporaryDirectory() as td:
-        full_path = os.path.join(td, file_path)
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(original_text)
-        patch_file = os.path.join(td, "patch.diff")
-        with open(patch_file, "w", encoding="utf-8") as pf:
-            pf.write(patch_str)
-        proc = subprocess.run(
-            ["git", "apply", "--ignore-whitespace", "patch.diff"],
-            cwd=td,
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode == 0 and os.path.exists(full_path):
-            with open(full_path, "r", encoding="utf-8") as f:
-                return f.read()
-    return None
+    """
+    Applies a unified diff patch to a source file string.
+    Tries git apply first, then falls back to pure-Python hunk application,
+    and finally content block replacement.
+    """
+    import os, re, shutil, subprocess, tempfile
+
+    # Strategy 1: Use git apply if git binary is present
+    if shutil.which("git"):
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                full_path = os.path.join(td, file_path)
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                with open(full_path, "w", encoding="utf-8") as f:
+                    f.write(original_text)
+                patch_file = os.path.join(td, "patch.diff")
+                with open(patch_file, "w", encoding="utf-8") as pf:
+                    pf.write(patch_str)
+                proc = subprocess.run(
+                    ["git", "apply", "--ignore-whitespace", "patch.diff"],
+                    cwd=td,
+                    capture_output=True,
+                    text=True,
+                )
+                if proc.returncode == 0 and os.path.exists(full_path):
+                    with open(full_path, "r", encoding="utf-8") as f:
+                        return f.read()
+        except Exception:
+            pass
+
+    # Strategy 2: Pure-Python unified diff hunk applicator
+    try:
+        lines = original_text.splitlines(keepends=True)
+        patch_lines = patch_str.splitlines()
+        hunk_header_re = re.compile(r"^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@")
+        hunks = []
+        current_hunk = None
+        for pline in patch_lines:
+            m = hunk_header_re.match(pline)
+            if m:
+                if current_hunk:
+                    hunks.append(current_hunk)
+                old_start = int(m.group(1))
+                current_hunk = {"old_start": old_start, "lines": []}
+            elif current_hunk is not None and pline.startswith(("+", "-", " ")):
+                current_hunk["lines"].append(pline)
+        if current_hunk:
+            hunks.append(current_hunk)
+
+        if hunks:
+            result = list(lines)
+            for hunk in sorted(hunks, key=lambda h: h["old_start"], reverse=True):
+                idx = max(0, hunk["old_start"] - 1)
+                new_slice = []
+                old_slice_len = 0
+                for hline in hunk["lines"]:
+                    tag = hline[0]
+                    content = hline[1:] + ("\n" if not hline[1:].endswith("\n") else "")
+                    if tag == " ":
+                        new_slice.append(content)
+                        old_slice_len += 1
+                    elif tag == "-":
+                        old_slice_len += 1
+                    elif tag == "+":
+                        new_slice.append(content)
+                result[idx : idx + old_slice_len] = new_slice
+            return "".join(result)
+    except Exception:
+        pass
+
+    # Strategy 3: Direct minus-to-plus line block replacement
+    minus_lines = [l[1:].strip() for l in patch_str.splitlines() if l.startswith("-") and not l.startswith("---")]
+    plus_lines = [l[1:].strip() for l in patch_str.splitlines() if l.startswith("+") and not l.startswith("+++")]
+    if minus_lines and plus_lines:
+        old_block = "\n".join(minus_lines)
+        new_block = "\n".join(plus_lines)
+        if old_block in original_text:
+            return original_text.replace(old_block, new_block, 1)
+
+    return original_text
 
 
 class RepairOrchestrator:
