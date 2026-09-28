@@ -138,7 +138,7 @@ class RepairOrchestrator:
             project_id = None
             if hasattr(incident, "service") and incident.service and incident.service.project_id:
                 project_id = incident.service.project_id
-            else:
+            elif incident.service_id:
                 # Query service for project_id
                 svc_res = await session.execute(
                     text("SELECT project_id FROM services WHERE id = :sid LIMIT 1"),
@@ -148,17 +148,38 @@ class RepairOrchestrator:
                 if row and row.get("project_id"):
                     project_id = row["project_id"]
 
-            if not project_id:
-                # Fallback to default project
-                proj_res = await session.execute(select(Project).limit(1))
-                default_proj = proj_res.scalar_one_or_none()
-                project_id = default_proj.id if default_proj else uuid.UUID("00000000-0000-0000-0000-000000000001")
-
             # 2. Fetch Project Repair Settings
-            settings_res = await session.execute(
-                select(RepairSettings).where(RepairSettings.project_id == project_id)
-            )
-            settings = settings_res.scalar_one_or_none()
+            settings = None
+            if project_id:
+                settings_res = await session.execute(
+                    select(RepairSettings).where(RepairSettings.project_id == project_id)
+                )
+                settings = settings_res.scalar_one_or_none()
+
+            # If no settings or no token configured for this project, look for configured project
+            if not settings or not settings.encrypted_github_token:
+                # First check default platform project
+                default_uuid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+                def_res = await session.execute(
+                    select(RepairSettings).where(RepairSettings.project_id == default_uuid)
+                )
+                def_settings = def_res.scalar_one_or_none()
+                if def_settings and def_settings.encrypted_github_token:
+                    settings = def_settings
+                    project_id = default_uuid
+                else:
+                    # Check any project with a token configured
+                    any_res = await session.execute(
+                        select(RepairSettings).where(RepairSettings.encrypted_github_token.is_not(None)).limit(1)
+                    )
+                    any_settings = any_res.scalar_one_or_none()
+                    if any_settings:
+                        settings = any_settings
+                        project_id = any_settings.project_id
+
+            if not project_id:
+                project_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
             if not settings:
                 # Create default inactive settings if not present
                 settings = RepairSettings(
