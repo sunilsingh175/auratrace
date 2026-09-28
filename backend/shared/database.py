@@ -623,6 +623,50 @@ class RepairRun(Base):
         nullable=True,
     )
 
+    merge_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="NOT_REQUESTED",
+    )
+
+    merged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    merge_commit_sha: Mapped[Optional[str]] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    post_deploy_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="NOT_STARTED",
+    )
+
+    baseline_error_rate: Mapped[float] = mapped_column(
+        Double,
+        nullable=False,
+        default=0.0,
+    )
+
+    post_repair_error_rate: Mapped[float] = mapped_column(
+        Double,
+        nullable=False,
+        default=0.0,
+    )
+
+    revert_pr_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    revert_pr_number: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     rollback_status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,

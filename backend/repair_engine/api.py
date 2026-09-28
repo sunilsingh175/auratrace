@@ -97,6 +97,12 @@ class RollbackPayload(BaseModel):
     reason: Optional[str] = Field("Post-deployment regression detected", description="Reason for triggering rollback")
 
 
+class VerifyTelemetryPayload(BaseModel):
+    simulate_regression: Optional[bool] = Field(False, description="Simulate post-deploy error spike for testing")
+    simulated_error_rate: Optional[float] = Field(None, description="Optional override error rate to simulate")
+    sample_window_minutes: Optional[int] = Field(15, ge=1, le=1440, description="Telemetry sample window in minutes")
+
+
 # ============================================================
 # API Endpoints
 # ============================================================
@@ -299,6 +305,14 @@ async def get_repair_run_status(
         "branch_name": run.branch_name,
         "pr_number": run.pr_number,
         "pr_url": run.pr_url,
+        "merge_status": run.merge_status,
+        "merged_at": run.merged_at.isoformat() if run.merged_at else "",
+        "merge_commit_sha": run.merge_commit_sha,
+        "post_deploy_status": run.post_deploy_status,
+        "baseline_error_rate": run.baseline_error_rate,
+        "post_repair_error_rate": run.post_repair_error_rate,
+        "revert_pr_url": run.revert_pr_url,
+        "revert_pr_number": run.revert_pr_number,
         "rollback_status": run.rollback_status,
         "safety_result": run.safety_result or {},
         "sandbox_result": run.sandbox_result or {},
@@ -336,6 +350,13 @@ async def get_repair_runs_for_incident(
             "branch_name": r.branch_name,
             "pr_number": r.pr_number,
             "pr_url": r.pr_url,
+            "merge_status": r.merge_status,
+            "merged_at": r.merged_at.isoformat() if r.merged_at else "",
+            "merge_commit_sha": r.merge_commit_sha,
+            "post_deploy_status": r.post_deploy_status,
+            "baseline_error_rate": r.baseline_error_rate,
+            "post_repair_error_rate": r.post_repair_error_rate,
+            "revert_pr_url": r.revert_pr_url,
             "rollback_status": r.rollback_status,
             "error_message": r.error_message,
             "created_at": r.created_at.isoformat() if r.created_at else "",
@@ -344,11 +365,59 @@ async def get_repair_runs_for_incident(
     ]
 
 
-@router.post("/rollback/{run_id}")
-async def trigger_manual_rollback(
+@router.post("/runs/{run_id}/merge")
+async def execute_run_merge(
     run_id: str,
-    payload: RollbackPayload,
-    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Execute human-approved controlled merge of the repair Pull Request."""
+    try:
+        r_uuid = uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid run UUID format.")
+
+    try:
+        return await _orchestrator.merge_repair_run(r_uuid)
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    except Exception as exc:
+        logger.error(f"Failed to execute PR merge: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Merge execution failed: {exc}")
+
+
+@router.post("/runs/{run_id}/verify-telemetry")
+async def verify_run_post_deploy_telemetry(
+    run_id: str,
+    payload: Optional[VerifyTelemetryPayload] = None,
+) -> dict[str, Any]:
+    """
+    Evaluate pre- vs post-deployment telemetry health metrics.
+    Triggers automated rollback if regression exceeds threshold.
+    """
+    try:
+        r_uuid = uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid run UUID format.")
+
+    p = payload or VerifyTelemetryPayload()
+    try:
+        return await _orchestrator.verify_post_deploy_telemetry(
+            r_uuid,
+            simulate_regression=bool(p.simulate_regression),
+            simulated_error_rate=p.simulated_error_rate,
+            sample_window_minutes=p.sample_window_minutes or 15,
+        )
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    except Exception as exc:
+        logger.error(f"Failed to verify post-deploy telemetry: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Telemetry verification failed: {exc}")
+
+
+@router.post("/runs/{run_id}/rollback")
+@router.post("/rollback/{run_id}")
+async def trigger_run_rollback(
+    run_id: str,
+    payload: Optional[RollbackPayload] = None,
 ) -> dict[str, Any]:
     """Trigger an automated rollback / revert PR for a previously merged repair run."""
     try:
@@ -356,35 +425,11 @@ async def trigger_manual_rollback(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid run UUID format.")
 
-    res = await db.execute(select(RepairRun).where(RepairRun.id == r_uuid))
-    run = res.scalar_one_or_none()
-    if not run:
-        raise HTTPException(status_code=404, detail="Repair run not found.")
-
-    # Fetch settings
-    set_res = await db.execute(select(RepairSettings).where(RepairSettings.project_id == run.project_id))
-    settings = set_res.scalar_one_or_none()
-    if not settings or not settings.encrypted_github_token or not settings.github_repo:
-        raise HTTPException(status_code=400, detail="GitHub configuration missing for project.")
-
-    token = decrypt_secret(settings.encrypted_github_token)
-    gh = GitHubClient(token=token)
-    reason = validate_rollback_reason(payload.reason or "Manual rollback requested")
-
+    p = payload or RollbackPayload()
     try:
-        revert_pr = await gh.create_revert_pr(
-            repo=settings.github_repo,
-            base_branch=settings.base_branch or "main",
-            commit_sha=run.branch_name or "main",
-            reason=reason,
-        )
-        run.status = "ROLLED_BACK"
-        run.rollback_status = "ROLLED_BACK"
-        await db.commit()
-        return {
-            "status": "SUCCESS",
-            "message": "Rollback PR created successfully.",
-            "revert_pr_url": revert_pr.get("html_url"),
-        }
+        return await _orchestrator.rollback_repair_run(r_uuid, reason=p.reason or "Manual rollback requested")
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Rollback PR creation failed: {exc}")
+        logger.error(f"Failed to execute rollback: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Rollback execution failed: {exc}")

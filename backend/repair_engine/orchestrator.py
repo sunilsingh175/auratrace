@@ -20,7 +20,7 @@ import logging
 import secrets
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import select, text
@@ -29,7 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from backend.repair_engine.ci import wait_for_ci
 from backend.repair_engine.crypto import decrypt_secret
 from backend.repair_engine.github_client import GitHubClient
-from backend.repair_engine.rollback import regression_detected, validate_rollback_reason
+from backend.repair_engine.rollback import (
+    calculate_window_error_rate,
+    check_incident_recurrence,
+    regression_detected,
+    validate_rollback_reason,
+)
 from backend.repair_engine.safety import inspect_patch
 from backend.repair_engine.sandbox import async_run_sandbox_test
 from backend.shared.database import Incident, Project, RepairRun, RepairSettings
@@ -536,11 +541,12 @@ class RepairOrchestrator:
                 await session.commit()
 
             # ----------------------------------------------------
-            # STAGE 7: AUTOMATED MERGE (If enabled)
+            # STAGE 7: MERGE GATE (Auto-Merge or Manual Review)
             # ----------------------------------------------------
+            merged_sha = None
             if settings.auto_merge_enabled and ci_result.get("status") == "PASSED" and pr_number:
                 async with self.session_maker() as session:
-                    await self._append_log(session, run_id, "MERGE", f"Auto-Merge is enabled. Merging PR #{pr_number}...")
+                    await self._append_log(session, run_id, "MERGE", f"Auto-Merge is enabled. Merging PR #{pr_number} via GitHub API...")
 
                 try:
                     merge_res = await gh_client.merge_pull_request(
@@ -549,15 +555,38 @@ class RepairOrchestrator:
                         commit_title=f"Merge autofix PR #{pr_number} for incident {str(incident_id)[:8]}",
                         merge_method="squash",
                     )
+                    merged_sha = merge_res.get("sha")
                     async with self.session_maker() as session:
                         run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
                         r = run_res.scalar_one()
                         r.status = "MERGED"
+                        r.merge_status = "MERGED"
+                        r.merged_at = datetime.now(timezone.utc)
+                        r.merge_commit_sha = merged_sha
+                        r.post_deploy_status = "MONITORING"
                         await session.commit()
-                        await self._append_log(session, run_id, "MERGE", f"PR #{pr_number} merged successfully.", data=merge_res)
+                        await self._append_log(session, run_id, "MERGE", f"PR #{pr_number} merged successfully. Commit SHA: {merged_sha}", data=merge_res)
                 except Exception as merge_err:
+                    logger.error(f"Auto-merge failed: {merge_err}")
                     async with self.session_maker() as session:
+                        run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
+                        r = run_res.scalar_one()
+                        r.merge_status = "AUTO_MERGE_FAILED"
+                        await session.commit()
                         await self._append_log(session, run_id, "MERGE", f"Auto-merge failed: {merge_err}", level="ERROR")
+            else:
+                async with self.session_maker() as session:
+                    run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
+                    r = run_res.scalar_one()
+                    r.merge_status = "PENDING_MANUAL_REVIEW"
+                    await session.commit()
+                    await self._append_log(
+                        session,
+                        run_id,
+                        "MERGE",
+                        f"Auto-Merge is disabled. Pull Request #{pr_number} is ready for manual review and approval.",
+                        data={"pr_number": pr_number, "pr_url": pr_url},
+                    )
 
             # ----------------------------------------------------
             # STAGE 8: PIPELINE COMPLETION
@@ -576,6 +605,7 @@ class RepairOrchestrator:
                 "branch_name": branch_name,
                 "pr_number": pr_number,
                 "pr_url": pr_url,
+                "merge_status": r.merge_status,
                 "ci_status": ci_result.get("status"),
             }
 
@@ -590,3 +620,236 @@ class RepairOrchestrator:
                     await session.commit()
                     await self._append_log(session, run_id, "ERROR", f"Orchestrator error: {unhandled_err}", level="ERROR")
             return {"status": "FAILED", "run_id": str(run_id), "error": str(unhandled_err)}
+
+    async def merge_repair_run(self, run_id: uuid.UUID) -> dict[str, Any]:
+        """
+        Execute controlled human-approved merge for an open repair Pull Request.
+        """
+        async with self.session_maker() as session:
+            run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
+            run = run_res.scalar_one_or_none()
+            if not run:
+                raise ValueError(f"Repair run '{run_id}' not found.")
+
+            if not run.pr_number:
+                raise ValueError("No Pull Request is associated with this repair run.")
+
+            settings_res = await session.execute(select(RepairSettings).where(RepairSettings.project_id == run.project_id))
+            settings = settings_res.scalar_one_or_none()
+            if not settings or not settings.encrypted_github_token:
+                raise ValueError("Project repair settings / token not configured.")
+
+            raw_token = decrypt_secret(settings.encrypted_github_token)
+            gh_client = GitHubClient(token=raw_token)
+
+            await self._append_log(session, run_id, "MERGE", f"Executing manual approval merge for PR #{run.pr_number}...")
+
+            merge_res = await gh_client.merge_pull_request(
+                repo=settings.github_repo,
+                pull_number=run.pr_number,
+                commit_title=f"Merge approved autofix PR #{run.pr_number} [AuraTrace L3]",
+                merge_method="squash",
+            )
+            merged_sha = merge_res.get("sha")
+
+            run.status = "MERGED"
+            run.merge_status = "MERGED"
+            run.merged_at = datetime.now(timezone.utc)
+            run.merge_commit_sha = merged_sha
+            run.post_deploy_status = "MONITORING"
+            await session.commit()
+
+            await self._append_log(
+                session,
+                run_id,
+                "MERGE",
+                f"PR #{run.pr_number} merged successfully. Commit SHA: {merged_sha}",
+                data=merge_res,
+            )
+
+        await self._broadcast_event("REPAIR_MERGED", {
+            "run_id": str(run_id),
+            "pr_number": run.pr_number,
+            "merge_commit_sha": merged_sha,
+        })
+
+        return {
+            "status": "MERGED",
+            "run_id": str(run_id),
+            "pr_number": run.pr_number,
+            "merge_commit_sha": merged_sha,
+            "merged_at": run.merged_at.isoformat() if run.merged_at else None,
+        }
+
+    async def verify_post_deploy_telemetry(
+        self,
+        run_id: uuid.UUID,
+        simulate_regression: bool = False,
+        simulated_error_rate: Optional[float] = None,
+        sample_window_minutes: int = 15,
+    ) -> dict[str, Any]:
+        """
+        Evaluates pre-deployment vs post-deployment telemetry health.
+        If error rate regression exceeds threshold or incident recurrence occurs,
+        triggers automated rollback PR creation.
+        """
+        async with self.session_maker() as session:
+            run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
+            run = run_res.scalar_one_or_none()
+            if not run:
+                raise ValueError(f"Repair run '{run_id}' not found.")
+
+            settings_res = await session.execute(select(RepairSettings).where(RepairSettings.project_id == run.project_id))
+            settings = settings_res.scalar_one_or_none()
+            threshold = settings.regression_error_rate_threshold if settings else 0.05
+
+            inc_res = await session.execute(select(Incident).where(Incident.id == run.incident_id))
+            incident = inc_res.scalar_one_or_none()
+
+            # Compute baseline pre-deploy error rate
+            pre_start = run.created_at - timedelta(minutes=sample_window_minutes)
+            pre_end = run.created_at
+            baseline_rate = await calculate_window_error_rate(
+                session,
+                project_id=run.project_id,
+                service_id=incident.service_id if incident else None,
+                start_time=pre_start,
+                end_time=pre_end,
+            )
+
+            # Compute post-deploy error rate
+            post_start = run.merged_at or run.created_at
+            post_end = datetime.now(timezone.utc)
+            post_rate = await calculate_window_error_rate(
+                session,
+                project_id=run.project_id,
+                service_id=incident.service_id if incident else None,
+                start_time=post_start,
+                end_time=post_end,
+            )
+
+            if simulate_regression or simulated_error_rate is not None:
+                post_rate = simulated_error_rate if simulated_error_rate is not None else round(baseline_rate + threshold + 0.10, 4)
+
+            run.baseline_error_rate = baseline_rate
+            run.post_repair_error_rate = post_rate
+
+            has_regression = regression_detected(
+                baseline_error_rate=baseline_rate,
+                current_error_rate=post_rate,
+                threshold=threshold,
+            )
+            has_recurrence = await check_incident_recurrence(
+                session,
+                service_id=incident.service_id if incident else None,
+                error_type=incident.error_type if incident else None,
+                after_time=post_start,
+            ) if incident else False
+
+            if has_regression or has_recurrence:
+                run.post_deploy_status = "REGRESSION_DETECTED"
+                reason = f"Post-deployment telemetry regression: error rate rose from {baseline_rate:.2%} to {post_rate:.2%} (Threshold: {threshold:.2%})"
+                if has_recurrence:
+                    reason += f" and recurrence of '{incident.error_type if incident else 'error'}' detected."
+                await session.commit()
+                await self._append_log(session, run_id, "POST_DEPLOY", reason, level="WARN", data={
+                    "baseline_error_rate": baseline_rate,
+                    "post_repair_error_rate": post_rate,
+                    "threshold": threshold,
+                    "has_recurrence": has_recurrence,
+                })
+                # Trigger automated rollback PR
+                rollback_res = await self.rollback_repair_run(run_id, reason=reason)
+                return {
+                    "status": "REGRESSION_DETECTED",
+                    "run_id": str(run_id),
+                    "baseline_error_rate": baseline_rate,
+                    "post_repair_error_rate": post_rate,
+                    "threshold": threshold,
+                    "rollback": rollback_res,
+                }
+            else:
+                run.post_deploy_status = "HEALTHY"
+                await session.commit()
+                await self._append_log(
+                    session,
+                    run_id,
+                    "POST_DEPLOY",
+                    f"Post-deployment telemetry verified healthy. Error rate: {post_rate:.2%} (Baseline: {baseline_rate:.2%})",
+                    data={
+                        "baseline_error_rate": baseline_rate,
+                        "post_repair_error_rate": post_rate,
+                        "threshold": threshold,
+                    },
+                )
+                return {
+                    "status": "HEALTHY",
+                    "run_id": str(run_id),
+                    "baseline_error_rate": baseline_rate,
+                    "post_repair_error_rate": post_rate,
+                    "threshold": threshold,
+                }
+
+    async def rollback_repair_run(
+        self,
+        run_id: uuid.UUID,
+        reason: str = "Post-deployment telemetry regression detected",
+    ) -> dict[str, Any]:
+        """
+        Execute automated rollback by generating a revert Pull Request.
+        """
+        clean_reason = validate_rollback_reason(reason)
+        async with self.session_maker() as session:
+            run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
+            run = run_res.scalar_one_or_none()
+            if not run:
+                raise ValueError(f"Repair run '{run_id}' not found.")
+
+            settings_res = await session.execute(select(RepairSettings).where(RepairSettings.project_id == run.project_id))
+            settings = settings_res.scalar_one_or_none()
+            if not settings or not settings.encrypted_github_token:
+                raise ValueError("Project repair settings / token not configured.")
+
+            raw_token = decrypt_secret(settings.encrypted_github_token)
+            gh_client = GitHubClient(token=raw_token)
+
+            commit_to_revert = run.merge_commit_sha or run.branch_name or "main"
+            await self._append_log(session, run_id, "ROLLBACK", f"Initiating automated rollback for commit '{commit_to_revert}'...")
+
+            revert_pr = await gh_client.create_revert_pr(
+                repo=settings.github_repo,
+                base_branch=settings.base_branch or "main",
+                commit_sha=commit_to_revert,
+                reason=clean_reason,
+            )
+
+            run.status = "ROLLED_BACK"
+            run.rollback_status = "REVERT_PR_CREATED"
+            run.revert_pr_url = revert_pr.get("html_url")
+            run.revert_pr_number = revert_pr.get("number")
+            await session.commit()
+
+            await self._append_log(
+                session,
+                run_id,
+                "ROLLBACK",
+                f"Automated Rollback Pull Request #{run.revert_pr_number} created: {run.revert_pr_url}",
+                level="WARN",
+                data=revert_pr,
+            )
+
+        await self._broadcast_event("REPAIR_ROLLBACK", {
+            "run_id": str(run_id),
+            "revert_pr_number": run.revert_pr_number,
+            "revert_pr_url": run.revert_pr_url,
+            "reason": clean_reason,
+        })
+
+        return {
+            "status": "ROLLED_BACK",
+            "run_id": str(run_id),
+            "rollback_status": "REVERT_PR_CREATED",
+            "revert_pr_number": run.revert_pr_number,
+            "revert_pr_url": run.revert_pr_url,
+            "reason": clean_reason,
+        }
