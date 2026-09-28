@@ -140,28 +140,25 @@ def run_sandbox_test(
                     "duration_ms": int((time.time() - start_time) * 1000),
                 }
 
-        allowed_commands = {
-            "pytest": lambda a: a,
-            "python -m pytest": lambda a: a,
-            "npm test": lambda a: a,
-            "npm run test": lambda a: a,
-        }
-        normalized = " ".join(raw_args[:3])
-        if normalized not in allowed_commands:
+        # Allow only known test runners. Arguments are passed directly to the process,
+        # never through a shell, so chaining/redirection cannot escape the test runner.
+        if raw_args[0] == "pytest":
+            cmd_args = raw_args
+        elif len(raw_args) >= 3 and raw_args[:3] == ["python", "-m", "pytest"]:
+            cmd_args = raw_args
+        elif raw_args[:2] == ["npm", "test"]:
+            cmd_args = raw_args
+        elif raw_args[:3] == ["npm", "run", "test"]:
+            cmd_args = raw_args
+        else:
             return {
                 "status": "FAILED",
                 "stage": "test_validation",
-                "error": "Test command is not allowlisted. Allowed commands: pytest, python -m pytest, npm test, npm run test.",
+                "error": "Test command is not allowlisted. Allowed entrypoints: pytest, python -m pytest, npm test, npm run test.",
                 "stdout": "",
                 "stderr": "",
                 "duration_ms": int((time.time() - start_time) * 1000),
             }
-        if normalized == "pytest":
-            cmd_args = raw_args
-        elif normalized == "python -m pytest":
-            cmd_args = raw_args
-        else:
-            cmd_args = raw_args
 
         # shell=False prevents command chaining/redirection such as ';', '&&', '|', '$()'.
         test_proc = subprocess.run(
