@@ -164,7 +164,14 @@ export function RepairTimeline({ incident, onRefreshIncident }: RepairTimelinePr
   const hasRegressionEvent = Boolean(r?.revert_pr_number || r?.post_deploy_status === "REGRESSION_DETECTED" || r?.status === "ROLLED_BACK" || r?.status === "ROLLBACK_COMPLETED");
   const isRollbackPrCreated = Boolean(r?.revert_pr_number);
   const isRollbackMerged = Boolean(r?.rollback_status === "REVERT_MERGED" || r?.rollback_status === "COMPLETED" || r?.status === "ROLLBACK_COMPLETED");
-  const isSystemHealthy = Boolean(r?.post_deploy_status === "HEALTHY" && (r?.status === "ROLLBACK_COMPLETED" || r?.status === "COMPLETED" || r?.status === "MERGED"));
+  const ciStatus = String(r?.ci_result?.status || "NOT_STARTED").toUpperCase();
+  const ciTestsPassed = typeof r?.ci_result?.tests_passed === "number" ? r.ci_result.tests_passed : null;
+  const ciTestsTotal = typeof r?.ci_result?.tests_total === "number" ? r.ci_result.tests_total : null;
+  const baselineRate = typeof r?.baseline_error_rate === "number" ? r.baseline_error_rate : null;
+  const postRepairRate = typeof r?.post_repair_error_rate === "number" ? r.post_repair_error_rate : null;
+  const configuredThreshold = typeof (r as any)?.regression_error_rate_threshold === "number" ? (r as any).regression_error_rate_threshold : null;
+  const ciDetail = ciTestsPassed !== null && ciTestsTotal !== null ? String(ciTestsPassed) + "/" + String(ciTestsTotal) + " tests passed" : ciStatus;
+  const isSystemHealthy = Boolean(r?.post_deploy_status === "HEALTHY");
 
   return (
     <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-6">
@@ -366,10 +373,10 @@ export function RepairTimeline({ incident, onRefreshIncident }: RepairTimelinePr
               ) : (
                 <span className="h-4 w-4 rounded-full border border-slate-300 shrink-0" />
               )}
-              <span className="font-semibold text-slate-800 font-heading">CI Passed — 3/3</span>
+              <span className="font-semibold text-slate-800 font-heading">CI ${ciStatus === "PASSED" ? "Passed" : ciStatus}</span>
             </div>
             <span className="text-[11px] text-emerald-700 font-mono font-bold">
-              {isCiPassed ? "3/3 Pytest Tests Passed" : "Pending"}
+              {isCiPassed ? ciDetail : "Pending"}
             </span>
           </div>
 
@@ -385,7 +392,7 @@ export function RepairTimeline({ incident, onRefreshIncident }: RepairTimelinePr
             </div>
             {isMerged ? (
               <span className="text-[11px] text-slate-600 font-mono">
-                Commit: <strong>{r.merge_commit_sha?.substring(0, 8) || "b57f486"}</strong>
+                Commit: <strong>{r.merge_commit_sha?.substring(0, 8) || "—"}</strong>
               </span>
             ) : isPrCreated && isCiPassed ? (
               <button
@@ -413,7 +420,7 @@ export function RepairTimeline({ incident, onRefreshIncident }: RepairTimelinePr
               <span className="font-semibold text-slate-800 font-heading">Post-Deploy Monitoring</span>
             </div>
             <span className="text-[11px] text-slate-600 font-mono">
-              Baseline: {(r.baseline_error_rate ?? 0.0).toFixed(1)}% (Threshold: 5.0%)
+              {baselineRate !== null ? "Baseline: " + (baselineRate * 100).toFixed(2) + "%" : "Baseline: —"}{configuredThreshold !== null ? " (Threshold: " + (configuredThreshold * 100).toFixed(2) + "%)" : ""}
             </span>
           </div>
 
@@ -422,10 +429,10 @@ export function RepairTimeline({ incident, onRefreshIncident }: RepairTimelinePr
             <div className="flex items-center justify-between p-3 rounded-xl bg-rose-50/60 border border-rose-200 text-xs">
               <div className="flex items-center gap-2.5">
                 <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
-                <span className="font-semibold text-rose-900 font-heading">Regression Detected — 18%</span>
+                <span className="font-semibold text-rose-900 font-heading">Regression Detected — {postRepairRate !== null ? (postRepairRate * 100).toFixed(2) + "%" : "rate unavailable"}</span>
               </div>
               <span className="text-[11px] text-rose-700 font-mono font-bold">
-                18.00% &gt; 5.00% Threshold (Spike Detected)
+                {postRepairRate !== null && configuredThreshold !== null ? (postRepairRate * 100).toFixed(2) + "% > " + (configuredThreshold * 100).toFixed(2) + "% threshold" : "Post-repair error rate exceeded the configured threshold."}
               </span>
             </div>
           )}
@@ -472,7 +479,7 @@ export function RepairTimeline({ incident, onRefreshIncident }: RepairTimelinePr
               </div>
               {isRollbackMerged ? (
                 <span className="text-[11px] text-slate-600 font-mono">
-                  Revert Commit: <strong>c9846da5</strong>
+                  Revert Commit: <strong>{(r as any).rollback_commit_sha?.substring(0, 8) || "—"}</strong>
                 </span>
               ) : r.revert_pr_number ? (
                 <button
@@ -498,10 +505,10 @@ export function RepairTimeline({ incident, onRefreshIncident }: RepairTimelinePr
               ) : (
                 <span className="h-4 w-4 rounded-full border border-slate-300 shrink-0" />
               )}
-              <span className="font-semibold text-emerald-900 font-heading">System Healthy — 0%</span>
+              <span className="font-semibold text-emerald-900 font-heading">System Healthy — {postRepairRate !== null ? (postRepairRate * 100).toFixed(2) + "%" : "rate unavailable"}</span>
             </div>
             <span className="text-[11px] text-emerald-700 font-mono font-bold">
-              {isSystemHealthy ? "0.00% Error Rate (Baseline Restored)" : "Monitoring"}
+              {isSystemHealthy ? (postRepairRate !== null ? (postRepairRate * 100).toFixed(2) + "% Error Rate" : "Healthy") : "Monitoring"}
             </span>
           </div>
         </div>
