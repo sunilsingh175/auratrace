@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import shlex
 import time
 from typing import Any, Optional
 
@@ -113,13 +114,62 @@ def run_sandbox_test(
             }
 
         # 3. Execute test command
-        cmd_args = test_command if isinstance(test_command, list) else test_command.strip()
+        # Only approved test entrypoints are allowed. Never invoke a shell here.
+        if isinstance(test_command, list):
+            raw_args = [str(arg) for arg in test_command]
+        else:
+            command = test_command.strip()
+            if not command:
+                return {
+                    "status": "FAILED",
+                    "stage": "test_validation",
+                    "error": "Test command cannot be empty.",
+                    "stdout": "",
+                    "stderr": "",
+                    "duration_ms": int((time.time() - start_time) * 1000),
+                }
+            try:
+                raw_args = shlex.split(command)
+            except ValueError as exc:
+                return {
+                    "status": "FAILED",
+                    "stage": "test_validation",
+                    "error": f"Invalid test command syntax: {exc}",
+                    "stdout": "",
+                    "stderr": "",
+                    "duration_ms": int((time.time() - start_time) * 1000),
+                }
+
+        allowed_commands = {
+            "pytest": lambda a: a,
+            "python -m pytest": lambda a: a,
+            "npm test": lambda a: a,
+            "npm run test": lambda a: a,
+        }
+        normalized = " ".join(raw_args[:3])
+        if normalized not in allowed_commands:
+            return {
+                "status": "FAILED",
+                "stage": "test_validation",
+                "error": "Test command is not allowlisted. Allowed commands: pytest, python -m pytest, npm test, npm run test.",
+                "stdout": "",
+                "stderr": "",
+                "duration_ms": int((time.time() - start_time) * 1000),
+            }
+        if normalized == "pytest":
+            cmd_args = raw_args
+        elif normalized == "python -m pytest":
+            cmd_args = raw_args
+        else:
+            cmd_args = raw_args
+
+        # shell=False prevents command chaining/redirection such as ';', '&&', '|', '$()'.
         test_proc = subprocess.run(
             cmd_args,
             cwd=work_dir,
             capture_output=True,
             text=True,
-            shell=True,
+            shell=False,
             timeout=timeout_seconds,
         )
 
