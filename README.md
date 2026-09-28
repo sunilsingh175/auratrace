@@ -1,145 +1,91 @@
-# AuraTrace: AI-Powered Application Observability & Crash Diagnostics Platform
+# AuraTrace
 
-AuraTrace is a modern, event-driven observability and automated root-cause analysis platform. It ingests continuous telemetry streams, detects system anomalies using unsupervised machine learning (Isolation Forest), performs semantic incident matching using `pgvector`, and generates actionable diagnostic and recovery patches using Retrieval-Augmented Generation (RAG) with Google Gemini.
+AuraTrace is an SDK-first crash observability and AI diagnostics platform. A developer creates an AuraTrace project, gets a project API key, installs the Python or Node.js SDK, and the SDK automatically captures application crashes and telemetry. AuraTrace detects anomalies, retrieves similar historical fixes with pgvector, generates an AI diagnosis and code patch, and can run the controlled L3 GitHub repair lifecycle.
 
----
-
-## Architecture Overview
+## Architecture
 
 ```text
-Python SDK ──┐
-             ├──► [ FastAPI Gateway ] ──► [ Redis Stream Buffer ]
-Node.js SDK ─┘             │                       │
-                           ▼                       ▼
-                   [ WebSocket Pub/Sub ]   [ ML Anomaly Worker ]
-                           │               (Isolation Forest)
-                           │                       │
-                           │                       ▼
-                           │             [ PostgreSQL Incident ]
-                           │                       │
-                           │                       ▼
-                           │               [ RAG AI Doctor ]
-                           │               ├── pgvector Semantic Search
-                           │               └── Gemini Diagnosis & Patch
-                           │                       │
-                           ▼                       ▼
-                   [ Next.js Real-Time Observability Dashboard ]
+Developer Application
+       │
+       │ AuraTrace Python / Node.js SDK
+       ▼
+FastAPI Ingestion Gateway
+       │
+       ▼
+Redis Stream
+       │
+       ▼
+ML Anomaly Worker ──► PostgreSQL Incident
+       │
+       ▼
+RAG Diagnostic Engine
+   ├── Embeddings
+   ├── pgvector top-3 historical matches
+   └── Gemini AI synthesis
+       │
+       ├── Root cause
+       └── Recommended code patch
+       │
+       ▼
+Next.js Dashboard
+       │
+       ▼
+L3 Repair Engine (opt-in)
+   Safety Gate → Sandbox → GitHub Branch → PR → CI
+       │
+       ├── Human review / optional auto-merge
+       ▼
+Post-deploy telemetry
+       │
+       └── Regression → Rollback PR → Healthy state
 ```
 
-### End-to-End Workflow
+The L3 lifecycle is verified in the controlled `feat/l3-automated-repair` project environment. It should not be interpreted as universal production auto-deployment: deployment behavior depends on the target repository/workflow, and automatic merge is opt-in.
 
-1. **SDK-First Zero-Configuration Auto-Discovery**: Applications integrate via the AuraTrace Python or Node.js SDK using a project API key (`at_live_...`). Service metadata, environment, runtime, and version are automatically discovered upon first telemetry emission.
-2. **High-Throughput Redis Stream Ingestion**: The FastAPI gateway accepts telemetry events with sub-millisecond asynchronous handoff to Redis Streams (`XADD`) and immediately returns HTTP 202.
-3. **Unsupervised ML Anomaly Detection**: A dedicated worker consumes the telemetry stream in real time, calculating rolling 5-minute statistical windows (error rate, 5xx ratio, latency distributions, unique errors) evaluated by an Isolation Forest model.
-4. **pgvector Historical Knowledge Retrieval**: When an incident is flagged, its error pattern and stack trace are vectorized using semantic embeddings (`sentence-transformers`) and queried against verified historical fixes.
-5. **RAG AI Doctor (Gemini)**: The incident context and top pgvector semantic matches are synthesized and passed to Gemini to generate root-cause explanations and concrete recovery patches.
-6. **Live WebSocket Telemetry & Dashboard**: Telemetry logs and newly diagnosed incidents are broadcast in real time to the Next.js frontend.
+## Developer workflow
 
----
+1. Create an AuraTrace project in Projects & Setup.
+2. Copy the generated project API key.
+3. Install the SDK:
+   ```bash
+   npm install @auratrace/node
+   ```
+   or:
+   ```bash
+   pip install auratrace
+   ```
+4. Initialize the SDK with the project API key.
+5. Run the application normally. The SDK automatically discovers application/runtime metadata and captures unhandled crashes.
+6. AuraTrace ingests telemetry through Redis and evaluates anomalies.
+7. Crash details show the stack trace, AI root cause, historical pgvector matches, and recommended code fix.
+8. When L3 repair is enabled, the repair lifecycle is shown inside the crash details page.
 
-## Key Features
+## Python SDK
 
-* **Zero-Config SDKs**: Native Python (`auratrace`) and Node.js (`@auratrace/node`) client libraries with automatic unhandled exception interceptors and background queue flushing.
-* **Non-Blocking Telemetry Ingestion**: Redis-buffered queue decouples client logging from long-term database persistence.
-* **Unsupervised Anomaly Scoring**: Real-time sliding window telemetry evaluation using Isolation Forest with heuristic fallback scoring.
-* **Contextual RAG Diagnostics**: Semantic vector search on PostgreSQL (`pgvector`) combined with Gemini LLM for automated post-mortem insights and remediation steps.
-* **Role-Based Access Control**: Secure user authentication (Admin, Developer) with JWT sessions, API key hashing, and optional email OTP delivery.
-* **Production-Ready Dashboard**: Next.js 14 App Router UI with real-time incident timelines, live telemetry feeds, project management, and system metrics.
-
----
-
-## Repository Structure
-
-```text
-auratrace/
-├── docker-compose.yml               # Multi-container orchestration
-├── .env.example                     # Environment configuration template
-├── README.md                        # Documentation & setup guide
-├── pytest.ini                       # Test configuration
-├── database/                        # PostgreSQL + pgvector initialization
-│   ├── 01-init.sql                  # Schema & table definitions
-│   ├── 02-seed.sql                  # Historical knowledge base & seed data
-│   └── 03-service-ownership.sql     # Service mappings
-├── backend/
-│   ├── ingestion_service/           # FastAPI gateway & WebSocket broadcaster
-│   ├── ml_anomaly_service/          # Isolation Forest anomaly worker
-│   ├── rag-diagnostic-service/      # pgvector RAG & Gemini AI Doctor
-│   └── shared/                      # Database models & logging
-├── frontend/                        # Next.js 14 React observability portal
-├── sdk/
-│   ├── nodejs/                      # @auratrace/node TypeScript SDK
-│   └── python/                      # auratrace Python SDK
-└── scripts/                         # Verification & simulation utilities
-    ├── demo_python_app.py           # Demo Python microservice with SDK
-    ├── demo_node_app.js             # Demo Node.js microservice with SDK
-    ├── simulate_crash.py            # Crash burst & anomaly simulator
-    ├── reset_demo_db.py             # Safe database reset utility
-    ├── stress_test.py               # Redis ingestion load test
-    └── e2e_acceptance_verification.py # Full stack acceptance test suite
-```
-
----
-
-## Quickstart & Installation
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/sunilsingh175/auratrace.git
-cd auratrace
-```
-
-### 2. Configure Environment Variables
-```bash
-cp .env.example .env
-```
-Update `.env` with your desired configuration, database credentials, master API key, and Gemini API key:
-```env
-AURA_MASTER_API_KEY=your_secure_master_key
-GEMINI_API_KEY=your_gemini_api_key
-POSTGRES_PASSWORD=your_postgres_password
-```
-
-### 3. Launch Services with Docker Compose
-```bash
-docker compose up -d --build
-```
-
-### 4. Access Platform Interfaces
-* **Web Dashboard**: [http://localhost:3000](http://localhost:3000)
-* **Ingestion Gateway OpenAPI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-* **WebSocket Endpoint**: `ws://localhost:8000/ws/telemetry`
-* **PostgreSQL (pgvector)**: `localhost:5432` (`trace_db`)
-* **Redis Stream**: `localhost:6379` (`telemetry_stream`)
-
----
-
-## Developer Usage & SDK Integration
-
-### 1. Python SDK
-
-Install the SDK or add it to your project:
 ```python
 import auratrace
 
-# Initialize with zero-config (runtime and service name auto-detected)
-client = auratrace.init(
-    api_key="your_project_or_master_api_key",
+auratrace.init(
+    api_key="YOUR_AURATRACE_PROJECT_KEY",
     endpoint="http://localhost:8000",
-    service_name="payment-service",
-    environment="production"
 )
 
-# Stream operational telemetry
-client.capture_message("Payment batch processed", metadata={"count": 50})
-
-# Capture exceptions with automated triage
 try:
     process_payment()
 except Exception as exc:
-    client.capture_exception(exc, metadata={"customer_id": "cus_12345"})
+    auratrace.capture_exception(exc)
 ```
 
-### 2. Node.js SDK
+For environment-based configuration:
+
+```bash
+export AURATRACE_API_KEY="YOUR_AURATRACE_PROJECT_KEY"
+export AURATRACE_ENDPOINT="http://localhost:8000"
+```
+
+The developer SDK does not use an AuraTrace master/admin API key.
+
+## Node.js SDK
 
 ```typescript
 import { AuraTrace } from "@auratrace/node";
@@ -147,53 +93,134 @@ import { AuraTrace } from "@auratrace/node";
 AuraTrace.init({
   apiKey: process.env.AURATRACE_API_KEY!,
   endpoint: "http://localhost:8000",
-  serviceName: "order-service",
-  environment: "production",
 });
-
-// Capture messages or caught exceptions
-await AuraTrace.captureMessage("Order dispatched", { order_id: "ord_991" });
 ```
 
----
+## Local development
 
-## Verification & Acceptance Testing
+Copy the environment template and configure local secrets:
 
-### 1. Run Backend Unit Tests
 ```bash
-pytest
+cp .env.example .env
+docker compose up -d --build
 ```
-*Executes all authentication, Isolation Forest model inference, and sliding-window aggregation tests.*
 
-### 2. Run Autonomous Crash Simulation
+The local interfaces are:
+
+- Dashboard: `http://localhost:3000`
+- FastAPI/OpenAPI: `http://localhost:8000/docs`
+- PostgreSQL/pgvector: `localhost:5432`
+- Redis: `localhost:6379`
+
+Never commit real API keys, GitHub tokens, encryption keys, database passwords, certificates, or private keys.
+
+## Repository structure
+
+```text
+auratrace/
+├── .github/workflows/ci.yml
+├── backend/
+│   ├── ingestion_service/
+│   ├── ml_anomaly_service/
+│   ├── rag-diagnostic-service/
+│   ├── repair_engine/
+│   └── shared/
+├── database/
+│   ├── 01-init.sql
+│   ├── 02-seed.sql
+│   ├── 03-service-ownership.sql
+│   └── 04-l3-repair.sql
+├── frontend/
+├── sdk/
+│   ├── nodejs/
+│   └── python/
+└── scripts/
+```
+
+The internal `services` database entity is used for telemetry/application identity. Developers do not manually register or manage services.
+
+## Testing
+
+Run the repository test suite:
+
 ```bash
-python scripts/simulate_crash.py
+pytest -q
 ```
-*Injects synthetic microservice telemetry bursts and crashes to trigger live ML anomaly detection and WebSocket updates.*
 
-### 3. Run Microservice SDK Demos
+Compile Python sources:
+
 ```bash
-# Node.js microservice SDK demo
-node scripts/demo_node_app.js
-
-# Python microservice SDK demo
-python scripts/demo_python_app.py
+python -m compileall -q backend sdk/python scripts
 ```
 
-### 4. Run End-to-End Acceptance Verification
+Build and test the Node.js SDK:
+
 ```bash
-python scripts/e2e_acceptance_verification.py
+cd sdk/nodejs
+npm ci
+npm run build
+npm test
 ```
-*Performs full lifecycle validation: provisions a project, runs SDK microservices, verifies anomaly detection, confirms pgvector semantic matches, checks Gemini AI Doctor diagnoses, and inspects PostgreSQL records.*
 
-### 5. Reset Database for Clean Demos
+Check and build the frontend:
+
 ```bash
-python scripts/reset_demo_db.py
+cd frontend
+npm ci
+npx tsc --noEmit
+npm run build
 ```
-*Clears active telemetry and incidents while preserving user accounts, registered projects, and the vectorized knowledge base.*
 
----
+The GitHub Actions workflow performs these validation categories automatically.
 
-## Author & Maintainer
+## L3 repair lifecycle
 
-* **GitHub**: [@sunilsingh175](https://github.com/sunilsingh175)
+L3 is the GitHub-based automated repair path:
+
+```text
+Crash
+  ↓
+AI/RAG diagnosis
+  ↓
+Safety Gate
+  ↓
+Sandbox tests
+  ↓
+Repair branch
+  ↓
+Pull Request
+  ↓
+GitHub Actions CI
+  ↓
+Safety/review gate
+  ↓
+Optional merge
+  ↓
+Post-deploy telemetry
+  ↓
+Regression detected?
+  ├─ No → Healthy
+  └─ Yes → Rollback PR → Rollback merge → Healthy
+```
+
+L3 records repair state, CI status, merge status, post-deploy health, and rollback state for display in Crash Details.
+
+The current sandbox provides prototype test isolation and command allowlisting. It is not equivalent to a production-grade container/VM security boundary.
+
+## Security
+
+- Project API keys are scoped to the developer project.
+- Developer SDKs must use project API keys, not master/admin credentials.
+- L3 repair operations are project-scoped and authorization protected.
+- Sensitive files and dangerous patch patterns are rejected by the Safety Gate.
+- Sandbox test commands are allowlisted and executed without shell interpretation.
+- GitHub credentials must be stored securely and should use least-privilege access.
+- Automatic merge remains disabled unless explicitly enabled.
+
+## Scope
+
+AuraTrace currently demonstrates the complete crash-to-diagnosis flow and the L3 repair/rollback lifecycle in a controlled project environment. It does not claim universal autonomous production deployment or production-grade sandbox isolation.
+
+## Maintainer
+
+GitHub: https://github.com/sunilsingh175/auratrace
