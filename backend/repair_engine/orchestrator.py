@@ -91,16 +91,17 @@ class RepairOrchestrator:
         session: AsyncSession,
         run_id: uuid.UUID,
         stage: str,
-        message: str,
+        message: Optional[str] = "",
         level: str = "INFO",
         data: Optional[dict[str, Any]] = None,
     ) -> None:
         """Append a timestamped step log to the repair run record."""
+        msg_str = str(message) if message is not None else ""
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "stage": stage,
             "level": level,
-            "message": message,
+            "message": msg_str,
             "data": data or {},
         }
         res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
@@ -222,7 +223,7 @@ class RepairOrchestrator:
                     r.status = "FAILED"
                     r.error_message = "No suggested code patch available for this incident."
                     await session.commit()
-                    await self._append_log(session, run_id, "INIT", r.error_message, level="ERROR")
+                    await self._append_log(session, run_id, "INIT", str(r.error_message or ""), level="ERROR")
                 return {"status": "FAILED", "run_id": str(run_id), "error": "No patch available."}
 
             # ----------------------------------------------------
@@ -251,7 +252,7 @@ class RepairOrchestrator:
                     r.status = "SAFETY_VIOLATION"
                     r.error_message = f"Safety Gate rejected patch: {', '.join(safety_result.reasons)}"
                     await session.commit()
-                    await self._append_log(session, run_id, "SAFETY_GATE", r.error_message, level="ERROR", data=safety_data)
+                    await self._append_log(session, run_id, "SAFETY_GATE", str(r.error_message or ""), level="ERROR", data=safety_data)
                     return {"status": "SAFETY_VIOLATION", "run_id": str(run_id), "safety_result": safety_data}
                 await session.commit()
                 await self._append_log(session, run_id, "SAFETY_GATE", "Safety Gate verification PASSED.", data=safety_data)
@@ -283,7 +284,7 @@ class RepairOrchestrator:
                         r.status = "SANDBOX_FAILED"
                         r.error_message = f"Sandbox verification failed: {sandbox_res.get('error')}"
                         await session.commit()
-                        await self._append_log(session, run_id, "SANDBOX", r.error_message, level="ERROR", data=sandbox_res)
+                        await self._append_log(session, run_id, "SANDBOX", str(r.error_message or ""), level="ERROR", data=sandbox_res)
                         return {"status": "SANDBOX_FAILED", "run_id": str(run_id), "sandbox_result": sandbox_res}
                     await session.commit()
                     await self._append_log(session, run_id, "SANDBOX", "Sandbox verification PASSED.", data=sandbox_res)
@@ -298,7 +299,7 @@ class RepairOrchestrator:
                     r.status = "AWAITING_CONFIG"
                     r.error_message = "GitHub repository or Personal Access Token is not configured for this project."
                     await session.commit()
-                    await self._append_log(session, run_id, "GITHUB", r.error_message, level="WARN")
+                    await self._append_log(session, run_id, "GITHUB", str(r.error_message or ""), level="WARN")
                 return {"status": "AWAITING_CONFIG", "run_id": str(run_id), "message": "Configure GitHub repo and token in Project Settings."}
 
             # Decrypt token
@@ -311,7 +312,7 @@ class RepairOrchestrator:
                     r.status = "FAILED"
                     r.error_message = f"Failed to decrypt GitHub token: {dec_err}"
                     await session.commit()
-                    await self._append_log(session, run_id, "GITHUB", r.error_message, level="ERROR")
+                    await self._append_log(session, run_id, "GITHUB", str(r.error_message or ""), level="ERROR")
                 return {"status": "FAILED", "run_id": str(run_id), "error": r.error_message}
 
             gh_client = GitHubClient(token=raw_token)
@@ -339,7 +340,7 @@ class RepairOrchestrator:
                     r.status = "FAILED"
                     r.error_message = f"GitHub branch creation failed: {gh_err}"
                     await session.commit()
-                    await self._append_log(session, run_id, "GITHUB", r.error_message, level="ERROR")
+                    await self._append_log(session, run_id, "GITHUB", str(r.error_message or ""), level="ERROR")
                 return {"status": "FAILED", "run_id": str(run_id), "error": str(gh_err)}
 
             # ----------------------------------------------------
@@ -432,7 +433,7 @@ class RepairOrchestrator:
                     r.status = "PR_FAILED"
                     r.error_message = f"Pull Request creation failed: {pr_err}"
                     await session.commit()
-                    await self._append_log(session, run_id, "GITHUB", r.error_message, level="ERROR")
+                    await self._append_log(session, run_id, "GITHUB", str(r.error_message or ""), level="ERROR")
                 return {"status": "PR_FAILED", "run_id": str(run_id), "error": str(pr_err)}
 
             # ----------------------------------------------------
@@ -463,7 +464,7 @@ class RepairOrchestrator:
                     r.status = f"CI_{ci_result.get('status', 'FAILED')}"
                     r.error_message = f"CI status reported: {ci_result.get('status')}"
                     await session.commit()
-                    await self._append_log(session, run_id, "CI", r.error_message, level="WARN", data=ci_result)
+                    await self._append_log(session, run_id, "CI", str(r.error_message or ""), level="WARN", data=ci_result)
                     return {"status": r.status, "run_id": str(run_id), "ci_result": ci_result, "pr_url": pr_url}
                 await session.commit()
 
