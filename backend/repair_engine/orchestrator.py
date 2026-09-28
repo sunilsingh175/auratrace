@@ -14,6 +14,7 @@ Coordinates the end-to-end autonomous healing pipeline:
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
 import json
 import logging
 import secrets
@@ -34,6 +35,12 @@ from backend.repair_engine.sandbox import async_run_sandbox_test
 from backend.shared.database import Incident, Project, RepairRun, RepairSettings
 
 logger = logging.getLogger("auratrace.repair.orchestrator")
+
+
+@dataclass
+class _DiffHunk:
+    old_start: int
+    lines: list[str] = field(default_factory=list)
 
 
 def apply_patch_to_text(original_text: str, file_path: str, patch_str: str) -> Optional[str]:
@@ -72,27 +79,27 @@ def apply_patch_to_text(original_text: str, file_path: str, patch_str: str) -> O
         lines = original_text.splitlines(keepends=True)
         patch_lines = patch_str.splitlines()
         hunk_header_re = re.compile(r"^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@")
-        hunks = []
-        current_hunk = None
+        hunks: list[_DiffHunk] = []
+        current_hunk: Optional[_DiffHunk] = None
         for pline in patch_lines:
             m = hunk_header_re.match(pline)
             if m:
-                if current_hunk:
+                if current_hunk is not None:
                     hunks.append(current_hunk)
                 old_start = int(m.group(1))
-                current_hunk = {"old_start": old_start, "lines": []}
+                current_hunk = _DiffHunk(old_start=old_start, lines=[])
             elif current_hunk is not None and pline.startswith(("+", "-", " ")):
-                current_hunk["lines"].append(pline)
-        if current_hunk:
+                current_hunk.lines.append(pline)
+        if current_hunk is not None:
             hunks.append(current_hunk)
 
         if hunks:
             result = list(lines)
-            for hunk in sorted(hunks, key=lambda h: h["old_start"], reverse=True):
-                idx = max(0, hunk["old_start"] - 1)
-                new_slice = []
+            for hunk in sorted(hunks, key=lambda h: h.old_start, reverse=True):
+                idx = max(0, hunk.old_start - 1)
+                new_slice: list[str] = []
                 old_slice_len = 0
-                for hline in hunk["lines"]:
+                for hline in hunk.lines:
                     tag = hline[0]
                     content = hline[1:] + ("\n" if not hline[1:].endswith("\n") else "")
                     if tag == " ":
