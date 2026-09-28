@@ -238,7 +238,6 @@ async def check_sandbox_execution(payload: SandboxTestPayload) -> dict[str, Any]
 async def trigger_automated_repair(
     incident_id: str,
     payload: Optional[TriggerRepairPayload] = None,
-    background_tasks: Optional[BackgroundTasks] = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
