@@ -144,3 +144,66 @@ export interface AnomalyHeatmapDay {
   day: string;
   hours: number[]; // 24 values (0 to 10 scale of anomalies)
 }
+
+export interface RepairRun {
+  id: string;
+  incident_id: string;
+  project_id?: string;
+  status: string;
+  branch_name?: string;
+  pr_number?: number;
+  pr_url?: string;
+  merge_status?: string;
+  merged_at?: string;
+  merge_commit_sha?: string;
+  post_deploy_status?: string;
+  baseline_error_rate?: number;
+  post_repair_error_rate?: number;
+  revert_pr_url?: string;
+  revert_pr_number?: number;
+  rollback_status?: string;
+  safety_result?: {
+    allowed?: boolean;
+    reasons?: string[];
+    target_files?: string[];
+    flagged_patterns?: string[];
+  };
+  sandbox_result?: {
+    status?: string;
+    passed?: boolean;
+    output?: string;
+    duration_ms?: number;
+    test_command?: string;
+  };
+  ci_result?: {
+    status?: string;
+    passed?: boolean;
+    total_checks?: number;
+    completed_checks?: number;
+    details?: any[];
+  };
+  logs?: Array<{
+    stage: string;
+    message: string;
+    level: string;
+    timestamp: string;
+    data?: any;
+  }>;
+  error_message?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface RepairSettings {
+  project_id: string;
+  github_repo: string;
+  base_branch: string;
+  has_token: boolean;
+  masked_token: string;
+  test_command: string;
+  auto_repair_enabled: boolean;
+  auto_merge_enabled: boolean;
+  regression_error_rate_threshold: number;
+  updated_at: string;
+}
+

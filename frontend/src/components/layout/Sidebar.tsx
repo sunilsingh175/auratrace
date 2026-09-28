@@ -42,7 +42,7 @@ export function Sidebar() {
     };
   }, []);
 
-  const navLinks = [
+  const devNavLinks = [
     {
       name: "Dashboard",
       href: "/dashboard",
@@ -61,16 +61,21 @@ export function Sidebar() {
       icon: FolderKanban,
       badge: null,
     },
-    ...(user?.role === "Admin"
-      ? [
-          {
-            name: "Admin Console",
-            href: "/admin",
-            icon: Shield,
-            badge: null,
-          },
-        ]
-      : []),
+    {
+      name: "Settings",
+      href: "/settings",
+      icon: Shield,
+      badge: null,
+    },
+  ];
+
+  const adminNavLinks = [
+    {
+      name: "Admin Console",
+      href: "/admin",
+      icon: Shield,
+      badge: null,
+    },
   ];
 
   const userInitials = user?.name
@@ -93,10 +98,10 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-6">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block px-4 mb-2 font-heading">
-            Workspace Navigation
+            Developer
           </span>
           <nav className="space-y-1">
-            {navLinks.map((item) => {
+            {devNavLinks.map((item) => {
               const Icon = item.icon;
               const isActive =
                 pathname === item.href ||
@@ -136,7 +141,43 @@ export function Sidebar() {
             })}
           </nav>
         </div>
+
+        {user?.role === "Admin" && (
+          <div className="pt-2 border-t border-slate-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block px-4 mb-2 font-heading">
+              Administration
+            </span>
+            <nav className="space-y-1">
+              {adminNavLinks.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname?.startsWith(item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`group flex items-center justify-between rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
+                      isActive
+                        ? "bg-red-50 text-[#dc2626]"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon
+                        className={`h-4 w-4 ${
+                          isActive ? "text-[#dc2626] stroke-[2.2]" : "text-slate-400 group-hover:text-slate-600"
+                        }`}
+                      />
+                      <span>{item.name}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        )}
       </div>
+
 
       {/* Footer / Account Information */}
       <div className="border-t border-slate-100 p-4">

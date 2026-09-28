@@ -24,6 +24,7 @@ import {
 
 import type { Incident } from "@/types";
 import { SeverityBadge } from "@/components/incidents/SeverityBadge";
+import { RepairTimeline } from "@/components/incidents/RepairTimeline";
 import { formatTimeAgo } from "@/lib/utils";
 
 export default function IncidentDetailsPage() {
@@ -461,7 +462,10 @@ export default function IncidentDetailsPage() {
               </div>
             )}
 
-            {/* 4. WHAT CODE TO CHANGE: Recommended Code Fix */}
+            {/* 4. L3 AUTONOMOUS REPAIR LIFECYCLE TIMELINE */}
+            <RepairTimeline incident={incident} onRefreshIncident={loadIncident} />
+
+            {/* 5. WHAT CODE TO CHANGE: Recommended Code Fix */}
             {diagnosed && recoveryPatch ? (
               <div className="panel p-6 bg-slate-950 border-slate-900 text-white shadow-xl space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">

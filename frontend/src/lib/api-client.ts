@@ -6,6 +6,8 @@ import {
   SystemStats,
   InfrastructureStatus,
   UserAccount,
+  RepairRun,
+  RepairSettings,
 } from "@/types";
 
 export * from "@/types";
@@ -396,3 +398,124 @@ export async function changeUserPassword(data: { current_password: string; new_p
   }
   return await res.json();
 }
+
+// ============================================================
+// L3 AUTONOMOUS REPAIR CLIENT METHODS
+// ============================================================
+
+export async function fetchRepairRunsForIncident(incidentId: string): Promise<RepairRun[]> {
+  try {
+    const path = `repair/runs/incident/${encodeURIComponent(incidentId)}`;
+    const res = await request(path);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn("Failed to fetch repair runs for incident:", err);
+    return [];
+  }
+}
+
+export async function fetchRepairRunById(runId: string): Promise<RepairRun | null> {
+  try {
+    const path = `repair/runs/${encodeURIComponent(runId)}`;
+    const res = await request(path);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to fetch repair run by id:", err);
+    return null;
+  }
+}
+
+export async function triggerAutonomousRepair(
+  incidentId: string,
+  payload?: { sandbox_repo_dir?: string }
+): Promise<any> {
+  const path = `repair/trigger/${encodeURIComponent(incidentId)}`;
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to trigger autonomous repair (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function executeRunMerge(runId: string): Promise<any> {
+  const path = `repair/runs/${encodeURIComponent(runId)}/merge`;
+  const res = await request(path, { method: "POST" });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to execute PR merge (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function verifyRunTelemetry(
+  runId: string,
+  simulateRegression: boolean = false,
+  simulatedErrorRate?: number
+): Promise<any> {
+  const path = `repair/runs/${encodeURIComponent(runId)}/verify-telemetry`;
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify({
+      simulate_regression: simulateRegression,
+      simulated_error_rate: simulatedErrorRate,
+    }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to verify telemetry (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function executeRunRollback(runId: string, reason?: string): Promise<any> {
+  const path = `repair/runs/${encodeURIComponent(runId)}/rollback`;
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason || "Manual rollback requested" }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to trigger rollback (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function executeRunMergeRollback(runId: string): Promise<any> {
+  const path = `repair/runs/${encodeURIComponent(runId)}/merge-rollback`;
+  const res = await request(path, { method: "POST" });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to merge rollback PR (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchProjectRepairSettings(projectId: string): Promise<RepairSettings> {
+  const path = `repair/projects/${encodeURIComponent(projectId)}/settings`;
+  const res = await request(path);
+  ensureOk(res, path);
+  return await res.json();
+}
+
+export async function updateProjectRepairSettings(
+  projectId: string,
+  payload: Partial<RepairSettings> & { github_token?: string }
+): Promise<any> {
+  const path = `repair/projects/${encodeURIComponent(projectId)}/settings`;
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to update repair settings (${res.status})`);
+  }
+  return await res.json();
+}
