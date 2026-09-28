@@ -70,8 +70,6 @@ class AuraTrace:
         self.api_key = (
             api_key
             or os.getenv("AURATRACE_API_KEY")
-            or os.getenv("AUTOTRACE_API_KEY")
-            or os.getenv("AURA_MASTER_API_KEY")
             or ""
         )
         self.service_name = service_name or auto_detect_service_name()
