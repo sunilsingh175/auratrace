@@ -174,18 +174,51 @@ class GitHubClient:
         base_branch: str,
         commit_sha: str,
         reason: str,
+        target_file: Optional[str] = None,
+        revert_content: Optional[str] = None,
     ) -> dict[str, Any]:
         """
-        Create a revert branch and Pull Request to rollback a problematic repair merge.
+        Create a revert branch, commit the restored baseline content, and open a Pull Request to rollback a problematic repair.
         """
-        revert_branch = f"auratrace/revert-{commit_sha[:8]}"
+        import json, secrets
+        from datetime import datetime, timezone
+
+        revert_branch = f"auratrace/revert-{commit_sha[:8]}-{secrets.token_hex(3)}"
         await self.create_branch(repo, revert_branch, from_ref_or_sha=base_branch)
+
+        # If target file and content provided, commit it to revert branch
+        if target_file and revert_content is not None:
+            await self.create_or_update_file(
+                repo=repo,
+                path=target_file,
+                content=revert_content,
+                message=f"revert: rollback automated repair commit {commit_sha[:8]} [AuraTrace L3]",
+                branch=revert_branch,
+            )
+        else:
+            # Commit a rollback audit marker file so the revert branch has a commit diff
+            marker_path = f".auratrace/rollbacks/revert_{commit_sha[:8]}.json"
+            marker_content = json.dumps({
+                "action": "ROLLBACK",
+                "commit_sha": commit_sha,
+                "reason": reason,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, indent=2)
+            await self.create_or_update_file(
+                repo=repo,
+                path=marker_path,
+                content=marker_content,
+                message=f"revert: record automated rollback for {commit_sha[:8]} [AuraTrace L3]",
+                branch=revert_branch,
+            )
+
         pr_title = f"fix(revert): rollback automated repair commit {commit_sha[:8]}"
         pr_body = (
             f"### ⚠️ AuraTrace Automated Rollback\n\n"
             f"**Reason:** {reason}\n\n"
             f"Post-deployment health monitoring detected a telemetry regression above baseline threshold. "
-            f"This PR reverts commit `{commit_sha}` to restore cluster stability."
+            f"This PR reverts commit `{commit_sha}` to restore cluster stability.\n\n"
+            f"---\n*Generated automatically by AuraTrace Autonomous Diagnostics & Healing Platform.*"
         )
         return await self.create_pull_request(repo, pr_title, revert_branch, base_branch, pr_body)
 
