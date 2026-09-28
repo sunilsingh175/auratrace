@@ -21,7 +21,17 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from pgvector.sqlalchemy import Vector
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    from sqlalchemy.types import UserDefinedType
+
+    class Vector(UserDefinedType):  # type: ignore
+        def __init__(self, dim=None):
+            self.dim = dim
+
+        def get_col_spec(self, **kw):
+            return f"vector({self.dim})" if self.dim else "vector"
 
 
 # ============================================================
@@ -102,6 +112,12 @@ class Project(Base):
 
     services: Mapped[list["Service"]] = relationship(
         back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+    repair_settings: Mapped[Optional["RepairSettings"]] = relationship(
+        back_populates="project",
+        uselist=False,
         cascade="all, delete-orphan",
     )
 
@@ -493,6 +509,170 @@ class HistoricalFix(Base):
     service: Mapped[Optional["Service"]] = relationship(
         back_populates="historical_fixes",
     )
+
+
+# ============================================================
+# L3 REPAIR SETTINGS & RUNS
+# ============================================================
+
+class RepairSettings(Base):
+    __tablename__ = "repair_settings"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    github_repo: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    base_branch: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="main",
+    )
+
+    encrypted_github_token: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    test_command: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="pytest",
+    )
+
+    auto_repair_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    auto_merge_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    regression_error_rate_threshold: Mapped[float] = mapped_column(
+        Double,
+        nullable=False,
+        default=0.05,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    project: Mapped["Project"] = relationship(
+        back_populates="repair_settings",
+    )
+
+
+class RepairRun(Base):
+    __tablename__ = "repair_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("incidents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="PENDING",
+        index=True,
+    )
+
+    branch_name: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    pr_number: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    pr_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    rollback_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="NONE",
+    )
+
+    safety_result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=dict,
+    )
+
+    sandbox_result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=dict,
+    )
+
+    ci_result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=dict,
+    )
+
+    logs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+    )
+
+    error_message: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    incident: Mapped["Incident"] = relationship()
+    project: Mapped["Project"] = relationship()
 
 
 # Backward-compatibility alias

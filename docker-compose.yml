@@ -20,6 +20,7 @@ services:
       - ./database/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - ./database/02-seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
       - ./database/03-service-ownership.sql:/docker-entrypoint-initdb.d/03-service-ownership.sql:ro
+      - ./database/04-l3-repair.sql:/docker-entrypoint-initdb.d/04-l3-repair.sql:ro
 
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
