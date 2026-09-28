@@ -34,6 +34,20 @@ CREATE TABLE IF NOT EXISTS repair_runs (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Upgrade existing schemas if migrating from legacy structures
+ALTER TABLE repair_runs DROP CONSTRAINT IF EXISTS repair_runs_status_check;
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE CASCADE;
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS branch_name VARCHAR(255);
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS pr_number INTEGER;
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS pr_url TEXT;
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS rollback_status VARCHAR(50) NOT NULL DEFAULT 'NONE';
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS safety_result JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS sandbox_result JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS ci_result JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS logs JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS error_message TEXT;
+ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
 CREATE INDEX IF NOT EXISTS repair_runs_incident_idx ON repair_runs (incident_id);
 CREATE INDEX IF NOT EXISTS repair_runs_project_idx ON repair_runs (project_id);
 CREATE INDEX IF NOT EXISTS repair_runs_status_idx ON repair_runs (status);
