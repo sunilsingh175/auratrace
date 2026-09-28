@@ -388,7 +388,7 @@ class RepairOrchestrator:
                 return {"status": "FAILED", "run_id": str(run_id), "error": r.error_message}
 
             gh_client = GitHubClient(token=raw_token)
-            repo_name = settings.github_repo
+            repo_name = str(settings.github_repo)
             base_branch = settings.base_branch or "main"
             branch_name = f"auratrace/repair/{str(incident_id)[:8]}-{secrets.token_hex(4)}"
 
@@ -636,16 +636,17 @@ class RepairOrchestrator:
 
             settings_res = await session.execute(select(RepairSettings).where(RepairSettings.project_id == run.project_id))
             settings = settings_res.scalar_one_or_none()
-            if not settings or not settings.encrypted_github_token:
-                raise ValueError("Project repair settings / token not configured.")
+            if not settings or not settings.encrypted_github_token or not settings.github_repo:
+                raise ValueError("Project repair settings / GitHub token / repository not configured.")
 
+            repo_name = str(settings.github_repo)
             raw_token = decrypt_secret(settings.encrypted_github_token)
             gh_client = GitHubClient(token=raw_token)
 
             await self._append_log(session, run_id, "MERGE", f"Executing manual approval merge for PR #{run.pr_number}...")
 
             merge_res = await gh_client.merge_pull_request(
-                repo=settings.github_repo,
+                repo=repo_name,
                 pull_number=run.pr_number,
                 commit_title=f"Merge approved autofix PR #{run.pr_number} [AuraTrace L3]",
                 merge_method="squash",
@@ -812,9 +813,10 @@ class RepairOrchestrator:
 
             settings_res = await session.execute(select(RepairSettings).where(RepairSettings.project_id == run.project_id))
             settings = settings_res.scalar_one_or_none()
-            if not settings or not settings.encrypted_github_token:
-                raise ValueError("Project repair settings / token not configured.")
+            if not settings or not settings.encrypted_github_token or not settings.github_repo:
+                raise ValueError("Project repair settings / GitHub token / repository not configured.")
 
+            repo_name = str(settings.github_repo)
             raw_token = decrypt_secret(settings.encrypted_github_token)
             gh_client = GitHubClient(token=raw_token)
 
@@ -822,7 +824,7 @@ class RepairOrchestrator:
             await self._append_log(session, run_id, "ROLLBACK", f"Initiating automated rollback for commit '{commit_to_revert}'...")
 
             revert_pr = await gh_client.create_revert_pr(
-                repo=settings.github_repo,
+                repo=repo_name,
                 base_branch=settings.base_branch or "main",
                 commit_sha=commit_to_revert,
                 reason=clean_reason,
@@ -874,16 +876,17 @@ class RepairOrchestrator:
 
             settings_res = await session.execute(select(RepairSettings).where(RepairSettings.project_id == run.project_id))
             settings = settings_res.scalar_one_or_none()
-            if not settings or not settings.encrypted_github_token:
-                raise ValueError("Project repair settings / token not configured.")
+            if not settings or not settings.encrypted_github_token or not settings.github_repo:
+                raise ValueError("Project repair settings / GitHub token / repository not configured.")
 
+            repo_name = str(settings.github_repo)
             raw_token = decrypt_secret(settings.encrypted_github_token)
             gh_client = GitHubClient(token=raw_token)
 
             await self._append_log(session, run_id, "ROLLBACK_MERGE", f"Executing merge for Revert PR #{run.revert_pr_number}...")
 
             merge_res = await gh_client.merge_pull_request(
-                repo=settings.github_repo,
+                repo=repo_name,
                 pull_number=run.revert_pr_number,
                 commit_title=f"Merge revert PR #{run.revert_pr_number} [AuraTrace L3 Rollback]",
                 merge_method="squash",
