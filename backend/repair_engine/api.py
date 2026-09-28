@@ -24,12 +24,14 @@ from backend.repair_engine.orchestrator import RepairOrchestrator
 from backend.repair_engine.rollback import validate_rollback_reason
 from backend.repair_engine.safety import inspect_patch
 from backend.repair_engine.sandbox import async_run_sandbox_test
+from backend.ingestion_service.auth import get_current_user
 from backend.shared.database import (
     AsyncSessionLocal,
     Incident,
     Project,
     RepairRun,
     RepairSettings,
+    Service,
     get_db,
 )
 
@@ -48,6 +50,54 @@ _orchestrator = RepairOrchestrator(
     redis_client=_redis,
     anomaly_channel=REDIS_ANOMALY_CHANNEL,
 )
+
+
+async def _require_project_access(
+    project_id: uuid.UUID,
+    user: dict,
+    db: AsyncSession,
+) -> Project:
+    """Require an authenticated user to own the project or be an admin."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    if user.get("role") != "Admin" and project.owner_id != uuid.UUID(str(user["id"])):
+        raise HTTPException(status_code=403, detail="Project access denied.")
+    return project
+
+
+async def _require_incident_access(
+    incident_id: uuid.UUID,
+    user: dict,
+    db: AsyncSession,
+) -> Incident:
+    """Load an incident and enforce access through its owning project."""
+    result = await db.execute(
+        select(Incident, Service.project_id)
+        .join(Service, Service.id == Incident.service_id)
+        .where(Incident.id == incident_id)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Incident not found.")
+    incident, project_id = row
+    if project_id is None:
+        raise HTTPException(status_code=403, detail="Incident is not associated with a project.")
+    await _require_project_access(project_id, user, db)
+    return incident
+
+
+async def _require_run_access(
+    run_id: uuid.UUID,
+    user: dict,
+    db: AsyncSession,
+) -> RepairRun:
+    """Load a repair run and enforce access through its owning project."""
+    run = await db.get(RepairRun, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Repair run not found.")
+    await _require_project_access(run.project_id, user, db)
+    return run
 
 
 # ============================================================
@@ -120,6 +170,7 @@ async def repair_health_check() -> dict[str, str]:
 @router.get("/projects/{project_id}/settings")
 async def get_project_repair_settings(
     project_id: str,
+    user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Retrieve repair and deployment automation settings for a project."""
@@ -128,6 +179,7 @@ async def get_project_repair_settings(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project UUID format.")
 
+    await _require_project_access(p_uuid, user, db)
     res = await db.execute(select(RepairSettings).where(RepairSettings.project_id == p_uuid))
     settings = res.scalar_one_or_none()
 
@@ -170,6 +222,7 @@ async def get_project_repair_settings(
 async def update_project_repair_settings(
     project_id: str,
     payload: RepairSettingsUpdatePayload,
+    user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Configure repository, token, test command, and automation policies for a project."""
@@ -178,6 +231,7 @@ async def update_project_repair_settings(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project UUID format.")
 
+    await _require_project_access(p_uuid, user, db)
     res = await db.execute(select(RepairSettings).where(RepairSettings.project_id == p_uuid))
     settings = res.scalar_one_or_none()
 
@@ -216,7 +270,10 @@ async def update_project_repair_settings(
 
 
 @router.post("/safety-check")
-async def check_patch_safety(payload: SafetyCheckPayload) -> dict[str, Any]:
+async def check_patch_safety(
+    payload: SafetyCheckPayload,
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
     """Test unified diff against AuraTrace Safety Gate rules."""
     result = inspect_patch(payload.patch, payload.target_files)
     return {
@@ -228,7 +285,10 @@ async def check_patch_safety(payload: SafetyCheckPayload) -> dict[str, Any]:
 
 
 @router.post("/sandbox-test")
-async def check_sandbox_execution(payload: SandboxTestPayload) -> dict[str, Any]:
+async def check_sandbox_execution(
+    payload: SandboxTestPayload,
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
     """Execute unified diff in isolated local sandbox repository."""
     result = await async_run_sandbox_test(
         repo_dir=payload.repo_dir,
@@ -244,6 +304,7 @@ async def check_sandbox_execution(payload: SandboxTestPayload) -> dict[str, Any]
 async def trigger_automated_repair(
     incident_id: str,
     payload: Optional[TriggerRepairPayload] = None,
+    user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
@@ -255,10 +316,7 @@ async def trigger_automated_repair(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid incident UUID format.")
 
-    res = await db.execute(select(Incident).where(Incident.id == inc_uuid))
-    incident = res.scalar_one_or_none()
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found.")
+    incident = await _require_incident_access(inc_uuid, user, db)
 
     if not incident.suggested_patch:
         raise HTTPException(
@@ -284,6 +342,7 @@ async def trigger_automated_repair(
 @router.get("/runs/{run_id}")
 async def get_repair_run_status(
     run_id: str,
+    user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Retrieve current status, logs, and outputs of a specific repair run."""
@@ -292,10 +351,7 @@ async def get_repair_run_status(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid run UUID format.")
 
-    res = await db.execute(select(RepairRun).where(RepairRun.id == r_uuid))
-    run = res.scalar_one_or_none()
-    if not run:
-        raise HTTPException(status_code=404, detail="Repair run not found.")
+    run = await _require_run_access(r_uuid, user, db)
 
     return {
         "id": str(run.id),
@@ -327,6 +383,7 @@ async def get_repair_run_status(
 @router.get("/runs/incident/{incident_id}")
 async def get_repair_runs_for_incident(
     incident_id: str,
+    user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """List all repair runs associated with a specific incident."""
@@ -334,6 +391,8 @@ async def get_repair_runs_for_incident(
         inc_uuid = uuid.UUID(incident_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid incident UUID format.")
+
+    await _require_incident_access(inc_uuid, user, db)
 
     res = await db.execute(
         select(RepairRun)
@@ -368,12 +427,16 @@ async def get_repair_runs_for_incident(
 @router.post("/runs/{run_id}/merge")
 async def execute_run_merge(
     run_id: str,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Execute human-approved controlled merge of the repair Pull Request."""
     try:
         r_uuid = uuid.UUID(run_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid run UUID format.")
+
+    await _require_run_access(r_uuid, user, db)
 
     try:
         return await _orchestrator.merge_repair_run(r_uuid)
@@ -388,6 +451,8 @@ async def execute_run_merge(
 async def verify_run_post_deploy_telemetry(
     run_id: str,
     payload: Optional[VerifyTelemetryPayload] = None,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Evaluate pre- vs post-deployment telemetry health metrics.
@@ -397,6 +462,8 @@ async def verify_run_post_deploy_telemetry(
         r_uuid = uuid.UUID(run_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid run UUID format.")
+
+    await _require_run_access(r_uuid, user, db)
 
     p = payload or VerifyTelemetryPayload()
     try:
@@ -418,12 +485,16 @@ async def verify_run_post_deploy_telemetry(
 async def trigger_run_rollback(
     run_id: str,
     payload: Optional[RollbackPayload] = None,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Trigger an automated rollback / revert PR for a previously merged repair run."""
     try:
         r_uuid = uuid.UUID(run_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid run UUID format.")
+
+    await _require_run_access(r_uuid, user, db)
 
     p = payload or RollbackPayload()
     try:
@@ -438,12 +509,16 @@ async def trigger_run_rollback(
 @router.post("/runs/{run_id}/merge-rollback")
 async def execute_run_merge_rollback(
     run_id: str,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Execute merge of the automated revert / rollback Pull Request."""
     try:
         r_uuid = uuid.UUID(run_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid run UUID format.")
+
+    await _require_run_access(r_uuid, user, db)
 
     try:
         return await _orchestrator.merge_rollback_run(r_uuid)
