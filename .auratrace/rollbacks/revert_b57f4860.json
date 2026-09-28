@@ -1,0 +1,6 @@
+{
+  "action": "ROLLBACK",
+  "commit_sha": "b57f48603460fa6c44ac56f59985487c622fe3cc",
+  "reason": "Post-deployment telemetry regression: error rate rose from 0.00 to 18.00 (Threshold: 5.00)",
+  "timestamp": "2026-09-28T08:11:17.900754+00:00"
+}
