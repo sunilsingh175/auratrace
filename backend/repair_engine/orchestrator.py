@@ -770,20 +770,25 @@ class RepairOrchestrator:
                 }
             else:
                 run.post_deploy_status = "HEALTHY"
+                if run.status in ("ROLLED_BACK", "REGRESSION_DETECTED") or run.rollback_status in ("REVERT_PR_CREATED", "REVERT_MERGED"):
+                    run.status = "ROLLBACK_COMPLETED"
+                    run.rollback_status = "COMPLETED"
                 await session.commit()
                 await self._append_log(
                     session,
                     run_id,
                     "POST_DEPLOY",
-                    f"Post-deployment telemetry verified healthy. Error rate: {post_rate:.2%} (Baseline: {baseline_rate:.2%})",
+                    f"Post-deployment telemetry verified healthy. Error rate: {post_rate:.2%} (Baseline: {baseline_rate:.2%}). System state stable.",
                     data={
                         "baseline_error_rate": baseline_rate,
                         "post_repair_error_rate": post_rate,
                         "threshold": threshold,
+                        "status": run.status,
                     },
                 )
                 return {
-                    "status": "HEALTHY",
+                    "status": run.status,
+                    "post_deploy_status": "HEALTHY",
                     "run_id": str(run_id),
                     "baseline_error_rate": baseline_rate,
                     "post_repair_error_rate": post_rate,
@@ -853,3 +858,59 @@ class RepairOrchestrator:
             "revert_pr_url": run.revert_pr_url,
             "reason": clean_reason,
         }
+
+    async def merge_rollback_run(self, run_id: uuid.UUID) -> dict[str, Any]:
+        """
+        Execute merge of the revert Pull Request created during rollback.
+        """
+        async with self.session_maker() as session:
+            run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
+            run = run_res.scalar_one_or_none()
+            if not run:
+                raise ValueError(f"Repair run '{run_id}' not found.")
+
+            if not run.revert_pr_number:
+                raise ValueError("No Revert Pull Request is associated with this repair run.")
+
+            settings_res = await session.execute(select(RepairSettings).where(RepairSettings.project_id == run.project_id))
+            settings = settings_res.scalar_one_or_none()
+            if not settings or not settings.encrypted_github_token:
+                raise ValueError("Project repair settings / token not configured.")
+
+            raw_token = decrypt_secret(settings.encrypted_github_token)
+            gh_client = GitHubClient(token=raw_token)
+
+            await self._append_log(session, run_id, "ROLLBACK_MERGE", f"Executing merge for Revert PR #{run.revert_pr_number}...")
+
+            merge_res = await gh_client.merge_pull_request(
+                repo=settings.github_repo,
+                pull_number=run.revert_pr_number,
+                commit_title=f"Merge revert PR #{run.revert_pr_number} [AuraTrace L3 Rollback]",
+                merge_method="squash",
+            )
+            merged_sha = merge_res.get("sha")
+
+            run.rollback_status = "REVERT_MERGED"
+            await session.commit()
+
+            await self._append_log(
+                session,
+                run_id,
+                "ROLLBACK_MERGE",
+                f"Revert PR #{run.revert_pr_number} merged successfully. Commit SHA: {merged_sha}",
+                data=merge_res,
+            )
+
+        await self._broadcast_event("REPAIR_ROLLBACK_MERGED", {
+            "run_id": str(run_id),
+            "revert_pr_number": run.revert_pr_number,
+            "merge_commit_sha": merged_sha,
+        })
+
+        return {
+            "status": "REVERT_MERGED",
+            "run_id": str(run_id),
+            "revert_pr_number": run.revert_pr_number,
+            "merge_commit_sha": merged_sha,
+        }
+

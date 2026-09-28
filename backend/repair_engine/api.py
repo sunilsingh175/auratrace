@@ -433,3 +433,23 @@ async def trigger_run_rollback(
     except Exception as exc:
         logger.error(f"Failed to execute rollback: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Rollback execution failed: {exc}")
+
+
+@router.post("/runs/{run_id}/merge-rollback")
+async def execute_run_merge_rollback(
+    run_id: str,
+) -> dict[str, Any]:
+    """Execute merge of the automated revert / rollback Pull Request."""
+    try:
+        r_uuid = uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid run UUID format.")
+
+    try:
+        return await _orchestrator.merge_rollback_run(r_uuid)
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    except Exception as exc:
+        logger.error(f"Failed to execute revert PR merge: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Revert merge execution failed: {exc}")
+
