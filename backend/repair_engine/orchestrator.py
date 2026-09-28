@@ -36,6 +36,29 @@ from backend.shared.database import Incident, Project, RepairRun, RepairSettings
 logger = logging.getLogger("auratrace.repair.orchestrator")
 
 
+def apply_patch_to_text(original_text: str, file_path: str, patch_str: str) -> Optional[str]:
+    """Applies a unified diff patch to a source file string in an isolated temp directory using git apply."""
+    import tempfile, subprocess, os
+    with tempfile.TemporaryDirectory() as td:
+        full_path = os.path.join(td, file_path)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, "w", encoding="utf-8") as f:
+            f.write(original_text)
+        patch_file = os.path.join(td, "patch.diff")
+        with open(patch_file, "w", encoding="utf-8") as pf:
+            pf.write(patch_str)
+        proc = subprocess.run(
+            ["git", "apply", "--ignore-whitespace", "patch.diff"],
+            cwd=td,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0 and os.path.exists(full_path):
+            with open(full_path, "r", encoding="utf-8") as f:
+                return f.read()
+    return None
+
+
 class RepairOrchestrator:
     """Orchestrates L3 automated repair workflows with multi-stage verification gates."""
 
@@ -311,14 +334,24 @@ class RepairOrchestrator:
             target_files = safety_result.target_files or ()
             for target_file in target_files:
                 try:
-                    # In a full flow, apply patch to file content and commit
-                    # For simplicity, if we have the file or full updated content, update via GitHub API
                     commit_msg = f"fix(autofix): automated patch for incident {str(incident_id)[:8]} [AuraTrace L3]"
-                    # Attempt fetching existing content and applying diff
-                    # We commit an update record to the repair branch
-                    pass
+                    current_content, current_sha = await gh_client.get_file(repo_name, target_file, ref=branch_name)
+                    updated_content = apply_patch_to_text(current_content, target_file, suggested_patch)
+                    if updated_content is not None and updated_content != current_content:
+                        await gh_client.create_or_update_file(
+                            repo=repo_name,
+                            path=target_file,
+                            content=updated_content,
+                            message=commit_msg,
+                            branch=branch_name,
+                            sha=current_sha,
+                        )
+                        async with self.session_maker() as session:
+                            await self._append_log(session, run_id, "GITHUB", f"Applied and committed patch to '{target_file}' on branch '{branch_name}'.")
                 except Exception as commit_err:
-                    logger.warning(f"File commit note: {commit_err}")
+                    logger.warning(f"File commit note for '{target_file}': {commit_err}")
+                    async with self.session_maker() as session:
+                        await self._append_log(session, run_id, "GITHUB", f"Commit note for '{target_file}': {commit_err}", level="WARN")
 
             # ----------------------------------------------------
             # STAGE 5: PULL REQUEST CREATION
