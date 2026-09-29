@@ -1,6 +1,9 @@
 /**
- * AuraTrace Node.js SDK
- * Zero-configuration telemetry, automatic service discovery, and AI root cause capture.
+ * AuraTrace Node.js SDK.
+ *
+ * Importing this module automatically starts the crash-capture client. Application
+ * code does not need to call init(), captureException(), or register middleware
+ * for unhandled process failures.
  */
 
 import fs from "node:fs";
@@ -43,10 +46,7 @@ function autoDetectServiceMetadata(): { serviceName: string; version: string; en
     }
   }
 
-  if (!serviceName) {
-    serviceName = path.basename(process.cwd()) || "node-service";
-  }
-
+  if (!serviceName) serviceName = path.basename(process.cwd()) || "node-service";
   return { serviceName, version, environment };
 }
 
@@ -55,6 +55,7 @@ export class AuraTraceClient {
   public serviceName: string;
   public environment: string;
   public version: string;
+  private static activeHandlerClient: AuraTraceClient | null = null;
 
   constructor(options: AuraTraceInitOptions = {}) {
     const detected = autoDetectServiceMetadata();
@@ -67,84 +68,72 @@ export class AuraTraceClient {
     const endpoint = options.endpoint || process.env.AURATRACE_ENDPOINT || process.env.AUTOTRACE_ENDPOINT || "http://localhost:8000";
 
     this.transporter = new BatchTransporter({
-      apiKey,
-      projectKey,
-      endpoint,
-      serviceId: this.serviceName,
-      serviceName: this.serviceName,
-      runtime: "node",
-      environment: this.environment,
-      version: this.version,
+      apiKey, projectKey, endpoint,
+      serviceId: this.serviceName, serviceName: this.serviceName,
+      runtime: "node", environment: this.environment, version: this.version,
     });
 
-    if (options.installGlobalHandlers !== false) {
-      this.installGlobalErrorHandlers();
-    }
+    if (options.installGlobalHandlers !== false) this.installGlobalErrorHandlers();
   }
 
   private installGlobalErrorHandlers() {
-    if (typeof process !== "undefined" && process.on) {
-      process.on("uncaughtException", (error: Error) => {
-        void this.captureException(error, { unhandled: true, mechanism: "uncaughtException" });
-      });
+    const previous = AuraTraceClient.activeHandlerClient;
+    if (previous) previous.removeGlobalErrorHandlers();
 
-      process.on("unhandledRejection", (reason: any) => {
-        const err = reason instanceof Error ? reason : new Error(String(reason));
-        void this.captureException(err, { unhandled: true, mechanism: "unhandledRejection" });
-      });
-    }
+    process.on("uncaughtException", this.handleUncaughtException);
+    process.on("unhandledRejection", this.handleUnhandledRejection);
+    AuraTraceClient.activeHandlerClient = this;
+  }
+
+  private readonly handleUncaughtException = (error: Error) => {
+    void this.captureException(error, { unhandled: true, mechanism: "uncaughtException" });
+  };
+
+  private readonly handleUnhandledRejection = (reason: any) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    void this.captureException(err, { unhandled: true, mechanism: "unhandledRejection" });
+  };
+
+  private removeGlobalErrorHandlers() {
+    process.removeListener("uncaughtException", this.handleUncaughtException);
+    process.removeListener("unhandledRejection", this.handleUnhandledRejection);
+    if (AuraTraceClient.activeHandlerClient === this) AuraTraceClient.activeHandlerClient = null;
   }
 
   async captureMessage(message: string, metadata?: Record<string, any>) {
-    const level = metadata?.level || "INFO";
-    const statusCode = metadata?.status_code || metadata?.statusCode || 200;
-    const latencyMs = metadata?.latency_ms || metadata?.latencyMs || 0;
-
     return await this.transporter.send({
       message,
-      level,
-      status_code: statusCode,
-      latency_ms: latencyMs,
+      level: metadata?.level || "INFO",
+      status_code: metadata?.status_code || metadata?.statusCode || 200,
+      latency_ms: metadata?.latency_ms || metadata?.latencyMs || 0,
       metadata,
     });
   }
 
   async captureException(error: Error, metadata?: Record<string, any>) {
-    const statusCode = metadata?.status_code || metadata?.statusCode || 500;
-    const latencyMs = metadata?.latency_ms || metadata?.latencyMs || 0;
-    const errorType = metadata?.error_type || error.name || "Error";
-
     return await this.transporter.send({
       level: "ERROR",
-      error_type: errorType,
+      error_type: metadata?.error_type || error.name || "Error",
       message: error.message || "Unhandled exception",
       stack_trace: error.stack || "",
       raw_stack_trace: error.stack || "",
-      status_code: statusCode,
-      latency_ms: latencyMs,
+      status_code: metadata?.status_code || metadata?.statusCode || 500,
+      latency_ms: metadata?.latency_ms || metadata?.latencyMs || 0,
       metadata,
     });
   }
 
-  /**
-   * Express / Connect middleware for automatic error capture & telemetry
-   */
   errorHandler() {
     return (err: any, req: any, res: any, next: any) => {
       const errorObj = err instanceof Error ? err : new Error(String(err));
       void this.captureException(errorObj, {
-        method: req?.method,
-        url: req?.originalUrl || req?.url,
-        headers: req?.headers,
-        ip: req?.ip,
+        method: req?.method, url: req?.originalUrl || req?.url,
+        headers: req?.headers, ip: req?.ip,
       });
       next(err);
     };
   }
 
-  /**
-   * Express / Connect middleware to trace latency & status codes
-   */
   requestHandler() {
     return (req: any, res: any, next: any) => {
       const start = Date.now();
@@ -154,12 +143,8 @@ export class AuraTraceClient {
           void this.transporter.send({
             level: res.statusCode >= 500 ? "ERROR" : "WARN",
             message: `${req.method} ${req.originalUrl || req.url} -> ${res.statusCode}`,
-            status_code: res.statusCode,
-            latency_ms: duration,
-            metadata: {
-              route: req.route?.path || req.url,
-              method: req.method,
-            },
+            status_code: res.statusCode, latency_ms: duration,
+            metadata: { route: req.route?.path || req.url, method: req.method },
           });
         }
       });
@@ -168,7 +153,6 @@ export class AuraTraceClient {
   }
 }
 
-// Global Singleton Instance
 let defaultClient: AuraTraceClient | null = null;
 
 export const AuraTrace = {
@@ -176,37 +160,34 @@ export const AuraTrace = {
     defaultClient = new AuraTraceClient(options);
     return defaultClient;
   },
-
   captureMessage(message: string, metadata?: Record<string, any>) {
     if (!defaultClient) AuraTrace.init();
     return defaultClient!.captureMessage(message, metadata);
   },
-
   captureException(error: Error, metadata?: Record<string, any>) {
     if (!defaultClient) AuraTrace.init();
     return defaultClient!.captureException(error, metadata);
   },
-
   errorHandler() {
     if (!defaultClient) AuraTrace.init();
     return defaultClient!.errorHandler();
   },
-
   requestHandler() {
     if (!defaultClient) AuraTrace.init();
     return defaultClient!.requestHandler();
   },
-
   getClient(): AuraTraceClient {
     if (!defaultClient) AuraTrace.init();
     return defaultClient!;
   },
 };
 
-// Aliases for backward compatibility
 export const AutoTrace = AuraTrace;
 export const AutoTraceClient = AuraTraceClient;
 export const Trace = AuraTrace;
 export const AutomaticBackendDetection = AuraTrace;
 
 export { BatchTransporter, type TransporterConfig, type TelemetryPayload };
+
+// Zero-code mode: importing the package installs crash handlers automatically.
+defaultClient = new AuraTraceClient();
