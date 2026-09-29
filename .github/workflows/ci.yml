@@ -54,6 +54,10 @@ jobs:
         working-directory: sdk/nodejs
         run: npm test
 
+      - name: Verify package contents
+        working-directory: sdk/nodejs
+        run: npm run pack:check
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
