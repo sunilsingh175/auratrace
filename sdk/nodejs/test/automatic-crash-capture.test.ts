@@ -1,57 +1,42 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { AuraTrace, AuraTraceClient } from "../index.js";
+import { AuraTrace } from "../src/client.js";
+import { uninstallGlobalHooks } from "../src/hooks.js";
 
-test("package import installs an uncaught exception handler", () => {
-  assert.ok(
-    process.listenerCount("uncaughtException") > 0,
-    "AuraTrace should install an uncaughtException handler on import",
-  );
-  assert.ok(
-    process.listenerCount("unhandledRejection") > 0,
-    "AuraTrace should install an unhandledRejection handler on import",
-  );
-});
+async function testAutomaticCrashCapture() {
+  console.log("Testing Node SDK automatic crash capture hooks...");
+  uninstallGlobalHooks();
 
-test("client captures exceptions without requiring network access", async () => {
-  const client = new AuraTraceClient({
-    apiKey: "test-key",
-    endpoint: "http://127.0.0.1:9",
-    serviceName: "sdk-test",
-    environment: "test",
-    installGlobalHandlers: false,
+  let capturedEvent: any = null;
+  const client = new AuraTrace({
+    apiKey: "test_key_123",
+    serviceName: "checkout-worker",
+    installGlobalHandlers: true,
   });
 
-  const payloads: unknown[] = [];
-  client.transporter.send = async (payload) => {
-    payloads.push(payload);
-    return { accepted: true };
+  // Override transport enqueue
+  client.transport.enqueue = (event: any) => {
+    capturedEvent = event;
+    return true;
   };
 
-  await client.captureException(new Error("synthetic failure"), {
-    status_code: 500,
-  });
+  // Simulate uncaught exception emit
+  const testError = new TypeError("Cannot read property 'price' of undefined");
+  process.emit("uncaughtException", testError);
 
-  assert.equal(payloads.length, 1);
-  const payload = payloads[0] as Record<string, unknown>;
-  assert.equal(payload.error_type, "Error");
-  assert.equal(payload.message, "synthetic failure");
-  assert.equal(payload.status_code, 500);
-  assert.equal(payload.service_id, "sdk-test");
-});
+  await new Promise((r) => setTimeout(r, 50));
 
-test("default client remains available for explicit APIs", async () => {
-  const client = AuraTrace.getClient();
-  assert.ok(client instanceof AuraTraceClient);
+  assert.ok(capturedEvent, "Event should have been captured by global hook");
+  assert.equal(capturedEvent.service_name, "checkout-worker");
+  assert.equal(capturedEvent.error_type, "TypeError");
+  assert.equal(capturedEvent.error_message, "Cannot read property 'price' of undefined");
+  assert.equal(capturedEvent.level, "CRITICAL");
+  assert.equal(capturedEvent.metadata.hook, "uncaughtException");
 
-  const payloads: unknown[] = [];
-  client.transporter.send = async (payload) => {
-    payloads.push(payload);
-    return { accepted: true };
-  };
+  await client.close();
+  console.log("✓ Automatic crash capture test passed.");
+}
 
-  await AuraTrace.captureMessage("sdk smoke test", { level: "INFO" });
-
-  assert.equal(payloads.length, 1);
-  assert.equal((payloads[0] as Record<string, unknown>).message, "sdk smoke test");
+testAutomaticCrashCapture().catch((err) => {
+  console.error("Test failed:", err);
+  process.exit(1);
 });
