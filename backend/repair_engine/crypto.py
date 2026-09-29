@@ -31,8 +31,16 @@ def get_encryption_key() -> bytes:
         except Exception as exc:
             logger.warning(f"Invalid AURATRACE_REPAIR_ENCRYPTION_KEY provided: {exc}. Generating derived fallback.")
 
-    # Fallback key derivation from AURA_AUTH_SECRET or default secret
-    secret = os.getenv("AURA_AUTH_SECRET", "auratrace_default_repair_key_32bytes_fallback").strip()
+    # Fallback key derivation from AURA_AUTH_SECRET or dynamic process entropy
+    secret = os.getenv("AURA_AUTH_SECRET", "").strip()
+    if not secret:
+        logger.warning("Neither AURATRACE_REPAIR_ENCRYPTION_KEY nor AURA_AUTH_SECRET is set. Using process-local ephemeral key.")
+        secret = os.getenv("AURA_AUTH_EPHEMERAL_KEY", "")
+        if not secret:
+            import secrets as sec
+            secret = sec.token_hex(32)
+            os.environ["AURA_AUTH_EPHEMERAL_KEY"] = secret
+
     import hashlib
     digest = hashlib.sha256(secret.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(digest)

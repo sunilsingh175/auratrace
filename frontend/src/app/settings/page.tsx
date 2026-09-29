@@ -539,7 +539,7 @@ function ProfileSettingsContent() {
                 placeholder={repairSettings?.has_token ? "•••••••••••••••• (Leave blank to keep existing token)" : "Enter GitHub Personal Access Token"}
                 className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2 text-xs font-mono text-slate-900 outline-none transition focus:border-red-500 focus:bg-white"
               />
-              <span className="text-[10px] text-slate-400 mt-1 block">Encrypted at rest using AES-256 Fernet tokens</span>
+              <span className="text-[10px] text-slate-400 mt-1 block">GitHub credentials are encrypted at rest using Fernet symmetric encryption</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">

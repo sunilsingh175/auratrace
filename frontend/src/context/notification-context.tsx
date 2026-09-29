@@ -87,9 +87,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = process.env.NEXT_PUBLIC_WS_HOST || window.location.hostname;
     const port = process.env.NEXT_PUBLIC_WS_PORT || "8000";
+    const token = typeof window !== "undefined" ? sessionStorage.getItem("trace_access_token_v1") : null;
+    const savedProjectId = typeof window !== "undefined" ? localStorage.getItem("auratrace_active_project_id_v1") : null;
+
+    const query = new URLSearchParams();
+    if (token) query.set("token", token);
+    if (savedProjectId) query.set("project_id", savedProjectId);
+    const queryString = query.toString() ? `?${query.toString()}` : "";
+
     const wsUrl =
-      process.env.NEXT_PUBLIC_WS_URL ||
-      `${protocol}//${host}:${port}/ws/telemetry`;
+      process.env.NEXT_PUBLIC_WS_URL
+        ? `${process.env.NEXT_PUBLIC_WS_URL.split("?")[0]}${queryString}`
+        : `${protocol}//${host}:${port}/ws/telemetry${queryString}`;
 
     try {
       const ws = new WebSocket(wsUrl);

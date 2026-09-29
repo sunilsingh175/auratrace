@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
 import { AuthProvider } from "@/context/auth-context";
+import { ProjectProvider } from "@/context/project-context";
 import { NotificationProvider } from "@/context/notification-context";
 
 export const metadata: Metadata = {
@@ -23,9 +24,12 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans antialiased selection:bg-red-500/20 selection:text-red-900">
         <AuthProvider>
-          <NotificationProvider>{children}</NotificationProvider>
+          <ProjectProvider>
+            <NotificationProvider>{children}</NotificationProvider>
+          </ProjectProvider>
         </AuthProvider>
       </body>
     </html>
   );
 }
+

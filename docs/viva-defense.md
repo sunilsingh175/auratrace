@@ -14,9 +14,10 @@
 
 ### Q2: Why choose Isolation Forest over supervised classifiers or deep learning (e.g., Autoencoders, LSTM)?
 **Answer:**
-- **Unsupervised Anomaly Isolation:** In real-world software crashes, failure modes are novel and unlabelled. Supervised classifiers fail on "zero-day" or unobserved crash patterns.
+- **Unsupervised Anomaly Isolation:** In real-world software crashes, failure modes are novel and unlabelled. The Isolation Forest learns the anomaly structure without using class labels as training targets; the known training anomaly ratio is used to configure the contamination parameter.
 - **Linear Time Complexity $O(n \cdot t \cdot \log \psi)$:** Isolation Forest recursively isolates anomalies by random axis-aligned feature splits. Anomalies have short path lengths near the root of trees. This makes inference extremely fast ($< 30\text{ ms}$) without GPU hardware.
 - **Explainability:** Tree depths map directly to anomalous feature boundaries, avoiding the opaque "black box" decisions of Deep Autoencoders.
+- **Evaluation Methodology:** Benchmark metrics (e.g., 99.96% accuracy on 2,400 unseen test samples) demonstrate precision on the modeled telemetry distribution and provide empirical validation against theLogHub HDFS baseline.
 
 ---
 
@@ -28,7 +29,7 @@ The 8 features compute real-time operational statistics over a 5-minute rolling 
 3. `error_rate` — Ratio of errors to requests ($0.0 \to 1.0$).
 4. `avg_latency_ms` — Mean service latency (detects gradual resource saturation).
 5. `max_latency_ms` — Extreme tail latency spike (detects database deadlocks/lock contention).
-6. `p95_latency_ms` — 95th percentile response time (filters out single outlier jitter).
+5. `p95_latency_ms` — 95th percentile response time (filters out single outlier jitter).
 7. `status_5xx_rate` — Ratio of severe server-side HTTP failures.
 8. `unique_error_types` — Diversity of distinct exception class names (detects cascade failures across microservices).
 
@@ -51,7 +52,7 @@ The 8 features compute real-time operational statistics over a 5-minute rolling 
 
 ### Q6: How does RAG assist the LLM (Gemini) in generating reliable repairs?
 **Answer:**
-- **Grounding with Verified Historical Context:** RAG grounds the diagnosis using the live stack trace, system metrics, and retrieved historical fixes, reducing reliance on unsupported LLM-generated solutions.
+- **Grounding with Verified Historical Context:** Gemini performs the synthesis, while the historical vector retrieval provides a grounded fallback when LLM generation is unavailable, reducing reliance on unsupported LLM-generated solutions.
 - **Context Injection:** Instead of passing an isolated stack trace in a vacuum, the RAG pipeline retrieves the top-3 most similar verified historical fixes (`historical_fixes`) using pgvector dense cosine similarity.
 - **Deterministic Diff Format:** Gemini is constrained by system prompts to return a structured JSON schema containing exact unified diff hunks rather than conversational prose.
 
@@ -69,15 +70,15 @@ The Safety Gate (`backend/repair_engine/safety.py`) evaluates the raw unified di
 ### Q8: Why is the sandbox verification step mandatory?
 **Answer:**
 - **Zero Corrupted Branches:** Generating a GitHub branch or PR with broken code creates noise, triggers wasteful CI runs, and risks broken deployments.
-- **Pre-Commit Verification:** The mandatory sandbox (`backend/repair_engine/sandbox.py`) creates an isolated temporary directory, applies the patch via `git apply`, and executes the test suite (`pytest`, `npm test`) with `shell=False`. If tests fail or syntax is invalid, the repair run is immediately rejected before touching GitHub.
+- **Pre-Commit Verification:** The mandatory sandbox (`backend/repair_engine/sandbox.py`) creates an isolated temporary directory workspace, applies the patch via `git apply`, and executes the test suite (`pytest`, `npm test`) with `shell=False`. If tests fail or syntax is invalid, the repair run is immediately rejected before touching GitHub.
 
 ---
 
-### Q9: How does AuraTrace prevent Project A from seeing Project B's private fixes?
+### Q9: How does AuraTrace enforce multi-tenant isolation across REST and WebSockets?
 **Answer:**
-- **Multi-Tenant Filter in Vector Store:** When searching for similar fixes, `vector_store.search_similar_fixes()` executes a scoped SQL filter:
-  `WHERE (project_id = :target_project_id OR is_global = TRUE)`
-- **Tenant Boundary:** Project A can only retrieve its own historical fixes or curated global fixes. It cannot query or compute embeddings against Project B's private proprietary codebase fixes.
+- **Project-Scoped Storage:** Telemetry logs, services, incidents, repair settings, and private embeddings are strictly partitioned by `project_id`.
+- **Authenticated WebSockets:** Telemetry WebSocket connections require JWT or API key verification, resolving an authorized project context and rejecting cross-tenant subscription requests. Global broadcasts do not leak project events.
+- **Vector Filter:** When searching for similar fixes, `vector_store.search_similar_fixes()` executes: `WHERE (project_id = :target_project_id OR is_global = TRUE OR project_id IS NULL)`.
 
 ---
 
@@ -98,15 +99,15 @@ The Safety Gate (`backend/repair_engine/safety.py`) evaluates the raw unified di
 
 ### Q12: How does automated rollback work?
 **Answer:**
-- **Revert Pull Request Generation:** The rollback module (`backend/repair_engine/rollback.py`) calls the GitHub API to generate an automated Revert Pull Request against the base branch targeting the merge commit SHA.
+- **Automated Rollback PR Generation:** AuraTrace automatically generates a revert pull request targeting the merge commit when post-deployment regression is detected. The revert can then be merged automatically (if `auto_merge_enabled` is true) or triaged manually according to project policy.
 - **Real-Time Alert:** Broadcasts a high-priority `REPAIR_ROLLBACK` WebSocket event to the project dashboard alerting on-call engineers with the exact root cause and revert PR link.
 
 ---
 
 ### Q13: What happens if the Gemini LLM is unavailable or times out?
 **Answer:**
-- **Failsafe Diagnosis:** The RAG worker catches API exceptions, falls back to the top-ranked pgvector historical fix summary, and sets a structured diagnosis with fallback recommendations.
-- **Non-Blocking:** The pipeline does not hang; the incident is recorded in PostgreSQL with status `DIAGNOSIS_FAILED_FALLBACK` and alerted to engineers.
+- **Failsafe Grounded Diagnosis:** The RAG worker catches API exceptions and falls back directly to the top-ranked pgvector historical fix summary.
+- **Non-Blocking:** The pipeline continues without hanging; the incident is updated in PostgreSQL with a grounded fallback diagnosis and notified to engineers.
 
 ---
 
@@ -121,3 +122,10 @@ The Safety Gate (`backend/repair_engine/safety.py`) evaluates the raw unified di
 **Answer:**
 - **Flushing Before Exit:** In Node.js, an uncaught exception leaves the application in an undefined, corrupted memory state.
 - **Interception + `process.exit(1)`:** Our hook intercepts `uncaughtException`, performs a synchronous/tight-timeout HTTP flush of the crash payload to AuraTrace, and then explicitly calls `process.exit(1)`. This ensures telemetry is delivered while guaranteeing the Node process exits with standard UNIX exit codes.
+
+---
+
+### Q16: How are third-party credentials secured?
+**Answer:**
+- **Fernet Symmetric Encryption:** GitHub Personal Access Tokens and repository credentials are encrypted at rest using Python `cryptography.fernet.Fernet` with keys dynamically derived from environment configuration. Tokens are masked when returned in API responses.
+

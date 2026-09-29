@@ -11,10 +11,12 @@ import {
 import { AppShell } from "@/components/layout/AppShell";
 import { useIncidents } from "@/hooks/use-incidents";
 import { useWebSocket, type AnomalyAlertEvent } from "@/hooks/use-websocket";
+import { useProject } from "@/context/project-context";
 import { IncidentTable } from "@/components/incidents/IncidentTable";
 
 export default function IncidentsPage() {
-  const { incidents, loading, refresh } = useIncidents(5000);
+  const { selectedProjectId } = useProject();
+  const { incidents, loading, refresh } = useIncidents(5000, selectedProjectId);
 
   const handleRealtimeAlert = useCallback(
     (alert: AnomalyAlertEvent) => {
@@ -24,7 +26,7 @@ export default function IncidentsPage() {
     [refresh]
   );
 
-  useWebSocket(handleRealtimeAlert);
+  useWebSocket(handleRealtimeAlert, selectedProjectId);
 
   const activeCount = incidents.filter(
     (i) => i.status === "OPEN" || i.status === "INVESTIGATING"

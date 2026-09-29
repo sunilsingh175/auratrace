@@ -27,6 +27,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
+import { useProject } from "@/context/project-context";
 import { useNotifications } from "@/context/notification-context";
 import { fetchSystemStats } from "@/lib/api-client";
 import { BrandLogo } from "@/components/brand/BrandLogo";
@@ -34,6 +35,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 export function Navbar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { projects, selectedProject, selectedProjectId, selectProject } = useProject();
   const {
     notifications,
     unreadCount,
@@ -48,6 +50,7 @@ export function Navbar() {
   const [serviceCount, setServiceCount] = useState<number | null>(null);
   const [openIncidentCount, setOpenIncidentCount] = useState<number | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showProjectMenu, setShowProjectMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -57,7 +60,7 @@ export function Navbar() {
 
     const loadCounts = async () => {
       try {
-        const stats = await fetchSystemStats();
+        const stats = await fetchSystemStats(selectedProjectId || undefined);
         if (!mounted) return;
         setServiceCount(stats.active_services_count);
         setOpenIncidentCount(stats.open_incidents_count);
@@ -73,7 +76,7 @@ export function Navbar() {
       mounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [selectedProjectId]);
 
   // Close dropdowns on route change
   useEffect(() => {
@@ -186,12 +189,77 @@ export function Navbar() {
 
             {/* 2. Right Controls */}
             <div className="flex items-center gap-3">
+              {/* Project Selector Dropdown */}
+              {projects.length > 0 && (
+                <div className="relative hidden sm:block">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProjectMenu(!showProjectMenu);
+                      setShowNotifications(false);
+                      setShowUserMenu(false);
+                      setShowAdminMenu(false);
+                    }}
+                    className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900 transition shadow-sm cursor-pointer"
+                  >
+                    <FolderKanban className="h-3.5 w-3.5 text-red-600" />
+                    <span className="max-w-[130px] truncate font-heading">
+                      {selectedProject?.name || "Select Project"}
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                  </button>
+
+                  {showProjectMenu && (
+                    <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-100 bg-white p-2 shadow-2xl z-50 animate-fadeIn font-sans">
+                      <div className="px-3 py-2 border-b border-slate-100">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-heading">
+                          Active Project Scope
+                        </p>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto py-1 space-y-0.5">
+                        {projects.map((proj) => (
+                          <button
+                            key={proj.id}
+                            type="button"
+                            onClick={() => {
+                              selectProject(proj.id);
+                              setShowProjectMenu(false);
+                            }}
+                            className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition cursor-pointer ${
+                              proj.id === selectedProjectId
+                                ? "bg-red-50 text-red-700 font-bold"
+                                : "text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            <span className="truncate font-heading">{proj.name}</span>
+                            {proj.id === selectedProjectId && (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-red-600 shrink-0 ml-2" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="pt-2 border-t border-slate-100">
+                        <Link
+                          href="/projects"
+                          onClick={() => setShowProjectMenu(false)}
+                          className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 transition"
+                        >
+                          <FolderKanban className="h-3.5 w-3.5" />
+                          <span>Manage &amp; Provision Projects</span>
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Real-time Notification Bell */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => {
                     setShowNotifications(!showNotifications);
+                    setShowProjectMenu(false);
                     setShowUserMenu(false);
                     setShowAdminMenu(false);
                   }}

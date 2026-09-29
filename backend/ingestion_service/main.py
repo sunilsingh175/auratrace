@@ -36,10 +36,10 @@ import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 try:
-    from .auth import router as auth_router, init_auth_table, require_admin, get_current_user
+    from .auth import router as auth_router, init_auth_table, require_admin, get_current_user, _decode_token
     from backend.repair_engine.api import router as repair_router
 except ImportError:
-    from auth import router as auth_router, init_auth_table, require_admin, get_current_user
+    from auth import router as auth_router, init_auth_table, require_admin, get_current_user, _decode_token
     from backend.repair_engine.api import router as repair_router
 
 # ============================================================
@@ -94,14 +94,17 @@ class ConnectionManager:
     """
     Project-partitioned WebSocket connection manager.
     Ensures that dashboard and developer clients only receive telemetry,
-    anomalies, and L3 repair updates for their authenticated/selected project.
+    anomalies, and L3 repair updates strictly for their authenticated/selected project.
     """
     def __init__(self):
         self.project_connections: Dict[str, Set[WebSocket]] = defaultdict(set)
+        self.admin_connections: Set[WebSocket] = set()
         self.global_connections: Set[WebSocket] = set()
 
-    async def connect(self, websocket: WebSocket, project_id: Optional[str] = None):
+    async def connect(self, websocket: WebSocket, project_id: Optional[str] = None, is_admin: bool = False):
         await websocket.accept()
+        if is_admin:
+            self.admin_connections.add(websocket)
         if project_id:
             pid = str(project_id).strip()
             self.project_connections[pid].add(websocket)
@@ -113,17 +116,22 @@ class ConnectionManager:
     def subscribe_to_project(self, websocket: WebSocket, project_id: str):
         pid = str(project_id).strip()
         self.global_connections.discard(websocket)
+        for existing_pid in list(self.project_connections.keys()):
+            self.project_connections[existing_pid].discard(websocket)
+            if not self.project_connections[existing_pid]:
+                del self.project_connections[existing_pid]
         self.project_connections[pid].add(websocket)
         logger.info(f"WebSocket client switched/subscribed to project '{pid}'.")
 
     def disconnect(self, websocket: WebSocket, project_id: Optional[str] = None):
+        self.admin_connections.discard(websocket)
+        self.global_connections.discard(websocket)
         if project_id:
             pid = str(project_id).strip()
             if pid in self.project_connections:
                 self.project_connections[pid].discard(websocket)
                 if not self.project_connections[pid]:
                     del self.project_connections[pid]
-        self.global_connections.discard(websocket)
         for pid in list(self.project_connections.keys()):
             self.project_connections[pid].discard(websocket)
             if not self.project_connections[pid]:
@@ -131,14 +139,19 @@ class ConnectionManager:
         logger.info("WebSocket client disconnected.")
 
     async def broadcast_to_project(self, message: dict, project_id: Optional[str] = None):
-        targets: Set[WebSocket] = set(self.global_connections)
+        targets: Set[WebSocket] = set()
         if project_id:
             pid = str(project_id).strip()
             if pid in self.project_connections:
                 targets.update(self.project_connections[pid])
+            # Only authenticated admin sessions receive cross-project telemetry
+            targets.update(self.admin_connections)
+        else:
+            targets.update(self.global_connections)
+            targets.update(self.admin_connections)
 
         disconnected = []
-        for connection in targets:
+        for connection in list(targets):
             try:
                 await connection.send_json(message)
             except Exception:
@@ -151,6 +164,92 @@ class ConnectionManager:
         await self.broadcast_to_project(message, str(pid) if pid else None)
 
 manager = ConnectionManager()
+
+async def authenticate_websocket(
+    websocket: WebSocket,
+    token: Optional[str] = None,
+    api_key: Optional[str] = None,
+    requested_project_id: Optional[str] = None,
+) -> tuple[dict, str]:
+    """
+    Authenticates a WebSocket connection via user JWT token or Project API Key,
+    and returns (auth_context, authorized_project_id).
+    Raises ValueError if unauthorized.
+    """
+    # 1. Bearer Token Verification
+    if token:
+        try:
+            payload = _decode_token(token)
+            user_id = str(payload.get("sub"))
+            role = payload.get("role", "Developer")
+            if db_engine:
+                async with db_engine.connect() as conn:
+                    user_res = await conn.execute(
+                        text("SELECT id, name, email, role, status FROM users WHERE id::text = :id"),
+                        {"id": user_id},
+                    )
+                    user = user_res.mappings().first()
+                    if not user or user["status"] != "Active":
+                        raise ValueError("User account is inactive or not found.")
+
+                    if role == "Admin" or user["role"] == "Admin":
+                        pid = requested_project_id or "00000000-0000-0000-0000-000000000001"
+                        return ({"auth_type": "user_session", "user_id": user_id, "role": "Admin", "is_admin": True}, pid)
+
+                    # Developer role: verify ownership of requested_project_id
+                    if requested_project_id:
+                        chk_res = await conn.execute(
+                            text("SELECT id FROM projects WHERE id::text = :pid AND (owner_id::text = :uid OR owner_id IS NULL) LIMIT 1"),
+                            {"pid": str(requested_project_id), "uid": user_id},
+                        )
+                        if not chk_res.first():
+                            raise ValueError(f"Access denied: You do not have permission for project '{requested_project_id}'.")
+                        return ({"auth_type": "user_session", "user_id": user_id, "role": "Developer", "is_admin": False}, str(requested_project_id))
+                    else:
+                        proj_res = await conn.execute(
+                            text("SELECT id FROM projects WHERE owner_id::text = :uid ORDER BY created_at ASC LIMIT 1"),
+                            {"uid": user_id},
+                        )
+                        p_row = proj_res.first()
+                        pid = str(p_row[0]) if p_row else "00000000-0000-0000-0000-000000000001"
+                        return ({"auth_type": "user_session", "user_id": user_id, "role": "Developer", "is_admin": False}, pid)
+            else:
+                return ({"auth_type": "user_session", "user_id": user_id, "role": role, "is_admin": role == "Admin"}, requested_project_id or "00000000-0000-0000-0000-000000000001")
+        except Exception as exc:
+            raise ValueError(f"Invalid access token: {exc}")
+
+    # 2. Project / Master API Key Verification
+    if api_key:
+        if MASTER_API_KEY and api_key == MASTER_API_KEY:
+            pid = requested_project_id or "00000000-0000-0000-0000-000000000001"
+            return ({"auth_type": "master_key", "is_admin": True}, pid)
+
+        if db_engine:
+            incoming_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+            async with db_engine.connect() as conn:
+                proj_res = await conn.execute(
+                    text("SELECT id, name FROM projects WHERE api_key_hash = :hash LIMIT 1"),
+                    {"hash": incoming_hash},
+                )
+                proj = proj_res.mappings().first()
+                if proj:
+                    return ({"auth_type": "project_api_key", "project_id": str(proj["id"]), "is_admin": False}, str(proj["id"]))
+
+                svc_res = await conn.execute(
+                    text("SELECT id, project_id FROM services WHERE api_key_hash = :hash AND status = 'ACTIVE' LIMIT 1"),
+                    {"hash": incoming_hash},
+                )
+                svc = svc_res.mappings().first()
+                if svc:
+                    svc_pid = str(svc["project_id"]) if svc["project_id"] else "00000000-0000-0000-0000-000000000001"
+                    return ({"auth_type": "service_api_key", "project_id": svc_pid, "is_admin": False}, svc_pid)
+            raise ValueError("Unrecognized or invalid API key.")
+
+    # 3. Unauthenticated fallback
+    if ENABLE_API_AUTH:
+        raise ValueError("Authentication credentials (token or api_key) required.")
+
+    return ({"auth_type": "guest", "is_admin": False}, requested_project_id or "00000000-0000-0000-0000-000000000001")
 
 # Background task reference
 pubsub_task: Optional[asyncio.Task] = None
@@ -235,11 +334,12 @@ async def startup_event():
     if db_engine:
         try:
             async with db_engine.begin() as conn:
-                default_hash = hashlib.sha256(b"at_live_master_auratrace_2026").hexdigest()
+                bootstrap_key = os.getenv("DEFAULT_PROJECT_BOOTSTRAP_KEY", MASTER_API_KEY or generate_alphanumeric_api_key(32))
+                default_hash = hashlib.sha256(bootstrap_key.encode("utf-8")).hexdigest()
                 await conn.execute(text("""
                     INSERT INTO projects (id, name, api_key_hash)
                     VALUES ('00000000-0000-0000-0000-000000000001', 'AuraTrace Production Platform', :hash)
-                    ON CONFLICT (id) DO UPDATE SET api_key_hash = EXCLUDED.api_key_hash;
+                    ON CONFLICT (id) DO NOTHING;
                 """), {"hash": default_hash})
             logger.info("AuraTrace database schema & default project bootstrap verified.")
         except Exception as exc:
@@ -963,17 +1063,37 @@ async def scalar_docs():
 
 @app.websocket("/ws/telemetry")
 @app.websocket("/api/v1/ws/telemetry")
-async def websocket_telemetry_endpoint(websocket: WebSocket, project_id: Optional[str] = Query(None)):
+async def websocket_telemetry_endpoint(
+    websocket: WebSocket,
+    project_id: Optional[str] = Query(None),
+    token: Optional[str] = Query(None),
+    api_key: Optional[str] = Query(None),
+):
     """
     Live bidirectional WebSocket endpoint streaming real-time log ingestion,
     ML anomaly alerts, and RAG AI Doctor diagnostic outputs strictly scoped to project.
+    Authenticates via JWT Bearer token or Project API key and isolates message delivery.
     """
-    await manager.connect(websocket, project_id=project_id)
+    try:
+        auth_ctx, authorized_project_id = await authenticate_websocket(
+            websocket=websocket,
+            token=token,
+            api_key=api_key,
+            requested_project_id=project_id,
+        )
+    except Exception as auth_err:
+        logger.warning(f"WebSocket auth rejected: {auth_err}")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason=f"Unauthorized: {auth_err}")
+        return
+
+    is_admin = auth_ctx.get("is_admin", False)
+    await manager.connect(websocket, project_id=authorized_project_id, is_admin=is_admin)
+
     try:
         await websocket.send_json({
             "type": "CONNECTION_ESTABLISHED",
-            "project_id": str(project_id) if project_id else None,
-            "message": f"Connected to AuraTrace live telemetry stream{' for project ' + str(project_id) if project_id else ''}.",
+            "project_id": authorized_project_id,
+            "message": f"Connected to AuraTrace live telemetry stream for project '{authorized_project_id}'.",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
         while True:
@@ -984,19 +1104,41 @@ async def websocket_telemetry_endpoint(websocket: WebSocket, project_id: Optiona
                 try:
                     msg = json.loads(data)
                     if isinstance(msg, dict) and msg.get("action") == "subscribe" and msg.get("project_id"):
-                        manager.subscribe_to_project(websocket, str(msg["project_id"]))
-                        await websocket.send_json({
-                            "type": "SUBSCRIBED",
-                            "project_id": str(msg["project_id"]),
-                            "message": f"Switched subscription to project {msg['project_id']}",
-                        })
-                except Exception:
-                    pass
+                        target_pid = str(msg["project_id"]).strip()
+                        allowed = False
+                        if is_admin:
+                            allowed = True
+                        elif auth_ctx.get("auth_type") == "user_session" and db_engine:
+                            async with db_engine.connect() as conn:
+                                chk_res = await conn.execute(
+                                    text("SELECT id FROM projects WHERE id::text = :pid AND (owner_id::text = :uid OR owner_id IS NULL) LIMIT 1"),
+                                    {"pid": target_pid, "uid": str(auth_ctx.get("user_id"))},
+                                )
+                                allowed = chk_res.first() is not None
+                        elif auth_ctx.get("auth_type") in ("project_api_key", "service_api_key"):
+                            allowed = (target_pid == auth_ctx.get("project_id"))
+
+                        if allowed:
+                            manager.subscribe_to_project(websocket, target_pid)
+                            authorized_project_id = target_pid
+                            await websocket.send_json({
+                                "type": "SUBSCRIBED",
+                                "project_id": target_pid,
+                                "message": f"Switched subscription to project {target_pid}",
+                            })
+                        else:
+                            await websocket.send_json({
+                                "type": "ERROR",
+                                "code": "UNAUTHORIZED_SUBSCRIPTION",
+                                "message": f"Access denied: You are not authorized to subscribe to project '{target_pid}'.",
+                            })
+                except Exception as parse_err:
+                    logger.debug(f"Error handling WebSocket client message: {parse_err}")
     except WebSocketDisconnect:
-        manager.disconnect(websocket, project_id=project_id)
+        manager.disconnect(websocket, project_id=authorized_project_id)
     except Exception as exc:
         logger.debug(f"WebSocket client session terminated: {exc}")
-        manager.disconnect(websocket, project_id=project_id)
+        manager.disconnect(websocket, project_id=authorized_project_id)
 
 
 # ============================================================
@@ -1253,11 +1395,12 @@ async def regenerate_project_key(
 
             is_admin = current_user.get("role") == "Admin" if current_user else False
             user_id = str(current_user.get("id")) if current_user and current_user.get("id") else None
-            if not is_admin and proj["owner_id"] and str(proj["owner_id"]) != user_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Forbidden: You do not have permission to rotate the API key for this project.",
-                )
+            if not is_admin:
+                if proj["owner_id"] is None or str(proj["owner_id"]) != user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Forbidden: System-owned and other users' projects cannot be modified.",
+                    )
 
             new_api_key = generate_alphanumeric_api_key(16)
             key_hash = hashlib.sha256(new_api_key.encode("utf-8")).hexdigest()
@@ -1310,11 +1453,12 @@ async def delete_project(
 
             is_admin = current_user.get("role") == "Admin" if current_user else False
             user_id = str(current_user.get("id")) if current_user and current_user.get("id") else None
-            if not is_admin and proj["owner_id"] and str(proj["owner_id"]) != user_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Forbidden: You do not have permission to delete this project.",
-                )
+            if not is_admin:
+                if proj["owner_id"] is None or str(proj["owner_id"]) != user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Forbidden: System-owned and other users' projects cannot be deleted.",
+                    )
 
             await conn.execute(
                 text("DELETE FROM projects WHERE id = :id"),
@@ -2059,7 +2203,8 @@ async def get_incident(
                     i.created_at,
                     i.resolved_at,
                     i.similar_fixes,
-                    COALESCE(i.source, 'sdk') AS source
+                    COALESCE(i.source, 'sdk') AS source,
+                    COALESCE(i.project_id, s.project_id) AS project_id
                 FROM incidents i
                 LEFT JOIN services s
                     ON i.service_id = s.id
@@ -2103,7 +2248,30 @@ async def get_incident(
                 resolved_at,
                 stored_similar_fixes,
                 incident_source,
+                db_project_id,
             ) = row
+
+            # Project authorization verification
+            inc_proj_str = str(db_project_id) if db_project_id else "00000000-0000-0000-0000-000000000001"
+            is_master = auth_ctx.get("is_master", False) or auth_ctx.get("role") == "Admin"
+            if not is_master:
+                if auth_ctx.get("auth_type") == "user_session":
+                    user_id = str(auth_ctx.get("user_id"))
+                    chk = await conn.execute(
+                        text("SELECT id FROM projects WHERE id::text = :pid AND (owner_id::text = :uid OR owner_id IS NULL) LIMIT 1"),
+                        {"pid": inc_proj_str, "uid": user_id},
+                    )
+                    if not chk.first():
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Access denied: You do not have permission to view incidents for this project.",
+                        )
+                elif auth_ctx.get("project_id"):
+                    if str(auth_ctx.get("project_id")) != inc_proj_str:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Access denied: API key not authorized for this incident's project.",
+                        )
 
             service_identifier = service_name or str(db_service_id)
 
@@ -2126,6 +2294,7 @@ async def get_incident(
                             code_patch,
                             service_id
                         FROM historical_fixes
+                        WHERE (project_id::text = :project_id OR is_global = TRUE OR project_id IS NULL)
                         ORDER BY
                             CASE
                                 WHEN error_type = :error_type THEN 0
@@ -2142,6 +2311,7 @@ async def get_incident(
                         {
                             "error_type": error_type,
                             "service_id": db_service_id,
+                            "project_id": inc_proj_str,
                         },
                     )
 
@@ -2575,27 +2745,67 @@ async def get_incident(
 async def update_incident_status(
     incident_id: str,
     payload: IncidentStatusUpdate,
-    authorization: str | None = Header(default=None),
+    auth_ctx: dict = Depends(get_request_auth),
 ):
-    if db_engine:
-        try:
-            async with db_engine.begin() as conn:
-                resolved_time = datetime.now(timezone.utc) if payload.status == "RESOLVED" else None
-                await conn.execute(
-                    text("""
-                        UPDATE incidents
-                        SET status = :status, resolved_at = :resolved_at
-                        WHERE id::text = :id OR id::text LIKE :id_prefix
-                    """),
-                    {
-                        "status": payload.status,
-                        "resolved_at": resolved_time,
-                        "id": incident_id,
-                        "id_prefix": f"{incident_id}%",
-                    },
-                )
-        except Exception as exc:
-            logger.error(f"Error updating incident status: {exc}")
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
+
+    try:
+        async with db_engine.begin() as conn:
+            # 1. Fetch incident and verify project authorization
+            chk_res = await conn.execute(
+                text("""
+                    SELECT i.id, COALESCE(i.project_id, s.project_id) AS project_id
+                    FROM incidents i
+                    LEFT JOIN services s ON i.service_id = s.id
+                    WHERE i.id::text = :id OR i.id::text LIKE :id_prefix
+                    LIMIT 1
+                """),
+                {"id": incident_id, "id_prefix": f"{incident_id}%"},
+            )
+            inc_row = chk_res.first()
+            if not inc_row:
+                raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found.")
+
+            inc_proj_str = str(inc_row[1]) if inc_row[1] else "00000000-0000-0000-0000-000000000001"
+            is_master = auth_ctx.get("is_master", False) or auth_ctx.get("role") == "Admin"
+            if not is_master:
+                if auth_ctx.get("auth_type") == "user_session":
+                    user_id = str(auth_ctx.get("user_id"))
+                    chk = await conn.execute(
+                        text("SELECT id FROM projects WHERE id::text = :pid AND (owner_id::text = :uid OR owner_id IS NULL) LIMIT 1"),
+                        {"pid": inc_proj_str, "uid": user_id},
+                    )
+                    if not chk.first():
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Access denied: You do not have permission to update incidents for this project.",
+                        )
+                elif auth_ctx.get("project_id"):
+                    if str(auth_ctx.get("project_id")) != inc_proj_str:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Access denied: API key not authorized for this incident's project.",
+                        )
+
+            resolved_time = datetime.now(timezone.utc) if payload.status == "RESOLVED" else None
+            await conn.execute(
+                text("""
+                    UPDATE incidents
+                    SET status = :status, resolved_at = :resolved_at
+                    WHERE id = :id
+                """),
+                {
+                    "status": payload.status,
+                    "resolved_at": resolved_time,
+                    "id": inc_row[0],
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Error updating incident status: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to update incident status.")
 
     return {
         "id": incident_id,
@@ -2612,38 +2822,72 @@ async def update_incident_status(
 )
 async def trigger_ai_doctor(
     incident_id: str,
-    authorization: str | None = Header(default=None),
+    auth_ctx: dict = Depends(get_request_auth),
 ):
-    # Fetch incident and republish anomaly event to trigger RAG worker
-    if db_engine:
-        try:
-            async with db_engine.connect() as conn:
-                res = await conn.execute(
-                    text("""
-                        SELECT i.id, COALESCE(s.name, i.service_id::text), i.anomaly_score, i.error_type, i.stack_trace
-                        FROM incidents i
-                        LEFT JOIN services s ON i.service_id = s.id
-                        WHERE i.id::text = :id OR i.id::text LIKE :id_prefix
-                        LIMIT 1
-                    """),
-                    {"id": incident_id, "id_prefix": f"{incident_id}%"},
-                )
-                row = res.first()
-                if row:
-                    event = {
-                        "type": "ANOMALY_DETECTED",
-                        "incident_id": str(row[0]),
-                        "service_id": str(row[1]),
-                        "anomaly_score": float(row[2] or 0.88),
-                        "error_type": row[3] or "SystemAnomaly",
-                        "stack_trace": row[4] or "",
-                        "raw_stack_trace": row[4] or "",
-                        "message": f"Re-diagnosis requested for incident {incident_id}",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }
-                    await redis_client.publish(REDIS_ANOMALY_CHANNEL, json.dumps(event))
-        except Exception as exc:
-            logger.error(f"Failed to re-trigger diagnosis: {exc}")
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
+
+    try:
+        async with db_engine.connect() as conn:
+            res = await conn.execute(
+                text("""
+                    SELECT 
+                        i.id, 
+                        COALESCE(i.project_id, s.project_id) AS project_id,
+                        COALESCE(s.name, i.service_id::text) AS service_name, 
+                        i.anomaly_score, 
+                        i.error_type, 
+                        i.stack_trace
+                    FROM incidents i
+                    LEFT JOIN services s ON i.service_id = s.id
+                    WHERE i.id::text = :id OR i.id::text LIKE :id_prefix
+                    LIMIT 1
+                """),
+                {"id": incident_id, "id_prefix": f"{incident_id}%"},
+            )
+            row = res.first()
+            if not row:
+                raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found.")
+
+            inc_proj_str = str(row[1]) if row[1] else "00000000-0000-0000-0000-000000000001"
+            is_master = auth_ctx.get("is_master", False) or auth_ctx.get("role") == "Admin"
+            if not is_master:
+                if auth_ctx.get("auth_type") == "user_session":
+                    user_id = str(auth_ctx.get("user_id"))
+                    chk = await conn.execute(
+                        text("SELECT id FROM projects WHERE id::text = :pid AND (owner_id::text = :uid OR owner_id IS NULL) LIMIT 1"),
+                        {"pid": inc_proj_str, "uid": user_id},
+                    )
+                    if not chk.first():
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Access denied: You do not have permission to trigger diagnostics for this project.",
+                        )
+                elif auth_ctx.get("project_id"):
+                    if str(auth_ctx.get("project_id")) != inc_proj_str:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Access denied: API key not authorized for this incident's project.",
+                        )
+
+            event = {
+                "type": "ANOMALY_DETECTED",
+                "incident_id": str(row[0]),
+                "project_id": inc_proj_str,
+                "service_id": str(row[2]),
+                "anomaly_score": float(row[3] or 0.88),
+                "error_type": row[4] or "SystemAnomaly",
+                "stack_trace": row[5] or "",
+                "raw_stack_trace": row[5] or "",
+                "message": f"Re-diagnosis requested for incident {incident_id}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            await redis_client.publish(REDIS_ANOMALY_CHANNEL, json.dumps(event))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Failed to re-trigger diagnosis: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to re-trigger diagnosis.")
 
     return {
         "id": incident_id,
@@ -2658,39 +2902,104 @@ async def trigger_ai_doctor(
     "/api/v1/services",
     tags=["Detected Services"],
     summary="List all automatically detected microservices",
-    description="Returns all services discovered from SDK telemetry with runtime metadata, version, health status, and real-time performance indicators.",
+    description="Returns all services discovered from SDK telemetry with runtime metadata, version, health status, and real-time performance indicators strictly scoped to project.",
 )
-async def list_services(api_key: str = Depends(verify_api_key)):
-    if db_engine:
-        try:
-            async with db_engine.connect() as conn:
-                stmt = text("""
-                    SELECT 
-                        s.id,
-                        s.name,
-                        s.environment,
-                        s.status,
-                        s.api_key_hash,
-                        s.created_at,
-                        s.owner_id,
-                        COUNT(i.id) AS incident_count,
-                        s.project_id,
-                        COALESCE(s.service_id, s.name) AS service_id,
-                        COALESCE(s.runtime, 'node') AS runtime,
-                        COALESCE(s.version, '1.0.0') AS version,
-                        s.first_seen_at,
-                        s.last_seen_at
-                    FROM services s
-                    LEFT JOIN incidents i ON s.id = i.service_id AND i.status IN ('OPEN', 'INVESTIGATING')
-                    GROUP BY s.id, s.name, s.environment, s.status, s.api_key_hash, s.created_at, s.owner_id, s.project_id, s.service_id, s.runtime, s.version, s.first_seen_at, s.last_seen_at
-                    ORDER BY s.last_seen_at DESC NULLS LAST, s.name ASC
-                """)
-                res = await conn.execute(stmt)
-                rows = res.fetchall()
+async def list_services(
+    project_id: Optional[str] = Query(None, description="Filter services by project UUID"),
+    auth_ctx: dict = Depends(get_request_auth),
+):
+    if not db_engine:
+        return []
 
-                services = []
-                for row in rows:
-                    service_metrics = await conn.execute(text("""
+    try:
+        async with db_engine.connect() as conn:
+            where_clauses = ["1=1"]
+            params: Dict[str, Any] = {}
+
+            is_master = auth_ctx.get("is_master", False) or auth_ctx.get("role") == "Admin"
+            if is_master:
+                if project_id:
+                    where_clauses.append("(s.project_id::text = :project_id)")
+                    params["project_id"] = str(project_id)
+            elif auth_ctx.get("auth_type") == "user_session":
+                user_id = str(auth_ctx.get("user_id"))
+                if project_id:
+                    chk = await conn.execute(
+                        text("SELECT id FROM projects WHERE id::text = :pid AND (owner_id::text = :uid OR owner_id IS NULL) LIMIT 1"),
+                        {"pid": str(project_id), "uid": user_id},
+                    )
+                    if not chk.first():
+                        return []
+                    where_clauses.append("(s.project_id::text = :project_id)")
+                    params["project_id"] = str(project_id)
+                else:
+                    where_clauses.append("(s.project_id IN (SELECT id FROM projects WHERE owner_id::text = :uid OR owner_id IS NULL))")
+                    params["uid"] = user_id
+            else:
+                key_proj_id = auth_ctx.get("project_id") or "00000000-0000-0000-0000-000000000001"
+                where_clauses.append("(s.project_id::text = :project_id)")
+                params["project_id"] = str(key_proj_id)
+
+            where_sql = " AND ".join(where_clauses)
+            stmt = text(f"""
+                SELECT 
+                    s.id,
+                    s.name,
+                    s.environment,
+                    s.status,
+                    s.api_key_hash,
+                    s.created_at,
+                    s.owner_id,
+                    COUNT(i.id) AS incident_count,
+                    s.project_id,
+                    COALESCE(s.service_id, s.name) AS service_id,
+                    COALESCE(s.runtime, 'node') AS runtime,
+                    COALESCE(s.version, '1.0.0') AS version,
+                    s.first_seen_at,
+                    s.last_seen_at
+                FROM services s
+                LEFT JOIN incidents i ON s.id = i.service_id AND i.status IN ('OPEN', 'INVESTIGATING')
+                WHERE {where_sql}
+                GROUP BY s.id, s.name, s.environment, s.status, s.api_key_hash, s.created_at, s.owner_id, s.project_id, s.service_id, s.runtime, s.version, s.first_seen_at, s.last_seen_at
+                ORDER BY s.last_seen_at DESC NULLS LAST, s.name ASC
+            """)
+            res = await conn.execute(stmt, params)
+            rows = res.fetchall()
+
+            services = []
+            for row in rows:
+                service_metrics = await conn.execute(text("""
+                    SELECT
+                        COUNT(*) AS request_count,
+                        COALESCE(
+                            PERCENTILE_CONT(0.95)
+                            WITHIN GROUP (ORDER BY latency_ms),
+                            0
+                        ) AS p95_latency_ms,
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN status_code >= 400
+                                    OR level IN ('ERROR', 'CRITICAL')
+                                    THEN 1 ELSE 0
+                                END
+                            ),
+                            0
+                        ) AS error_count,
+                        MAX(created_at) AS last_activity
+                    FROM telemetry_logs
+                    WHERE (service_id = :service_id OR service_id IN (SELECT id FROM services WHERE id::text = :service_id_str OR name = :service_id_str OR service_id = :service_id_str))
+                      AND created_at >= NOW() - INTERVAL '15 minutes'
+                """), {"service_id": row[0], "service_id_str": str(row[1] or row[0])})
+
+                metric = service_metrics.first()
+                requests = int(metric[0] or 0) if metric else 0
+                latency = float(metric[1] or 0) if metric else 0.0
+                errors = int(metric[2] or 0) if metric else 0
+                last_activity = metric[3] if metric else None
+
+                if requests == 0:
+                    all_time = await conn.execute(text("""
                         SELECT
                             COUNT(*) AS request_count,
                             COALESCE(
@@ -2711,79 +3020,46 @@ async def list_services(api_key: str = Depends(verify_api_key)):
                             MAX(created_at) AS last_activity
                         FROM telemetry_logs
                         WHERE (service_id = :service_id OR service_id IN (SELECT id FROM services WHERE id::text = :service_id_str OR name = :service_id_str OR service_id = :service_id_str))
-                          AND created_at >= NOW() - INTERVAL '15 minutes'
                     """), {"service_id": row[0], "service_id_str": str(row[1] or row[0])})
+                    at_metric = all_time.first()
+                    if at_metric and at_metric[0]:
+                        requests = int(at_metric[0] or 0)
+                        latency = float(at_metric[1] or 0)
+                        errors = int(at_metric[2] or 0)
+                        last_activity = at_metric[3]
 
-                    metric = service_metrics.first()
-                    requests = int(metric[0] or 0) if metric else 0
-                    latency = float(metric[1] or 0) if metric else 0.0
-                    errors = int(metric[2] or 0) if metric else 0
-                    last_activity = metric[3] if metric else None
+                error_rate = (
+                    (errors / requests) * 100
+                    if requests
+                    else 0
+                )
 
-                    if requests == 0:
-                        all_time = await conn.execute(text("""
-                            SELECT
-                                COUNT(*) AS request_count,
-                                COALESCE(
-                                    PERCENTILE_CONT(0.95)
-                                    WITHIN GROUP (ORDER BY latency_ms),
-                                    0
-                                ) AS p95_latency_ms,
-                                COALESCE(
-                                    SUM(
-                                        CASE
-                                            WHEN status_code >= 400
-                                            OR level IN ('ERROR', 'CRITICAL')
-                                            THEN 1 ELSE 0
-                                        END
-                                    ),
-                                    0
-                                ) AS error_count,
-                                MAX(created_at) AS last_activity
-                            FROM telemetry_logs
-                            WHERE (service_id = :service_id OR service_id IN (SELECT id FROM services WHERE id::text = :service_id_str OR name = :service_id_str OR service_id = :service_id_str))
-                        """), {"service_id": row[0], "service_id_str": str(row[1] or row[0])})
-                        at_metric = all_time.first()
-                        if at_metric and at_metric[0]:
-                            requests = int(at_metric[0] or 0)
-                            latency = float(at_metric[1] or 0)
-                            errors = int(at_metric[2] or 0)
-                            last_activity = at_metric[3]
+                last_seen = row[13] or last_activity or row[5]
 
-                    error_rate = (
-                        (errors / requests) * 100
-                        if requests
-                        else 0
-                    )
+                services.append({
+                    "id": row[1] or str(row[0]),
+                    "service_id": row[9] or row[1] or str(row[0]),
+                    "name": row[1] or "Service",
+                    "project_id": str(row[8]) if row[8] else None,
+                    "runtime": row[10] or "node",
+                    "version": row[11] or "1.0.0",
+                    "environment": row[2] or "production",
+                    "status": (row[3] or "ACTIVE").lower(),
+                    "requests": requests,
+                    "error_rate": round(error_rate, 2),
+                    "latency_ms": round(latency, 2),
+                    "incident_count": int(row[7] or 0),
+                    "first_seen_at": row[12].isoformat() if row[12] else (row[5].isoformat() if row[5] else None),
+                    "last_seen_at": last_seen.isoformat() if last_seen else None,
+                    "last_activity": last_seen.isoformat() if last_seen else None,
+                    "created_at": row[5].isoformat() if row[5] else None,
+                    "owner_id": str(row[6]) if row[6] else None,
+                })
 
-                    last_seen = row[13] or last_activity or row[5]
-
-                    services.append({
-                        "id": row[1] or str(row[0]),
-                        "service_id": row[9] or row[1] or str(row[0]),
-                        "name": row[1] or "Service",
-                        "project_id": str(row[8]) if row[8] else None,
-                        "runtime": row[10] or "node",
-                        "version": row[11] or "1.0.0",
-                        "environment": row[2] or "production",
-                        "status": (row[3] or "ACTIVE").lower(),
-                        "requests": requests,
-                        "error_rate": round(error_rate, 2),
-                        "latency_ms": round(latency, 2),
-                        "incident_count": int(row[7] or 0),
-                        "first_seen_at": row[12].isoformat() if row[12] else (row[5].isoformat() if row[5] else None),
-                        "last_seen_at": last_seen.isoformat() if last_seen else None,
-                        "last_activity": last_seen.isoformat() if last_seen else None,
-                        "created_at": row[5].isoformat() if row[5] else None,
-                        "owner_id": str(row[6]) if row[6] else None,
-                    })
-
-                if services:
-                    return services
-        except Exception as exc:
-            logger.error(f"Error querying services: {exc}")
-
-    return []
+            return services
+    except Exception as exc:
+        logger.error(f"Error querying services: {exc}")
+        return []
 
 
 @app.post(

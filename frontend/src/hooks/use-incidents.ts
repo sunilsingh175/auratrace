@@ -8,7 +8,7 @@ import {
   SystemStats,
 } from "@/lib/api-client";
 
-export function useIncidents(pollIntervalMs: number = 5000) {
+export function useIncidents(pollIntervalMs: number = 5000, projectId?: string | null) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [stats, setStats] = useState<SystemStats>({
     total_logs_ingested: 0,
@@ -26,8 +26,8 @@ export function useIncidents(pollIntervalMs: number = 5000) {
     const minWait = new Promise((resolve) => setTimeout(resolve, 400));
     try {
       const [incList, sysStats] = await Promise.all([
-        fetchIncidents({ limit: 50 }).catch(() => []),
-        fetchSystemStats().catch(() => ({
+        fetchIncidents({ limit: 50, project_id: projectId || undefined }).catch(() => []),
+        fetchSystemStats(projectId || undefined).catch(() => ({
           total_logs_ingested: 0,
           ingestion_rate_per_sec: 0,
           error_rate_percent: 0,
@@ -44,19 +44,22 @@ export function useIncidents(pollIntervalMs: number = 5000) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      void loadData();
+    } else {
       void loadData();
     }
     const interval = setInterval(() => {
       void loadData();
     }, pollIntervalMs);
     return () => clearInterval(interval);
-  }, [loadData, pollIntervalMs]);
+  }, [loadData, pollIntervalMs, projectId]);
 
   return { incidents, stats, loading, refresh: loadData };
 }
+
 
