@@ -1,64 +1,36 @@
 # AuraTrace Python SDK
 
-Official Python telemetry and crash diagnostics SDK for AuraTrace.
+AuraTrace is an automatic crash-capture client.
 
-## Quickstart
-
-Install the SDK from the Python SDK directory:
+## Installation
 
 ```bash
-pip install -e sdk/python
+pip install auratrace
 ```
 
-Initialize AuraTrace with your project API key:
+Import the package once at application startup:
+
+```python
+import auratrace
+```
+
+That is the complete integration for unhandled crashes. Importing AuraTrace automatically installs the global exception hook, detects the application name, captures the crash stack trace and runtime metadata, and sends the event asynchronously.
+
+Use a project-scoped `AURATRACE_API_KEY` and optionally `AURATRACE_ENDPOINT`. The SDK never uses an AuraTrace master/admin key.
+
+## Optional explicit configuration
 
 ```python
 import auratrace
 
-auratrace.init(api_key="YOUR_AURATRACE_PROJECT_KEY")
-```
-
-AuraTrace automatically detects the application name from the running Python application and captures unhandled crashes. Telemetry is sent to the AuraTrace ingestion gateway in the background so the SDK does not block the application.
-
-## Manual exception capture
-
-```python
-try:
-    process_payment()
-except Exception as exc:
-    auratrace.capture_exception(exc, message="Payment processing failure")
-```
-
-## Custom telemetry
-
-```python
-auratrace.capture_message(
-    "User checkout initiated",
-    level="INFO",
-    latency_ms=45.2,
+auratrace.init(
+    api_key="YOUR_AURATRACE_PROJECT_KEY",
+    endpoint="http://localhost:8000",
 )
 ```
 
-## Configuration
+## Optional manual capture
 
-The project API key can be supplied directly or through:
+Manual capture remains available for caught exceptions and custom telemetry, but it is not required for unhandled crash detection.
 
-```bash
-export AURATRACE_API_KEY="YOUR_AURATRACE_PROJECT_KEY"
-```
-
-For local development, the ingestion endpoint defaults to:
-
-```text
-http://localhost:8000
-```
-
-Set `AURATRACE_ENDPOINT` when the AuraTrace backend is hosted elsewhere.
-
-Do not place production API keys in source control. Never use an AuraTrace master/admin key in a developer application.
-
-## Automatic crash capture
-
-When initialized with the default global exception hook, AuraTrace captures unhandled Python exceptions, sanitizes stack-trace paths, and queues the telemetry for background delivery.
-
-The SDK is designed to fail silently if telemetry delivery is unavailable so an observability failure does not interrupt the host application.
+The SDK buffers telemetry in a background worker and fails silently if AuraTrace is unavailable so observability cannot interrupt the host application.
