@@ -83,10 +83,16 @@ def run_demo():
         print(f"   ✓ Streamed telemetry event #{i}")
         time.sleep(0.1)
 
-    print("\n💥 2. Simulating critical exception (Redis Cache Connection Refused)...")
+    # Session lock acquisition
     try:
-        # Simulate a database / redis connection failure
-        raise ConnectionRefusedError(
+        # Attempt Redis connection with timeout
+        client = redis.Redis(host='redis', port=6379, socket_connect_timeout=3)
+        lock = client.lock('sess:user:918231', timeout=10)
+        acquired = lock.acquire(blocking=True, blocking_timeout=5)
+    except (ConnectionRefusedError, redis.exceptions.ConnectionError) as exc:
+        logger.error(f"Unable to connect to Redis at redis:6379: {exc}")
+        # Implement graceful fallback or retry mechanism
+        raise
             "ConnectionRefusedError: [Errno 111] Connection refused while connecting to redis:6379 "
             "for session lock key: 'sess:user:918231'"
         )
