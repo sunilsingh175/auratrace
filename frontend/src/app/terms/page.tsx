@@ -49,7 +49,7 @@ export default function TermsOfServicePage() {
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-sans">
-            These terms outline the rules and responsibilities for using the Automatic Backend Detection platform, SDK telemetry ingestion, and AI diagnostic assistance.
+            These terms outline the rules and responsibilities for using the AuraTrace platform, SDK telemetry ingestion, and AI diagnostic assistance.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-6 pt-6 border-t border-slate-100 text-xs text-slate-500 font-sans">
@@ -95,7 +95,7 @@ export default function TermsOfServicePage() {
               <span>SDK Usage & Telemetry Transmission</span>
             </h2>
             <p>
-              Automatic Backend Detection provides client SDKs for Node.js and Python. You agree to deploy SDKs in accordance with provided documentation and avoid transmitting unsolicited sensitive data, raw database dumps, or credentials in error logs.
+              AuraTrace provides client SDKs for Node.js and Python. You agree to deploy SDKs in accordance with provided documentation and avoid transmitting unsolicited sensitive data, raw database dumps, or credentials in error logs.
             </p>
           </section>
 
@@ -106,7 +106,7 @@ export default function TermsOfServicePage() {
               <span>Acceptable Use</span>
             </h2>
             <p>
-              You agree not to use the Automatic Backend Detection platform to:
+              You agree not to use the AuraTrace platform to:
             </p>
             <ul className="list-disc list-inside space-y-1 text-slate-600 pl-2">
               <li>Transmit intentional malware, malicious payloads, or unmasked credentials.</li>
@@ -125,7 +125,7 @@ export default function TermsOfServicePage() {
               <strong>Important Notice:</strong> AI-generated diagnoses and code recommendations are provided as developer assistance. Users are responsible for reviewing, testing, and applying any suggested changes to their applications.
             </div>
             <p>
-              Automatic Backend Detection provides diagnostic synthesis using machine learning and historical vector similarity. There is no guarantee that an AI-generated recommendation will resolve every problem or error condition.
+              AuraTrace provides diagnostic synthesis using machine learning and historical vector similarity. There is no guarantee that an AI-generated recommendation will resolve every problem or error condition.
             </p>
           </section>
 
@@ -133,10 +133,10 @@ export default function TermsOfServicePage() {
           <section className="space-y-3">
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2.5 font-heading">
               <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-slate-100 text-slate-800 text-xs font-bold font-heading">6</span>
-              <span>No Automatic Code Modification</span>
+              <span>Controlled Autonomous Repair</span>
             </h2>
             <p>
-              Automatic Backend Detection performs purely read-only diagnostic telemetry analysis. The platform does not automatically deploy, edit, push, or modify your application&apos;s source code or production repositories.
+              AuraTrace provides controlled autonomous repair workflows subject to project settings, Safety Gate policies, sandbox validation, PR review, and post-deployment monitoring.
             </p>
           </section>
 
@@ -147,7 +147,7 @@ export default function TermsOfServicePage() {
               <span>Service Limitations & Termination</span>
             </h2>
             <p>
-              As a final-year engineering system and developer tool, Automatic Backend Detection is provided &ldquo;as is&rdquo; without warranties of uninterrupted availability. Administrators reserve the right to suspend accounts or throttle ingestion in the event of abusive or excessive telemetry traffic.
+              As a final-year engineering system and developer tool, AuraTrace is provided &ldquo;as is&rdquo; without warranties of uninterrupted availability. Administrators reserve the right to suspend accounts or throttle ingestion in the event of abusive or excessive telemetry traffic.
             </p>
           </section>
         </div>

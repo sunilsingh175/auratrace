@@ -99,7 +99,7 @@ export default function ContactPage() {
         <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.04)] mb-8">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-xs font-semibold text-[#dc2626] mb-4 font-heading">
             <Mail className="w-3.5 h-3.5" />
-            <span>Contact Automatic Backend Detection</span>
+            <span>Contact AuraTrace</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-heading">
@@ -107,7 +107,7 @@ export default function ContactPage() {
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-sans">
-            For questions, technical inquiries, feedback, or support regarding Automatic Backend Detection:
+            For questions, technical inquiries, feedback, or support regarding AuraTrace:
           </p>
 
           {/* Project Details Grid (Email & GitHub) */}

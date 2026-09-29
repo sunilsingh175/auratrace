@@ -1,0 +1,6 @@
+httpx>=0.25.2
+cryptography>=41.0.7
+pydantic>=2.5.2
+sqlalchemy>=2.0.23
+asyncpg>=0.29.0
+redis>=5.0.1

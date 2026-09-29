@@ -1,6 +1,6 @@
 # Environment Variables
 .env
-.env*.local
+.env.*
 !.env.example
 
 # Python
@@ -32,6 +32,8 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+models/
+*.pkl
 
 # Node.js & Next.js
 node_modules/
@@ -81,3 +83,6 @@ scripts/datasets/**/anomaly_label.csv
 *.parquet
 *.h5
 
+
+# AuraTrace runtime rollback artifacts
+.auratrace/rollbacks/*.json

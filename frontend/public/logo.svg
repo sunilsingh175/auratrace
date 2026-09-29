@@ -21,14 +21,11 @@
     <path d="M12 36 L24 36 L27 43 L32 23 L37 47 L41 33 L44 36 L56 36" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 
-  <!-- Typography: Automatic Backend DETECTION -->
-  <text x="84" y="32" font-family="'Montserrat', 'Inter', -apple-system, sans-serif" font-size="20" font-weight="800" fill="#0f172a" letter-spacing="-0.3">
-    Automatic Backend
+  <!-- Typography: AuraTrace -->
+  <text x="84" y="38" font-family="'Montserrat', 'Inter', -apple-system, sans-serif" font-size="28" font-weight="900" fill="#0f172a" letter-spacing="-0.5">
+    Aura<tspan fill="#dc2626">Trace</tspan>
   </text>
-  <text x="84" y="54" font-family="'Montserrat', 'Inter', -apple-system, sans-serif" font-size="19" font-weight="900" fill="#dc2626" letter-spacing="1.5">
-    DETECTION
-  </text>
-  <text x="84" y="67" font-family="'Lato', -apple-system, sans-serif" font-size="7.5" font-weight="700" fill="#64748b" letter-spacing="0.8">
-    AUTONOMOUS OBSERVABILITY &amp; DIAGNOSTICS
+  <text x="84" y="58" font-family="'Lato', -apple-system, sans-serif" font-size="8.5" font-weight="700" fill="#64748b" letter-spacing="1.2">
+    AUTONOMOUS OBSERVABILITY &amp; HEALING
   </text>
 </svg>

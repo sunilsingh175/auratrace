@@ -44,7 +44,7 @@ export default function ProjectsPage() {
       setProjects(data);
     } catch (err) {
       console.error(err);
-      setError("Unable to load Automatic Backend Detection projects.");
+      setError("Unable to load projects.");
     } finally {
       setLoading(false);
     }
@@ -77,7 +77,7 @@ export default function ProjectsPage() {
 
   const activeProject = projects[0];
   const hasRealKey = Boolean(activeProject?.api_key);
-  const displayKey = activeProject?.api_key || "A7K92M481X63P205";
+  const displayKey = activeProject?.api_key || (loading ? "Loading..." : "No API key generated yet");
 
   const handleRegenerateKey = async () => {
     if (!activeProject) return;
@@ -97,10 +97,7 @@ export default function ProjectsPage() {
   };
 
   const copyApiKey = async () => {
-    if (!activeProject?.api_key) {
-      await handleRegenerateKey();
-      return;
-    }
+    if (!activeProject?.api_key) return;
     try {
       await navigator.clipboard.writeText(activeProject.api_key);
       setCopiedKey(true);

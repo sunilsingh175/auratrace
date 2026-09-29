@@ -47,8 +47,8 @@ export default function SecurityArchitecturePage() {
       desc: "Administrative operations (user suspension, project purging) require verified Admin status.",
     },
     {
-      title: "No Automatic Source Code Modification",
-      desc: "Automatic Backend Detection operates in read-only diagnostic mode; source code changes require explicit developer action.",
+      title: "Controlled Autonomous Repair",
+      desc: "AuraTrace operates with explicit Safety Gates, sandbox validation, PR workflows, and rollback guards.",
     },
   ];
 
@@ -80,7 +80,7 @@ export default function SecurityArchitecturePage() {
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-sans">
-            Automatic Backend Detection is designed with multi-tier service isolation, API authentication, and read-only telemetry diagnostics to ensure secure observability for backend applications.
+            AuraTrace is designed with multi-tier service isolation, API authentication, and telemetry diagnostics to ensure secure observability for backend applications.
           </p>
         </div>
 
@@ -120,7 +120,7 @@ export default function SecurityArchitecturePage() {
               Have a security inquiry or vulnerability report?
             </h3>
             <p className="text-xs text-slate-300 mt-1 max-w-lg font-sans">
-              For security-related questions or responsible disclosure regarding the Automatic Backend Detection project architecture, please contact our team.
+              For security-related questions or responsible disclosure regarding the AuraTrace project architecture, please contact our team.
             </p>
           </div>
           <Link

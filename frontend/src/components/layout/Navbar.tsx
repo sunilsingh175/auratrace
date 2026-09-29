@@ -103,6 +103,12 @@ export function Navbar() {
       icon: FolderKanban,
       badge: null,
     },
+    {
+      name: "Settings",
+      href: "/settings",
+      icon: Settings,
+      badge: null,
+    },
     ...(user?.role === "Admin"
       ? [
           {
