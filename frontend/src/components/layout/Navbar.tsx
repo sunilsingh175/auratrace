@@ -1,161 +1,67 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  FolderKanban,
-  Server,
-  Activity,
-  AlertTriangle,
-  ShieldCheck,
-  Users,
-  BarChart3,
-  Settings,
-  LogOut,
-  User,
-  Shield,
-  LogIn,
-  Bell,
-  ChevronDown,
+  Sparkles,
+  BookOpen,
+  FolderGit2,
+  Github,
+  Terminal,
   Menu,
   X,
-  Trash2,
-  ExternalLink,
-  CheckCircle2,
-  AlertCircle,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle,
 } from "lucide-react";
-import { useAuth } from "@/context/auth-context";
-import { useProject } from "@/context/project-context";
-import { useNotifications } from "@/context/notification-context";
-import { fetchSystemStats } from "@/lib/api-client";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
-  const { projects, selectedProject, selectedProjectId, selectProject } = useProject();
-  const {
-    notifications,
-    unreadCount,
-    isConnected,
-    latestToast,
-    dismissToast,
-    markAsRead,
-    markAllAsRead,
-    clearNotifications,
-  } = useNotifications();
-
-  const [serviceCount, setServiceCount] = useState<number | null>(null);
-  const [openIncidentCount, setOpenIncidentCount] = useState<number | null>(null);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showProjectMenu, setShowProjectMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const loadCounts = async () => {
-      try {
-        const stats = await fetchSystemStats(selectedProjectId || undefined);
-        if (!mounted) return;
-        setServiceCount(stats.active_services_count);
-        setOpenIncidentCount(stats.open_incidents_count);
-      } catch (error) {
-        // Silently continue
-      }
-    };
-
-    loadCounts();
-    const interval = setInterval(loadCounts, 8000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [selectedProjectId]);
-
-  // Close dropdowns on route change
-  useEffect(() => {
-    setShowUserMenu(false);
-    setShowNotifications(false);
-    setShowAdminMenu(false);
-    setMobileMenuOpen(false);
-  }, [pathname]);
 
   const navLinks = [
     {
-      name: "Dashboard",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-      badge: null,
+      name: "Overview",
+      href: "/",
+      icon: Sparkles,
     },
     {
-      name: "Crashes",
-      href: "/incidents",
-      icon: AlertTriangle,
-      badge: openIncidentCount !== null && openIncidentCount > 0 ? String(openIncidentCount) : null,
-      badgeColor: "bg-rose-100 text-rose-700",
+      name: "Project",
+      href: "/project",
+      icon: FolderGit2,
     },
     {
-      name: "Projects & Setup",
-      href: "/projects",
-      icon: FolderKanban,
-      badge: null,
+      name: "Documentation",
+      href: "/docs",
+      icon: BookOpen,
     },
-    {
-      name: "Settings",
-      href: "/settings",
-      icon: Settings,
-      badge: null,
-    },
-    ...(user?.role === "Admin"
-      ? [
-          {
-            name: "Admin",
-            href: "/admin",
-            icon: Shield,
-            badge: null,
-          },
-        ]
-      : []),
   ];
-
-  const userDisplayName = user?.name ? user.name.split(" ")[0] : "Guest";
-  const userInitials = user?.name
-    ? user.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .substring(0, 2)
-    : "U";
 
   return (
     <>
-      <nav className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)]">
+      <nav className="sticky top-0 z-50 w-full bg-white/90 backdrop-blur-md border-b border-slate-100 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] transition-all">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-20 items-center justify-between gap-4">
-            {/* 1. Left: Brand Logo & Title */}
-            <div className="flex items-center gap-6">
-              <BrandLogo size="md" href="/dashboard" />
+            {/* 1. Brand Logo */}
+            <div className="flex items-center gap-8">
+              <BrandLogo size="md" href="/" />
 
-              {/* Desktop Horizontal Navigation Links */}
-              <div className="hidden md:flex items-center gap-1.5 ml-2">
+              {/* Desktop Navigation Links */}
+              <div className="hidden md:flex items-center gap-1.5">
                 {navLinks.map((item) => {
                   const Icon = item.icon;
                   const isActive =
-                    pathname === item.href ||
-                    (item.href !== "/dashboard" && pathname?.startsWith(item.href));
+                    item.href === "/"
+                      ? pathname === "/"
+                      : pathname?.startsWith(item.href);
 
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`group flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+                      className={`group flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
                         isActive
                           ? "bg-red-50 text-[#dc2626] font-bold shadow-[0_2px_8px_-2px_rgba(220,38,38,0.15)]"
                           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -169,278 +75,32 @@ export function Navbar() {
                         }`}
                       />
                       <span>{item.name}</span>
-                      {item.badge && (
-                        <span
-                          className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                            item.badgeColor ||
-                            (isActive
-                              ? "bg-red-100 text-red-700"
-                              : "bg-slate-100 text-slate-600")
-                          }`}
-                        >
-                          {item.badge}
-                        </span>
-                      )}
                     </Link>
                   );
                 })}
               </div>
             </div>
 
-            {/* 2. Right Controls */}
+            {/* 2. Right Actions: GitHub & Get SDK */}
             <div className="flex items-center gap-3">
-              {/* Project Selector Dropdown */}
-              {projects.length > 0 && (
-                <div className="relative hidden sm:block">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowProjectMenu(!showProjectMenu);
-                      setShowNotifications(false);
-                      setShowUserMenu(false);
-                      setShowAdminMenu(false);
-                    }}
-                    className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900 transition shadow-sm cursor-pointer"
-                  >
-                    <FolderKanban className="h-3.5 w-3.5 text-red-600" />
-                    <span className="max-w-[130px] truncate font-heading">
-                      {selectedProject?.name || "Select Project"}
-                    </span>
-                    <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                  </button>
+              <a
+                href="https://github.com/sunilsingh175/auratrace"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition shadow-xs"
+              >
+                <Github className="h-4 w-4 text-slate-700" />
+                <span>GitHub</span>
+              </a>
 
-                  {showProjectMenu && (
-                    <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-100 bg-white p-2 shadow-2xl z-50 animate-fadeIn font-sans">
-                      <div className="px-3 py-2 border-b border-slate-100">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-heading">
-                          Active Project Scope
-                        </p>
-                      </div>
-                      <div className="max-h-56 overflow-y-auto py-1 space-y-0.5">
-                        {projects.map((proj) => (
-                          <button
-                            key={proj.id}
-                            type="button"
-                            onClick={() => {
-                              selectProject(proj.id);
-                              setShowProjectMenu(false);
-                            }}
-                            className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition cursor-pointer ${
-                              proj.id === selectedProjectId
-                                ? "bg-red-50 text-red-700 font-bold"
-                                : "text-slate-700 hover:bg-slate-50"
-                            }`}
-                          >
-                            <span className="truncate font-heading">{proj.name}</span>
-                            {proj.id === selectedProjectId && (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-red-600 shrink-0 ml-2" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="pt-2 border-t border-slate-100">
-                        <Link
-                          href="/projects"
-                          onClick={() => setShowProjectMenu(false)}
-                          className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 transition"
-                        >
-                          <FolderKanban className="h-3.5 w-3.5" />
-                          <span>Manage &amp; Provision Projects</span>
-                        </Link>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Real-time Notification Bell */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNotifications(!showNotifications);
-                    setShowProjectMenu(false);
-                    setShowUserMenu(false);
-                    setShowAdminMenu(false);
-                  }}
-                  className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 transition shadow-sm cursor-pointer"
-                  aria-label="Notifications"
-                >
-                  <Bell className="h-4 w-4" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-[#dc2626] text-white text-[9px] font-bold animate-pulse font-heading">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-
-                {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl z-50 animate-fadeIn font-sans">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-900 font-heading">
-                          Real-Time Notifications
-                        </span>
-                        {unreadCount > 0 && (
-                          <span className="text-[10px] bg-red-50 text-red-700 px-2 py-0.5 rounded-full font-bold font-heading">
-                            {unreadCount} new
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {unreadCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={markAllAsRead}
-                            className="text-[11px] font-semibold text-[#dc2626] hover:underline cursor-pointer"
-                          >
-                            Mark all read
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={clearNotifications}
-                          title="Clear all notifications"
-                          className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
-                      {notifications.length > 0 ? (
-                        notifications.map((notif) => (
-                          <div
-                            key={notif.id}
-                            onClick={() => markAsRead(notif.id)}
-                            className={`p-3 rounded-xl border transition cursor-pointer ${
-                              notif.read
-                                ? "bg-slate-50/60 border-slate-100 text-slate-600"
-                                : "bg-red-50/40 border-red-100 text-slate-900 shadow-xs"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                {notif.type === "critical" ? (
-                                   <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
-                                ) : notif.type === "success" ? (
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                                ) : (
-                                  <Activity className="h-4 w-4 text-blue-600 shrink-0" />
-                                )}
-                                <span className="text-xs font-bold font-heading line-clamp-1">
-                                  {notif.title}
-                                </span>
-                              </div>
-                              {!notif.read && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#dc2626] shrink-0 mt-1" />
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2 font-sans">
-                              {notif.message}
-                            </p>
-                            <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-100/60 text-[10px] text-slate-400">
-                              <span>{new Date(notif.timestamp).toLocaleTimeString()}</span>
-                              {notif.link && (
-                                <Link
-                                  href={notif.link}
-                                  onClick={() => setShowNotifications(false)}
-                                  className="text-[#dc2626] font-bold hover:underline inline-flex items-center gap-1 font-heading"
-                                >
-                                  View details <ExternalLink className="h-2.5 w-2.5" />
-                                </Link>
-                              )}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-6 text-xs text-slate-400">
-                          No notifications to display.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-
-              {/* User Profile / Guest Sign In */}
-              <div className="relative">
-                {user ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowUserMenu(!showUserMenu);
-                      setShowNotifications(false);
-                    }}
-                    className="flex items-center gap-2 rounded-full bg-white border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:border-slate-300 transition shadow-sm cursor-pointer font-heading"
-                  >
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-700 font-bold text-[10px]">
-                      {userInitials}
-                    </div>
-                    <span className="hidden sm:inline font-bold">{userDisplayName}</span>
-                    <ChevronDown className="h-3 w-3 text-slate-400" />
-                  </button>
-                ) : (
-                  <Link
-                    href="/login"
-                    className="flex items-center gap-2 rounded-xl bg-[#dc2626] hover:bg-[#b91c1c] text-white px-4 py-2 text-xs font-bold font-heading shadow-sm transition"
-                  >
-                    <LogIn className="h-3.5 w-3.5" />
-                    <span>Sign In</span>
-                  </Link>
-                )}
-
-                {showUserMenu && user && (
-                  <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-100 bg-white p-2.5 shadow-2xl z-50 animate-fadeIn font-sans">
-                    <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                      <p className="font-bold text-xs text-slate-900 font-heading">{user.name}</p>
-                      <p className="text-[10px] text-slate-500 truncate mt-0.5">{user.email}</p>
-                    </div>
-
-                    <div className="space-y-0.5 text-xs">
-                      {user.role === "Admin" && (
-                        <Link
-                          href="/admin"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-2 rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-50 transition font-medium"
-                        >
-                          <Shield className="h-3.5 w-3.5 text-[#dc2626]" />
-                          <span>Admin Console</span>
-                        </Link>
-                      )}
-                      <Link
-                        href="/projects"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-50 transition font-medium"
-                      >
-                        <FolderKanban className="h-3.5 w-3.5 text-slate-500" />
-                        <span>Projects &amp; Keys</span>
-                      </Link>
-                      <Link
-                        href="/settings"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-50 transition font-medium"
-                      >
-                        <Settings className="h-3.5 w-3.5 text-slate-500" />
-                        <span>Settings</span>
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          logout();
-                        }}
-                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-red-600 hover:bg-red-50 transition font-medium cursor-pointer"
-                      >
-                        <LogOut className="h-3.5 w-3.5" />
-                        <span>Sign Out</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <Link
+                href="/docs"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#dc2626] hover:bg-[#b91c1c] active:bg-[#991b1b] text-white px-4 py-2 text-xs font-bold font-heading shadow-sm transition group"
+              >
+                <Terminal className="h-3.5 w-3.5" />
+                <span>Install SDK</span>
+                <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+              </Link>
 
               {/* Mobile Menu Toggle */}
               <div className="flex md:hidden">
@@ -464,8 +124,9 @@ export function Navbar() {
               {navLinks.map((item) => {
                 const Icon = item.icon;
                 const isActive =
-                  pathname === item.href ||
-                  (item.href !== "/dashboard" && pathname?.startsWith(item.href));
+                  item.href === "/"
+                    ? pathname === "/"
+                    : pathname?.startsWith(item.href);
 
                 return (
                   <Link
@@ -474,7 +135,7 @@ export function Navbar() {
                     onClick={() => setMobileMenuOpen(false)}
                     className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold transition ${
                       isActive
-                        ? "bg-red-50 text-[#dc2626]"
+                        ? "bg-red-50 text-[#dc2626] font-bold"
                         : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
@@ -482,80 +143,25 @@ export function Navbar() {
                       <Icon className={`h-4 w-4 ${isActive ? "text-[#dc2626]" : "text-slate-400"}`} />
                       <span>{item.name}</span>
                     </div>
-                    {item.badge && (
-                      <span className="rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-[10px] font-bold">
-                        {item.badge}
-                      </span>
-                    )}
                   </Link>
                 );
               })}
-              {user && (
-                <Link
-                  href="/settings"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold transition ${
-                    pathname === "/settings"
-                      ? "bg-red-50 text-[#dc2626]"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
+
+              <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                <a
+                  href="https://github.com/sunilsingh175/auratrace"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <Settings className={`h-4 w-4 ${pathname === "/settings" ? "text-[#dc2626]" : "text-slate-400"}`} />
-                    <span>Settings</span>
-                  </div>
-                </Link>
-              )}
+                  <Github className="h-4 w-4" />
+                  <span>View on GitHub</span>
+                </a>
+              </div>
             </div>
           </div>
         )}
       </nav>
-
-      {/* Live Toast Notification Popup */}
-      {latestToast && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 animate-scaleUp font-sans">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-2.5 min-w-0">
-              {latestToast.type === "critical" ? (
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-600 shrink-0 border border-rose-100">
-                  <AlertCircle className="h-4 w-4" />
-                </div>
-              ) : (
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 shrink-0 border border-emerald-100">
-                  <CheckCircle2 className="h-4 w-4" />
-                </div>
-              )}
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-heading block">
-                  Real-Time Alert
-                </span>
-                <h4 className="text-xs font-bold text-slate-900 font-heading leading-tight mt-0.5">
-                  {latestToast.title}
-                </h4>
-                <p className="text-[11px] text-slate-500 mt-1 leading-snug line-clamp-2">
-                  {latestToast.message}
-                </p>
-                {latestToast.link && (
-                  <Link
-                    href={latestToast.link}
-                    onClick={dismissToast}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#dc2626] hover:underline mt-2 font-heading"
-                  >
-                    Open Incident <ExternalLink className="h-2.5 w-2.5" />
-                  </Link>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={dismissToast}
-              className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
