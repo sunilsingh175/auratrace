@@ -2,7 +2,7 @@
   "name": "@auratrace/node",
   "version": "2.0.0",
   "type": "module",
-  "description": "Official Node.js Telemetry & Crash Diagnostic SDK for AuraTrace Autonomous Backend Diagnostics",
+  "description": "Official Node.js automatic crash-capture and AI diagnostics SDK for AuraTrace",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build",
-    "test": "tsx test-sdk.ts"
+    "test": "npm run build && tsx --test test/*.test.ts",
+    "pack:check": "npm run build && npm pack --dry-run"
   },
   "keywords": [
     "auratrace",
