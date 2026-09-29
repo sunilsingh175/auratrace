@@ -21,45 +21,34 @@ class AnomalyDetector:
     """
 
     def __init__(self):
-        self.model_path_joblib = os.path.join(
-            os.path.dirname(__file__),
-            "isolation_forest.joblib",
-        )
+        self.candidate_paths = [
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models", "production", "isolation_forest.joblib")),
+            os.path.join(os.path.dirname(__file__), "isolation_forest.joblib"),
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models", "isolation_forest.pkl")),
+        ]
 
         self.model = None
-
         self._load_model()
 
     def _load_model(self):
-        """Load the trained Isolation Forest model."""
+        """Load the trained Isolation Forest model from candidate paths."""
+        if not joblib:
+            print("Joblib is not installed. Anomaly detection is running in failsafe mode.")
+            return
 
-        if joblib and os.path.exists(
-            self.model_path_joblib
-        ):
-            try:
-                self.model = joblib.load(
-                    self.model_path_joblib
-                )
-                if hasattr(self.model, "n_jobs"):
-                    self.model.n_jobs = 1
+        for path in self.candidate_paths:
+            if os.path.exists(path):
+                try:
+                    self.model = joblib.load(path)
+                    if hasattr(self.model, "n_jobs"):
+                        self.model.n_jobs = 1
 
-                print(
-                    "Loaded Isolation Forest model from "
-                    f"{self.model_path_joblib}"
-                )
+                    print(f"Loaded Isolation Forest model from {path}")
+                    return
+                except Exception as exc:
+                    print(f"Failed to load joblib model from {path}: {exc}")
 
-                return
-
-            except Exception as exc:
-                print(
-                    "Failed to load joblib model: "
-                    f"{exc}"
-                )
-
-        print(
-            "No trained Isolation Forest model found. "
-            "Anomaly detection is running in failsafe mode."
-        )
+        print("No trained Isolation Forest model found. Anomaly detection is running in failsafe mode.")
 
     def _prepare_features(
         self,

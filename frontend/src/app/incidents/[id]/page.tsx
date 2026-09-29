@@ -24,6 +24,7 @@ import {
 
 import type { Incident } from "@/types";
 import { SeverityBadge } from "@/components/incidents/SeverityBadge";
+import { RepairTimeline } from "@/components/incidents/RepairTimeline";
 import { formatTimeAgo } from "@/lib/utils";
 
 export default function IncidentDetailsPage() {
@@ -415,53 +416,7 @@ export default function IncidentDetailsPage() {
               )}
             </div>
 
-            {/* 3. HISTORICAL MATCHES: Similar Incident Matches */}
-            {historicalMatches.length > 0 && (
-              <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Database className="h-4 w-4 text-slate-500" />
-                    <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-heading">
-                      Historical Matches
-                    </h2>
-                  </div>
-                  <span className="text-[11px] text-slate-400 font-sans">Historical pattern matching</span>
-                </div>
-
-                <div className="space-y-3">
-                  {historicalMatches.slice(0, 3).map((match: any, idx: number) => {
-                    const score = typeof match.similarity_score === "number" ? match.similarity_score : null;
-                    const matchPercent = score !== null ? (score <= 1 ? (score * 100).toFixed(1) : score.toFixed(1)) : "81.7";
-
-                    return (
-                      <div
-                        key={idx}
-                        className="p-4 rounded-xl border border-slate-100 bg-[#f8fafc] space-y-1.5 text-xs"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2 font-heading font-bold text-slate-900">
-                            <span className="text-slate-400 font-mono text-[11px]">{idx + 1}.</span>
-                            <span>{match.title || match.fix_summary || "Connection Failure"}</span>
-                          </div>
-                          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-700 font-mono">
-                            Similarity: {matchPercent}%
-                          </span>
-                        </div>
-
-                        {match.fix_summary && (
-                          <div className="pl-4 text-[11px] text-slate-600 font-sans">
-                            <span className="font-semibold text-slate-700">Historical fix: </span>
-                            <span>{match.fix_summary}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* 4. WHAT CODE TO CHANGE: Recommended Code Fix */}
+            {/* 3. WHAT CODE TO CHANGE: Recommended Code Fix */}
             {diagnosed && recoveryPatch ? (
               <div className="panel p-6 bg-slate-950 border-slate-900 text-white shadow-xl space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
@@ -516,7 +471,56 @@ export default function IncidentDetailsPage() {
               </div>
             ) : null}
 
-            {/* 5. EVIDENCE: Stack Trace (at the bottom) */}
+            {/* 4. L3 AUTONOMOUS REPAIR LIFECYCLE TIMELINE */}
+            <RepairTimeline incident={incident} onRefreshIncident={loadIncident} />
+
+            {/* 5. HISTORICAL FIXES: Similar Incident Matches */}
+            {historicalMatches.length > 0 && (
+              <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-4 w-4 text-slate-500" />
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-heading">
+                      Historical Matches
+                    </h2>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-sans">Historical pattern matching</span>
+                </div>
+
+                <div className="space-y-3">
+                  {historicalMatches.slice(0, 3).map((match: any, idx: number) => {
+                    const score = typeof match.similarity_score === "number" ? match.similarity_score : null;
+                    const matchPercent = score !== null ? (score <= 1 ? (score * 100).toFixed(1) : score.toFixed(1)) : "81.7";
+
+                    return (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-xl border border-slate-100 bg-[#f8fafc] space-y-1.5 text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 font-heading font-bold text-slate-900">
+                            <span className="text-slate-400 font-mono text-[11px]">{idx + 1}.</span>
+                            <span>{match.title || match.fix_summary || "Connection Failure"}</span>
+                          </div>
+                          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-700 font-mono">
+                            Similarity: {matchPercent}%
+                          </span>
+                        </div>
+
+                        {match.fix_summary && (
+                          <div className="pl-4 text-[11px] text-slate-600 font-sans">
+                            <span className="font-semibold text-slate-700">Historical fix: </span>
+                            <span>{match.fix_summary}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 6. EVIDENCE: Stack Trace (at the bottom) */}
             <div className="panel p-6 bg-white border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] space-y-3">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">

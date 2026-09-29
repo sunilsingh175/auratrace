@@ -31,18 +31,35 @@ export interface AnomalyAlertEvent {
   timestamp: string;
 }
 
-function getWsUrl(): string {
-  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
+function getWsUrl(projectId?: string | null): string {
+  const query = new URLSearchParams();
+  if (projectId) query.set("project_id", projectId);
+  if (typeof window !== "undefined") {
+    const token = sessionStorage.getItem("trace_access_token_v1");
+    if (token) query.set("token", token);
+    const cachedKey = projectId ? (localStorage.getItem(`autotrace_key_${projectId}`) || localStorage.getItem(`auratrace_key_${projectId}`)) : null;
+    if (cachedKey) query.set("api_key", cachedKey);
+  }
+
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    const base = process.env.NEXT_PUBLIC_WS_URL.split("?")[0];
+    return `${base}${queryString}`;
+  }
   if (typeof window !== "undefined") {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.hostname || "localhost";
     const port = process.env.NEXT_PUBLIC_WS_PORT || "8000";
-    return `${protocol}//${host}:${port}/ws/telemetry`;
+    return `${protocol}//${host}:${port}/ws/telemetry${queryString}`;
   }
-  return "ws://localhost:8000/ws/telemetry";
+  return `ws://localhost:8000/ws/telemetry${queryString}`;
 }
 
-export function useWebSocket(onAnomalyAlert?: (alert: AnomalyAlertEvent) => void) {
+export function useWebSocket(
+  onAnomalyAlert?: (alert: AnomalyAlertEvent) => void,
+  projectId?: string | null
+) {
   const [isConnected, setIsConnected] = useState(false);
   const [logs, setLogs] = useState<LogEvent[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
@@ -57,7 +74,8 @@ export function useWebSocket(onAnomalyAlert?: (alert: AnomalyAlertEvent) => void
     let active = true;
     async function loadRecent() {
       try {
-        const res = await fetch("/api/aura?path=telemetry/recent", { cache: "no-store" });
+        const projParam = projectId ? `&project_id=${encodeURIComponent(projectId)}` : "";
+        const res = await fetch(`/api/aura?path=${encodeURIComponent(`telemetry/recent${projParam ? `?${projParam.slice(1)}` : ""}`)}`, { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && active && data.length > 0) {
@@ -76,10 +94,10 @@ export function useWebSocket(onAnomalyAlert?: (alert: AnomalyAlertEvent) => void
     return () => {
       active = false;
     };
-  }, []);
+  }, [projectId]);
 
   const connect = useCallback(() => {
-    const wsUrl = getWsUrl();
+    const wsUrl = getWsUrl(projectId);
     try {
       const socket = new WebSocket(wsUrl);
       wsRef.current = socket;
@@ -138,7 +156,7 @@ export function useWebSocket(onAnomalyAlert?: (alert: AnomalyAlertEvent) => void
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = setTimeout(connect, 3000);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     connect();

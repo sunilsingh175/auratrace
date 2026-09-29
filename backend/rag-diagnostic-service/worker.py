@@ -43,6 +43,7 @@ try:
         AsyncSessionLocal,
         Incident,
         HistoricalFix,
+        RepairSettings,
         get_or_create_service_id,
     )
 except ImportError:
@@ -52,6 +53,7 @@ except ImportError:
             AsyncSessionLocal,
             Incident,
             HistoricalFix,
+            RepairSettings,
             get_or_create_service_id,
         )
     except ImportError:
@@ -141,6 +143,9 @@ async def get_or_create_incident(
         alert.get("incident_id")
     )
 
+    project_id = alert.get("project_id")
+    project_uuid = safe_uuid(project_id) if project_id else None
+
     anomaly_score = safe_float(
         alert.get("anomaly_score", 0.0)
     )
@@ -168,10 +173,11 @@ async def get_or_create_incident(
         incident = result.scalar_one_or_none()
 
         if incident is None:
-            service_db_id = await get_or_create_service_id(session, service_identifier)
+            service_db_id = await get_or_create_service_id(session, service_identifier, project_id=project_uuid)
 
             incident = Incident(
                 id=incident_id,
+                project_id=project_uuid,
                 service_id=service_db_id,
                 error_type=error_type,
                 stack_trace=stack_trace,
@@ -182,10 +188,12 @@ async def get_or_create_incident(
                 created_at=datetime.now(timezone.utc),
             )
             session.add(incident)
-            logger.info("Created incident %s in database | score=%.4f", incident_id, anomaly_score)
+            logger.info("Created incident %s in database | project_id=%s | score=%.4f", incident_id, project_uuid, anomaly_score)
         else:
             incident.anomaly_score = anomaly_score
             incident.error_type = error_type
+            if project_uuid and not incident.project_id:
+                incident.project_id = project_uuid
             if stack_trace:
                 incident.stack_trace = stack_trace
 
@@ -240,6 +248,9 @@ async def process_anomaly(
         alert.get("incident_id")
     )
 
+    project_id = alert.get("project_id")
+    project_uuid = safe_uuid(project_id) if project_id else None
+
     service_id = str(
         alert.get("service_id", "unknown-service")
     )
@@ -261,8 +272,9 @@ async def process_anomaly(
     )
 
     logger.info(
-        "RAG Doctor processing anomaly | incident_id=%s | service=%s | score=%.4f",
+        "RAG Doctor processing anomaly | incident_id=%s | project_id=%s | service=%s | score=%.4f",
         incident_id,
+        project_uuid,
         service_id,
         anomaly_score,
     )
@@ -270,10 +282,11 @@ async def process_anomaly(
     # 1. Ensure incident exists in PostgreSQL
     await get_or_create_incident(alert)
 
-    # 2. Retrieve top similar historical fixes from pgvector
+    # 2. Retrieve top similar historical fixes from pgvector scoped by project
     similar_records = await vector_store.search_similar_fixes(
         stack_trace=stack_trace,
         error_type=error_type,
+        project_id=project_uuid,
         top_k=3,
     )
 
@@ -310,6 +323,7 @@ async def process_anomaly(
         diagnosis_event = {
             "type": "INCIDENT_DIAGNOSED",
             "incident_id": str(incident_id),
+            "project_id": str(project_uuid) if project_uuid else None,
             "service_id": service_id,
             "anomaly_score": anomaly_score,
             "error_type": error_type,
@@ -333,6 +347,32 @@ async def process_anomaly(
         )
     except Exception as exc:
         logger.warning("Failed to publish INCIDENT_DIAGNOSED event: %s", exc)
+
+    # 6. Autonomous L3 Self-Healing Trigger: If auto_repair_enabled is True, initiate repair
+    try:
+        async with AsyncSessionLocal() as session:
+            stmt = select(RepairSettings)
+            if project_uuid:
+                stmt = stmt.where(RepairSettings.project_id == project_uuid)
+            res = await session.execute(stmt)
+            repair_settings = res.scalars().first()
+
+            if repair_settings and repair_settings.auto_repair_enabled:
+                logger.info(
+                    "Auto-repair is enabled for project %s. Triggering autonomous L3 repair pipeline...",
+                    project_uuid or "global",
+                )
+                from backend.repair_engine.orchestrator import RepairOrchestrator
+                orchestrator = RepairOrchestrator(
+                    session_maker=AsyncSessionLocal,
+                    redis_client=redis_client,
+                    anomaly_channel=REDIS_ANOMALY_CHANNEL,
+                )
+                asyncio.create_task(
+                    orchestrator.execute_repair(incident_id=incident_id)
+                )
+    except Exception as auto_repair_exc:
+        logger.warning("Auto-repair trigger evaluation notice: %s", auto_repair_exc)
 
 
 # ---------------------------------------------------------

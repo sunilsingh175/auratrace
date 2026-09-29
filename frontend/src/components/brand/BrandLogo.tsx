@@ -86,24 +86,27 @@ export function BrandLogo({
       {/* Typography */}
       {showText && (
         <div className="min-w-0 flex flex-col justify-center">
-          <div className="flex flex-col leading-[1.15]">
+          <div className="flex items-center leading-none">
             <span
-              className={`font-heading font-extrabold text-[#0f172a] ${titleSizes[size]} tracking-tight group-hover:text-red-700 transition-colors block whitespace-nowrap`}
+              className={`font-heading font-black text-[#0f172a] ${titleSizes[size]} tracking-tight group-hover:text-slate-800 transition-colors`}
             >
-              Automatic Backend
+              Aura
             </span>
             <span
-              className={`font-heading font-black text-[#dc2626] ${subSizes[size]} tracking-widest uppercase block whitespace-nowrap`}
+              className={`font-heading font-black text-[#dc2626] ${titleSizes[size]} tracking-tight`}
             >
-              DETECTION
+              Trace
+            </span>
+            <span className="ml-2 hidden sm:inline-block rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-slate-600 font-heading">
+              SDK v1.0
             </span>
           </div>
 
-          {showTagline && (
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-heading block mt-0.5">
-              Autonomous Observability &amp; Diagnostics
-            </span>
-          )}
+          <span
+            className={`font-heading font-bold text-slate-500 ${subSizes[size]} tracking-wider uppercase block mt-0.5`}
+          >
+            Autonomous Debugging
+          </span>
         </div>
       )}
     </div>

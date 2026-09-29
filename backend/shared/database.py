@@ -21,7 +21,17 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from pgvector.sqlalchemy import Vector
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    from sqlalchemy.types import UserDefinedType
+
+    class Vector(UserDefinedType):  # type: ignore
+        def __init__(self, dim=None):
+            self.dim = dim
+
+        def get_col_spec(self, **kw):
+            return f"vector({self.dim})" if self.dim else "vector"
 
 
 # ============================================================
@@ -102,6 +112,12 @@ class Project(Base):
 
     services: Mapped[list["Service"]] = relationship(
         back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+    repair_settings: Mapped[Optional["RepairSettings"]] = relationship(
+        back_populates="project",
+        uselist=False,
         cascade="all, delete-orphan",
     )
 
@@ -335,6 +351,15 @@ class Incident(Base):
         default=uuid.uuid4,
     )
 
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey(
+            "projects.id",
+            ondelete="CASCADE",
+        ),
+        nullable=True,
+        index=True,
+    )
+
     service_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(
             "services.id",
@@ -421,6 +446,8 @@ class Incident(Base):
         nullable=True,
     )
 
+    project: Mapped[Optional["Project"]] = relationship()
+
     service: Mapped["Service"] = relationship(
         back_populates="incidents",
     )
@@ -440,6 +467,22 @@ class HistoricalFix(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
         default=uuid.uuid4,
+    )
+
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey(
+            "projects.id",
+            ondelete="CASCADE",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    is_global: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
     )
 
     service_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -477,10 +520,32 @@ class HistoricalFix(Base):
         nullable=True,
     )
 
-    # 384 dimensions because the selected embedding model
-    # produces 384-dimensional embeddings.
+    # 384 dimensions because BGE-small produces 384-dimensional embeddings.
     embedding: Mapped[Optional[list[float]]] = mapped_column(
         Vector(384),
+        nullable=True,
+    )
+
+    embedding_model: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="bge-small-en-v1.5",
+    )
+
+    embedding_version: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="1",
+    )
+
+    source: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="verified_kb",
+    )
+
+    verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
 
@@ -490,9 +555,219 @@ class HistoricalFix(Base):
         nullable=False,
     )
 
+    project: Mapped[Optional["Project"]] = relationship()
+
     service: Mapped[Optional["Service"]] = relationship(
         back_populates="historical_fixes",
     )
+
+
+# ============================================================
+# L3 REPAIR SETTINGS & RUNS
+# ============================================================
+
+class RepairSettings(Base):
+    __tablename__ = "repair_settings"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    github_repo: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    base_branch: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="main",
+    )
+
+    encrypted_github_token: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    test_command: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="pytest",
+    )
+
+    auto_repair_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    auto_merge_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    regression_error_rate_threshold: Mapped[float] = mapped_column(
+        Double,
+        nullable=False,
+        default=0.05,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    project: Mapped["Project"] = relationship(
+        back_populates="repair_settings",
+    )
+
+
+class RepairRun(Base):
+    __tablename__ = "repair_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("incidents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="PENDING",
+        index=True,
+    )
+
+    branch_name: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    pr_number: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    pr_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    merge_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="NOT_REQUESTED",
+    )
+
+    merged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    merge_commit_sha: Mapped[Optional[str]] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    post_deploy_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="NOT_STARTED",
+    )
+
+    baseline_error_rate: Mapped[float] = mapped_column(
+        Double,
+        nullable=False,
+        default=0.0,
+    )
+
+    post_repair_error_rate: Mapped[float] = mapped_column(
+        Double,
+        nullable=False,
+        default=0.0,
+    )
+
+    revert_pr_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    revert_pr_number: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    rollback_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="NONE",
+    )
+
+    safety_result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=dict,
+    )
+
+    sandbox_result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=dict,
+    )
+
+    ci_result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=dict,
+    )
+
+    logs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+    )
+
+    error_message: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    incident: Mapped["Incident"] = relationship()
+    project: Mapped["Project"] = relationship()
 
 
 # Backward-compatibility alias
@@ -513,69 +788,56 @@ async def get_or_create_service_id(
 ) -> uuid.UUID:
     """
     Resolve a service identifier (UUID or service name slug) to its database UUID.
-    If the service does not exist, it is automatically discovered and created under the project.
+    Enforces strict project isolation:
+    - If project_id is provided, only searches within that project and creates under that project.
+    - Never resolves or mutates services belonging to a different project.
     """
     if not identifier:
         identifier = "unknown-service"
 
-    # 1. Try parsing as UUID
+    target_project_id = project_id or uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    # 1. Try parsing as UUID within project
     try:
         service_uuid = uuid.UUID(str(identifier))
         result = await session.execute(
-            select(Service).where(Service.id == service_uuid)
+            select(Service).where(
+                Service.id == service_uuid,
+                (Service.project_id == target_project_id) | (Service.project_id.is_(None)),
+            )
         )
         existing = result.scalar_one_or_none()
         if existing:
-            # Update last_seen_at
             existing.last_seen_at = datetime.now(timezone.utc)
-            if project_id and not existing.project_id:
-                existing.project_id = project_id
+            if not existing.project_id:
+                existing.project_id = target_project_id
             await session.commit()
             return existing.id
     except (ValueError, TypeError):
         pass
 
-    # 2. Lookup by project_id and service_id / name
-    if project_id:
-        result = await session.execute(
-            select(Service).where(
-                Service.project_id == project_id,
-                (Service.service_id == str(identifier)) | (Service.name == str(identifier))
-            )
-        )
-        service = result.scalar_one_or_none()
-        if service:
-            service.last_seen_at = datetime.now(timezone.utc)
-            if runtime:
-                service.runtime = runtime
-            if version:
-                service.version = version
-            if environment:
-                service.environment = environment
-            await session.commit()
-            return service.id
-
-    # 3. Global lookup by name or service_id
+    # 2. Lookup strictly by project_id and service_id / name
     result = await session.execute(
         select(Service).where(
-            (Service.name == str(identifier)) | (Service.service_id == str(identifier))
+            Service.project_id == target_project_id,
+            (Service.service_id == str(identifier)) | (Service.name == str(identifier)),
         )
     )
     service = result.scalar_one_or_none()
     if service:
         service.last_seen_at = datetime.now(timezone.utc)
-        if project_id and not service.project_id:
-            service.project_id = project_id
         if runtime:
             service.runtime = runtime
         if version:
             service.version = version
+        if environment:
+            service.environment = environment
         await session.commit()
         return service.id
 
-    # 4. Automatically discover and create new service
+    # 3. Automatically discover and create new service scoped strictly to target_project_id
     new_service = Service(
-        project_id=project_id,
+        project_id=target_project_id,
         service_id=str(identifier),
         name=str(identifier),
         description=f"Auto-discovered {runtime} service: {identifier}",

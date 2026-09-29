@@ -2,10 +2,11 @@ import {
   Incident,
   Service,
   Project,
-  ServiceRegistrationResponse,
   SystemStats,
   InfrastructureStatus,
   UserAccount,
+  RepairRun,
+  RepairSettings,
 } from "@/types";
 
 export * from "@/types";
@@ -35,11 +36,13 @@ function ensureOk(response: Response, path: string) {
 export async function fetchIncidents(params?: {
   status?: string;
   service_id?: string;
+  project_id?: string;
   limit?: number;
 }): Promise<Incident[]> {
   const query = new URLSearchParams();
   if (params?.status && params.status !== "ALL") query.set("status_filter", params.status);
   if (params?.service_id) query.set("service_id", params.service_id);
+  if (params?.project_id) query.set("project_id", params.project_id);
   if (params?.limit) query.set("limit", String(params.limit));
   const path = `incidents?${query}`;
   const res = await request(path);
@@ -48,6 +51,7 @@ export async function fetchIncidents(params?: {
   if (!Array.isArray(data)) throw new Error("Invalid incidents response");
   return data.map((item: any) => ({
     id: item.id,
+    project_id: item.project_id || undefined,
     service_id: item.service_id || "unknown",
     title: item.title || item.error_type || "Anomaly Detected",
     error_type: item.error_type || "System Anomaly",
@@ -78,6 +82,7 @@ export async function fetchIncidentById(id: string): Promise<Incident | null> {
     if (!item?.id) return null;
     return {
       id: item.id,
+      project_id: item.project_id || undefined,
       service_id: item.service_id || "unknown",
       title: item.title || item.error_type || "Anomaly Detected",
       error_type: item.error_type || "System Anomaly",
@@ -188,7 +193,8 @@ export async function cleanTestData(): Promise<{ success: boolean; message: stri
 
 export async function simulateCrash(
   scenario: string = "db_pool_exhaustion",
-  serviceId?: string
+  serviceId?: string,
+  projectId?: string
 ): Promise<{ status?: string; scenario?: string; event_id?: string; message: string }> {
   const path = "simulate-crash";
   const res = await request(path, {
@@ -196,14 +202,16 @@ export async function simulateCrash(
     body: JSON.stringify({
       scenario,
       service_id: serviceId || "checkout-service",
+      project_id: projectId || undefined,
     }),
   });
   ensureOk(res, path);
   return res.json();
 }
 
-export async function fetchServices(): Promise<Service[]> {
-  const path = "services";
+export async function fetchServices(projectId?: string): Promise<Service[]> {
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const path = `services${query}`;
   const res = await request(path);
   ensureOk(res, path);
   const data = await res.json();
@@ -229,52 +237,10 @@ export async function fetchServices(): Promise<Service[]> {
   }));
 }
 
-export async function registerService(data: { id: string; name: string; environment: string }): Promise<ServiceRegistrationResponse> {
-  const path = "services";
-  const res = await request(path, { method: "POST", body: JSON.stringify(data) });
-  ensureOk(res, path);
-  const created = await res.json();
-  return {
-    id: created.id || data.id,
-    project_id: created.project_id || undefined,
-    service_id: created.service_id || data.id,
-    name: created.name || data.name,
-    runtime: created.runtime || "node",
-    version: created.version || "1.0.0",
-    environment: created.environment || data.environment,
-    status: created.status || "healthy",
-    requests: Number(created.requests ?? 0),
-    error_rate: Number(created.error_rate ?? 0),
-    latency_ms: Number(created.latency_ms ?? 0),
-    incident_count: Number(created.incident_count ?? 0),
-    last_activity: created.last_activity || undefined,
-    api_key: created.api_key || "",
-    message: created.message,
-    created_at: created.created_at,
-    owner_id: created.owner_id || undefined,
-  };
-}
 
-export async function updateService(
-  serviceId: string,
-  data: { name?: string; description?: string; environment?: string; status?: string }
-): Promise<Service> {
-  const path = `services/${encodeURIComponent(serviceId)}`;
-  const res = await request(path, { method: "PATCH", body: JSON.stringify(data) });
-  ensureOk(res, path);
-  return res.json();
-}
-
-export async function deleteService(serviceId: string): Promise<{ success: boolean; message: string }> {
-  const path = `services/${encodeURIComponent(serviceId)}`;
-  const res = await request(path, { method: "DELETE" });
-  ensureOk(res, path);
-  return res.json();
-}
-
-
-export async function fetchSystemStats(): Promise<SystemStats> {
-  const path = "stats";
+export async function fetchSystemStats(projectId?: string): Promise<SystemStats> {
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const path = `stats${query}`;
   const res = await request(path);
   ensureOk(res, path);
   const data = await res.json();
@@ -396,3 +362,124 @@ export async function changeUserPassword(data: { current_password: string; new_p
   }
   return await res.json();
 }
+
+// ============================================================
+// L3 AUTONOMOUS REPAIR CLIENT METHODS
+// ============================================================
+
+export async function fetchRepairRunsForIncident(incidentId: string): Promise<RepairRun[]> {
+  try {
+    const path = `repair/runs/incident/${encodeURIComponent(incidentId)}`;
+    const res = await request(path);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn("Failed to fetch repair runs for incident:", err);
+    return [];
+  }
+}
+
+export async function fetchRepairRunById(runId: string): Promise<RepairRun | null> {
+  try {
+    const path = `repair/runs/${encodeURIComponent(runId)}`;
+    const res = await request(path);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to fetch repair run by id:", err);
+    return null;
+  }
+}
+
+export async function triggerAutonomousRepair(
+  incidentId: string,
+  payload?: { sandbox_repo_dir?: string }
+): Promise<any> {
+  const path = `repair/trigger/${encodeURIComponent(incidentId)}`;
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to trigger autonomous repair (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function executeRunMerge(runId: string): Promise<any> {
+  const path = `repair/runs/${encodeURIComponent(runId)}/merge`;
+  const res = await request(path, { method: "POST" });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to execute PR merge (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function verifyRunTelemetry(
+  runId: string,
+  simulateRegression: boolean = false,
+  simulatedErrorRate?: number
+): Promise<any> {
+  const path = `repair/runs/${encodeURIComponent(runId)}/verify-telemetry`;
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify({
+      simulate_regression: simulateRegression,
+      simulated_error_rate: simulatedErrorRate,
+    }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to verify telemetry (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function executeRunRollback(runId: string, reason?: string): Promise<any> {
+  const path = `repair/runs/${encodeURIComponent(runId)}/rollback`;
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason || "Manual rollback requested" }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to trigger rollback (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function executeRunMergeRollback(runId: string): Promise<any> {
+  const path = `repair/runs/${encodeURIComponent(runId)}/merge-rollback`;
+  const res = await request(path, { method: "POST" });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to merge rollback PR (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchProjectRepairSettings(projectId: string): Promise<RepairSettings> {
+  const path = `repair/projects/${encodeURIComponent(projectId)}/settings`;
+  const res = await request(path);
+  ensureOk(res, path);
+  return await res.json();
+}
+
+export async function updateProjectRepairSettings(
+  projectId: string,
+  payload: Partial<RepairSettings> & { github_token?: string }
+): Promise<any> {
+  const path = `repair/projects/${encodeURIComponent(projectId)}/settings`;
+  const res = await request(path, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.detail || `Failed to update repair settings (${res.status})`);
+  }
+  return await res.json();
+}

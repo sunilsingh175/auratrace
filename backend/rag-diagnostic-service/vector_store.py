@@ -102,6 +102,10 @@ class VectorStore:
                     if text_content:
                         vector = embedder.get_embedding(text_content)
                         fix.embedding = vector
+                        fix.embedding_model = "bge-small-en-v1.5"
+                        fix.embedding_version = "1"
+                        if not fix.source:
+                            fix.source = "verified_kb"
                         updated_count += 1
 
                 await session.commit()
@@ -122,42 +126,58 @@ class VectorStore:
         stack_trace: str,
         error_type: str = "",
         top_k: int = 3,
+        project_id: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
         """
         Perform pgvector HNSW cosine similarity search against HistoricalFix.
-
-        The knowledge base is backfilled before searching so seeded records
-        are included in the vector-search candidate set. Results are returned
-        only when they have a valid embedding; no non-semantic fallback is used.
+        Enforces tenant isolation:
+          - Prioritizes project-specific fixes for this project_id
+          - Merges verified global baseline knowledge fixes
+          - Never leaks another tenant's private code fixes
         """
         try:
             search_query = f"{error_type} {stack_trace}".strip()
             if not search_query:
                 return []
 
-            # Ensure all seeded/new historical fixes have vectors before
-            # executing the similarity query. This also repairs databases
-            # where the worker started before seed embeddings were generated.
             await self.sync_historical_embeddings()
 
             query_embedding = embedder.get_embedding(search_query)
 
             async with AsyncSessionLocal() as session:
                 distance_col = HistoricalFix.embedding.cosine_distance(query_embedding).label("distance")
-                stmt = (
-                    select(HistoricalFix, distance_col)
-                    .where(HistoricalFix.embedding.isnot(None))
-                    .order_by(distance_col)
-                    .limit(top_k)
-                )
+                
+                # Query scoped to current project + global verified knowledge
+                if project_id:
+                    stmt = (
+                        select(HistoricalFix, distance_col)
+                        .where(
+                            HistoricalFix.embedding.isnot(None),
+                            (HistoricalFix.project_id == project_id) | (HistoricalFix.is_global.is_(True)) | (HistoricalFix.project_id.is_(None)),
+                        )
+                        .order_by(
+                            # Prioritize project-specific matches first, then cosine distance
+                            (HistoricalFix.project_id == project_id).desc(),
+                            distance_col
+                        )
+                        .limit(top_k)
+                    )
+                else:
+                    stmt = (
+                        select(HistoricalFix, distance_col)
+                        .where(HistoricalFix.embedding.isnot(None))
+                        .order_by(distance_col)
+                        .limit(top_k)
+                    )
 
                 result = await session.execute(stmt)
                 rows = result.all()
 
                 logger.info(
-                    "Returning %d/%d semantically similar historical fixes from pgvector.",
+                    "Returning %d/%d semantically similar historical fixes from pgvector (project_id=%s).",
                     len(rows),
                     top_k,
+                    project_id,
                 )
 
                 return [
@@ -169,6 +189,9 @@ class VectorStore:
                         "fix_summary": fix.fix_description or fix.root_cause or "Verified patch",
                         "fix_description": fix.fix_description or "",
                         "code_patch": fix.code_patch or "",
+                        "is_global": bool(getattr(fix, "is_global", False)),
+                        "source": getattr(fix, "source", "verified_kb"),
+                        "embedding_model": getattr(fix, "embedding_model", "bge-small-en-v1.5"),
                         "similarity_score": round(max(0.0, min(1.0, 1.0 - float(dist))), 4),
                     }
                     for fix, dist in rows

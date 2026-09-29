@@ -1,38 +1,61 @@
+"""
+Unit tests for the official AuraTrace Python SDK.
+Tests initialization, telemetry queueing, exception handling, and transport handling offline.
+"""
+
 import os
-import time
+import unittest
+from unittest.mock import patch
+
 import auratrace
+from auratrace.client import AuraTrace
+from auratrace.metadata import resolve_service_name
 
-def run_test():
-    print("Initializing Python AuraTrace SDK...")
-    client = auratrace.init(
-        api_key=os.getenv("AURATRACE_API_KEY", "at_live_master_auratrace_2026"),
-        endpoint=os.getenv("AURATRACE_ENDPOINT", "http://localhost:8000"),
-        service_name="python-billing-service",
-        environment="production",
-    )
 
-    print("Client initialized for service:", client.service_name)
+class TestPythonSDK(unittest.TestCase):
+    def test_auto_detect_service_name(self):
+        with patch.dict(os.environ, {"AURATRACE_SERVICE_NAME": "order-service"}):
+            self.assertEqual(resolve_service_name(), "order-service")
 
-    print("Dispatching test message...")
-    auratrace.capture_message("Billing subscription renewed for user_4410", metadata={
-        "plan": "enterprise",
-        "amount": 299.00,
-        "source": "python-sdk-test",
-    })
+    def test_auratrace_init_no_master_key_fallback(self):
+        with patch.dict(os.environ, {}, clear=True):
+            client = AuraTrace(api_key="at_test_key_12345", service_name="test-service", install_global_hook=False)
+            self.assertEqual(client.api_key, "at_test_key_12345")
+            self.assertEqual(client.service_name, "test-service")
+            self.assertEqual(client.environment, "production")
 
-    print("Dispatching test exception...")
-    try:
-        raise ValueError("StripeWebhookVerificationError: Invalid signature received from payment provider")
-    except Exception as e:
-        auratrace.capture_exception(e, metadata={
-            "webhook_id": "wh_991823",
-            "provider": "stripe",
-            "status_code": 400,
-        })
+    def test_capture_message_queuing(self):
+        client = AuraTrace(api_key="at_test_key_12345", service_name="test-service", install_global_hook=False)
+        client.capture_message("User authentication succeeded", metadata={"user_id": "usr_100"})
+        self.assertFalse(client.transport._queue.empty())
+        item = client.transport._queue.get_nowait()
+        self.assertEqual(item["level"], "INFO")
+        self.assertEqual(item["message"], "User authentication succeeded")
+        self.assertEqual(item["metadata"]["user_id"], "usr_100")
 
-    auratrace.flush()
-    time.sleep(1)
-    print("Python SDK test completed successfully!")
+    def test_capture_exception_queuing(self):
+        client = AuraTrace(api_key="at_test_key_12345", service_name="test-service", install_global_hook=False)
+        try:
+            raise KeyError("missing_account_id")
+        except Exception as exc:
+            client.capture_exception(exc, metadata={"transaction_id": "tx_9988"})
+
+        self.assertFalse(client.transport._queue.empty())
+        item = client.transport._queue.get_nowait()
+        self.assertEqual(item["level"], "CRITICAL")
+        self.assertEqual(item["error_type"], "KeyError")
+        self.assertIn("missing_account_id", item["message"])
+        self.assertEqual(item["metadata"]["transaction_id"], "tx_9988")
+
+    def test_global_module_functions(self):
+        with patch.dict(os.environ, {"AURATRACE_API_KEY": "at_test_env_key", "AURATRACE_SERVICE_NAME": "global-test-service"}):
+            client = auratrace.init(install_global_hook=False)
+            self.assertEqual(client.api_key, "at_test_env_key")
+            self.assertEqual(client.service_name, "global-test-service")
+
+            auratrace.capture_message("Global test log")
+            self.assertFalse(client.transport._queue.empty())
+
 
 if __name__ == "__main__":
-    run_test()
+    unittest.main()

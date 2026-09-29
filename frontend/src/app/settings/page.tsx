@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   User,
   KeyRound,
@@ -17,10 +17,20 @@ import {
   Code,
   Calendar,
   CheckCircle2,
+  GitBranch,
+  GitPullRequest,
+  RefreshCw,
+  Sliders,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/context/auth-context";
+import {
+  fetchProjects,
+  fetchProjectRepairSettings,
+  updateProjectRepairSettings,
+} from "@/lib/api-client";
+import { Project, RepairSettings } from "@/types";
 
 export default function ProfileSettingsPage() {
   return (
@@ -49,7 +59,73 @@ function ProfileSettingsContent() {
   const [passwordSuccess, setPasswordSuccess] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
+  // L3 Repair Settings State
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [repairSettings, setRepairSettings] = useState<RepairSettings | null>(null);
+  const [githubRepo, setGithubRepo] = useState("");
+  const [baseBranch, setBaseBranch] = useState("main");
+  const [githubToken, setGithubToken] = useState("");
+  const [autoRepairEnabled, setAutoRepairEnabled] = useState(false);
+  const [autoMergeEnabled, setAutoMergeEnabled] = useState(false);
+  const [regressionThreshold, setRegressionThreshold] = useState(0.05);
+  const [isSavingRepair, setIsSavingRepair] = useState(false);
+  const [repairSuccess, setRepairSuccess] = useState("");
+  const [repairError, setRepairError] = useState("");
+
   const [copiedId, setCopiedId] = useState(false);
+
+  // Load projects and repair settings
+  const loadRepairConfig = useCallback(async () => {
+    try {
+      const projList = await fetchProjects();
+      setProjects(projList);
+      const activeProj = projList[0];
+      if (activeProj) {
+        setSelectedProjectId(activeProj.id);
+        const settings = await fetchProjectRepairSettings(activeProj.id);
+        setRepairSettings(settings);
+        setGithubRepo(settings.github_repo || "");
+        setBaseBranch(settings.base_branch || "main");
+        setAutoRepairEnabled(settings.auto_repair_enabled);
+        setAutoMergeEnabled(settings.auto_merge_enabled);
+        setRegressionThreshold(settings.regression_error_rate_threshold || 0.05);
+      }
+    } catch (err) {
+      console.warn("Failed to load repair settings:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRepairConfig();
+  }, [loadRepairConfig]);
+
+  const handleSaveRepairSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProjectId) return;
+    setIsSavingRepair(true);
+    setRepairSuccess("");
+    setRepairError("");
+
+    try {
+      await updateProjectRepairSettings(selectedProjectId, {
+        github_repo: githubRepo.trim(),
+        base_branch: baseBranch.trim(),
+        auto_repair_enabled: autoRepairEnabled,
+        auto_merge_enabled: autoMergeEnabled,
+        regression_error_rate_threshold: Number(regressionThreshold),
+        ...(githubToken.trim() ? { github_token: githubToken.trim() } : {}),
+      });
+      setRepairSuccess("L3 Autonomous Repair settings saved successfully.");
+      setGithubToken("");
+      await loadRepairConfig();
+      setTimeout(() => setRepairSuccess(""), 4000);
+    } catch (err: any) {
+      setRepairError(err.message || "Failed to save repair settings.");
+    } finally {
+      setIsSavingRepair(false);
+    }
+  };
 
   // Sync initial name when user loads
   useEffect(() => {
@@ -146,7 +222,7 @@ function ProfileSettingsContent() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-bold text-slate-900 font-heading truncate">
-                  {user?.name || "Automatic Backend Detection Developer"}
+                  {user?.name || "—"}
                 </h2>
                 <span
                   className={`px-2 py-0.5 rounded-md text-[10px] font-bold font-heading border ${
@@ -159,7 +235,7 @@ function ProfileSettingsContent() {
                 </span>
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 truncate">
-                <span className="truncate">{user?.email || "developer@auratrace.dev"}</span>
+                <span className="truncate">{user?.email || "—"}</span>
                 <span className="text-slate-300">•</span>
                 <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-[11px]">
                   <CheckCircle2 className="h-3 w-3 text-emerald-600" />
@@ -175,7 +251,7 @@ function ProfileSettingsContent() {
                 Member Since
               </span>
               <span className="font-mono text-xs font-semibold text-slate-700">
-                {user?.created_at ? new Date(user.created_at).toLocaleDateString() : "2026-09-24"}
+                {user?.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}
               </span>
             </div>
             <div className="text-right">
@@ -184,7 +260,7 @@ function ProfileSettingsContent() {
               </span>
               <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-xs">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {user?.status || "Active"}
+                {user?.status || "—"}
               </span>
             </div>
           </div>
@@ -239,7 +315,7 @@ function ProfileSettingsContent() {
                 <input
                   type="email"
                   disabled
-                  value={user?.email || "developer@auratrace.dev"}
+                  value={user?.email || "—"}
                   className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2 text-xs font-mono text-slate-500 cursor-not-allowed"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
@@ -255,7 +331,7 @@ function ProfileSettingsContent() {
                   <input
                     type="text"
                     disabled
-                    value={user?.id || "5be15cc3-18ae-4f6f-a437-b34c57ead43e"}
+                    value={user?.id || "—"}
                     className="w-full rounded-l-xl border border-slate-200 bg-slate-100 px-3.5 py-2 text-xs font-mono text-slate-500 cursor-not-allowed"
                   />
                   <button
@@ -384,7 +460,166 @@ function ProfileSettingsContent() {
           </div>
         </div>
 
-        {/* 3. Role & Permissions Matrix */}
+        {/* 3. L3 Autonomous Repair Configuration */}
+        <div className="panel p-5 bg-white border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)] space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-red-100 text-red-600 font-bold text-[10px] font-heading">
+                L3
+              </span>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-heading">
+                Autonomous Repair &amp; Rollback Configuration
+              </h3>
+            </div>
+            {repairSettings?.has_token && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full font-heading">
+                <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                GitHub Authenticated ({repairSettings.masked_token})
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-500 font-sans leading-relaxed">
+            Configure target GitHub repository integration, sandbox test policies, CI gating, and automated rollback regression thresholds.
+          </p>
+
+          {repairError && (
+            <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700 flex items-center gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span>{repairError}</span>
+            </div>
+          )}
+
+          {repairSuccess && (
+            <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-xs text-emerald-700 flex items-center gap-2">
+              <Check className="h-3.5 w-3.5 shrink-0" />
+              <span>{repairSuccess}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveRepairSettings} className="space-y-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 font-heading">
+                  GitHub Repository Slug
+                </label>
+                <input
+                  type="text"
+                  value={githubRepo}
+                  onChange={(e) => setGithubRepo(e.target.value)}
+                  placeholder="e.g. sunilsingh175/auratrace"
+                  className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2 text-xs font-mono text-slate-900 outline-none transition focus:border-red-500 focus:bg-white"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">Format: owner/repository</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 font-heading">
+                  Base Target Branch
+                </label>
+                <input
+                  type="text"
+                  value={baseBranch}
+                  onChange={(e) => setBaseBranch(e.target.value)}
+                  placeholder="e.g. feat/l3-automated-repair or main"
+                  className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2 text-xs font-mono text-slate-900 outline-none transition focus:border-red-500 focus:bg-white"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">Branch from which repair branches branch off</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 font-heading">
+                GitHub Personal Access Token (PAT)
+              </label>
+              <input
+                type="password"
+                value={githubToken}
+                onChange={(e) => setGithubToken(e.target.value)}
+                placeholder={repairSettings?.has_token ? "•••••••••••••••• (Leave blank to keep existing token)" : "Enter GitHub Personal Access Token"}
+                className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2 text-xs font-mono text-slate-900 outline-none transition focus:border-red-500 focus:bg-white"
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">GitHub credentials are encrypted at rest using Fernet symmetric encryption</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
+              {/* Auto Repair Toggle */}
+              <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 font-heading text-xs cursor-pointer" htmlFor="auto-repair-toggle">
+                    Auto-Repair Pipeline
+                  </label>
+                  <input
+                    id="auto-repair-toggle"
+                    type="checkbox"
+                    checked={autoRepairEnabled}
+                    onChange={(e) => setAutoRepairEnabled(e.target.checked)}
+                    className="h-4 w-4 rounded text-[#dc2626] focus:ring-red-500 cursor-pointer"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Automatically synthesize branch &amp; PR when an anomaly is diagnosed.
+                </p>
+              </div>
+
+              {/* Auto Merge Toggle */}
+              <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 font-heading text-xs cursor-pointer" htmlFor="auto-merge-toggle">
+                    Autonomous Auto-Merge
+                  </label>
+                  <input
+                    id="auto-merge-toggle"
+                    type="checkbox"
+                    checked={autoMergeEnabled}
+                    onChange={(e) => setAutoMergeEnabled(e.target.checked)}
+                    className="h-4 w-4 rounded text-[#dc2626] focus:ring-red-500 cursor-pointer"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Automatically merge PRs when CI passes (Recommended: OFF for controlled review).
+                </p>
+              </div>
+
+              {/* Regression Threshold */}
+              <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-100 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 font-heading text-xs">
+                    Rollback Threshold
+                  </label>
+                  <span className="font-mono font-bold text-xs text-rose-600">
+                    {(regressionThreshold * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.01"
+                  max="0.25"
+                  step="0.01"
+                  value={regressionThreshold}
+                  onChange={(e) => setRegressionThreshold(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-600"
+                />
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Triggers automated rollback if post-deploy error spike exceeds baseline.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={isSavingRepair}
+                className="button-primary px-4 py-2 text-xs font-heading font-bold disabled:opacity-50 cursor-pointer flex items-center gap-2"
+              >
+                {isSavingRepair && <RefreshCw className="h-3 w-3 animate-spin" />}
+                <span>{isSavingRepair ? "Saving..." : "Save L3 Repair Settings"}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* 4. Role & Permissions Matrix */}
         <div className="panel p-5 bg-white border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)] space-y-3.5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">

@@ -1,29 +1,36 @@
-# Trace Python SDK
+# AuraTrace Python SDK
 
-Official Python telemetry and unhandled crash diagnostics SDK for Trace.
+AuraTrace is an automatic crash-capture client.
 
-## Quickstart
+## Installation
+
+```bash
+pip install auratrace
+```
+
+Import the package once at application startup:
 
 ```python
-from trace_sdk import Trace, TraceMiddleware
-
-# Initialize Trace Client
-trace = Trace(
-    service_id="payment-service",
-    api_key="trace_payment_secret_456",
-    endpoint="http://localhost:8000"
-)
-
-# 1. Log metrics & structured messages
-trace.info("User checkout initiated", latency_ms=45.2, metadata={"user_id": "usr_99"})
-
-# 2. Capture and report caught exceptions
-try:
-    process_payment()
-except Exception as e:
-    trace.capture_exception(e, message="Payment processing failure")
-
-# 3. Use as a FastAPI / Starlette middleware
-# Automatically records latency and reports unhandled exceptions
-app.add_middleware(TraceMiddleware, client=trace)
+import auratrace
 ```
+
+That is the complete integration for unhandled crashes. Importing AuraTrace automatically installs the global exception hook, detects the application name, captures the crash stack trace and runtime metadata, and sends the event asynchronously.
+
+Use a project-scoped `AURATRACE_API_KEY` and optionally `AURATRACE_ENDPOINT`. The SDK never uses an AuraTrace master/admin key.
+
+## Optional explicit configuration
+
+```python
+import auratrace
+
+auratrace.init(
+    api_key="YOUR_AURATRACE_PROJECT_KEY",
+    endpoint="http://localhost:8000",
+)
+```
+
+## Optional manual capture
+
+Manual capture remains available for caught exceptions and custom telemetry, but it is not required for unhandled crash detection.
+
+The SDK buffers telemetry in a background worker and fails silently if AuraTrace is unavailable so observability cannot interrupt the host application.

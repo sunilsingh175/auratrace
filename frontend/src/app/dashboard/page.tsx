@@ -10,6 +10,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { SummaryMetricCard } from "@/components/dashboard/SummaryMetricCard";
 import { ActiveAnomaliesPanel } from "@/components/dashboard/ActiveAnomaliesPanel";
 import { useWebSocket, type AnomalyAlertEvent } from "@/hooks/use-websocket";
+import { useProject } from "@/context/project-context";
 import {
   fetchSystemStats,
   fetchIncidents,
@@ -18,6 +19,7 @@ import {
 import { SystemStats, Incident, Service } from "@/types";
 
 export default function DashboardPage() {
+  const { selectedProjectId, selectedProject } = useProject();
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -26,9 +28,9 @@ export default function DashboardPage() {
   const loadDashboardData = useCallback(async () => {
     try {
       const [statsData, incidentsData, servicesData] = await Promise.all([
-        fetchSystemStats().catch(() => null),
-        fetchIncidents({ limit: 10 }).catch(() => []),
-        fetchServices().catch(() => []),
+        fetchSystemStats(selectedProjectId || undefined).catch(() => null),
+        fetchIncidents({ limit: 10, project_id: selectedProjectId || undefined }).catch(() => []),
+        fetchServices(selectedProjectId || undefined).catch(() => []),
       ]);
 
       if (statsData) setStats(statsData);
@@ -39,7 +41,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedProjectId]);
 
   // Real-time WebSocket listener: new crashes update instantly without page refresh
   const handleRealtimeAlert = useCallback(
@@ -50,7 +52,7 @@ export default function DashboardPage() {
     [loadDashboardData]
   );
 
-  useWebSocket(handleRealtimeAlert);
+  useWebSocket(handleRealtimeAlert, selectedProjectId);
 
   useEffect(() => {
     loadDashboardData();
