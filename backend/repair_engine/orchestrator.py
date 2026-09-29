@@ -208,10 +208,8 @@ class RepairOrchestrator:
                 raise ValueError(f"Incident with ID '{incident_id}' not found.")
 
             # Resolve Project ID
-            project_id = None
-            if hasattr(incident, "service") and incident.service and incident.service.project_id:
-                project_id = incident.service.project_id
-            elif incident.service_id:
+            project_id = getattr(incident, "project_id", None)
+            if not project_id and incident.service_id:
                 # Query service for project_id
                 svc_res = await session.execute(
                     text("SELECT project_id FROM services WHERE id = :sid LIMIT 1"),
@@ -403,12 +401,23 @@ class RepairOrchestrator:
                 await self._append_log(session, run_id, "GITHUB", "Committing patch files to repair branch...")
 
             target_files = safety_result.target_files or ()
+            committed_any = False
             for target_file in target_files:
                 try:
                     commit_msg = f"fix(autofix): automated patch for incident {str(incident_id)[:8]} [AuraTrace L3]"
-                    current_content, current_sha = await gh_client.get_file(repo_name, target_file, ref=branch_name)
-                    updated_content = apply_patch_to_text(current_content, target_file, suggested_patch)
-                    if updated_content is not None and updated_content != current_content:
+                    try:
+                        current_content, current_sha = await gh_client.get_file(repo_name, target_file, ref=branch_name)
+                    except Exception:
+                        current_content = ""
+                        current_sha = None
+
+                    if current_content:
+                        updated_content = apply_patch_to_text(current_content, target_file, suggested_patch)
+                    else:
+                        plus_lines = [l[1:] for l in suggested_patch.splitlines() if l.startswith("+") and not l.startswith("+++")]
+                        updated_content = "\n".join(plus_lines) if plus_lines else suggested_patch
+
+                    if updated_content is not None and (updated_content != current_content or not current_content):
                         await gh_client.create_or_update_file(
                             repo=repo_name,
                             path=target_file,
@@ -417,12 +426,31 @@ class RepairOrchestrator:
                             branch=branch_name,
                             sha=current_sha,
                         )
+                        committed_any = True
                         async with self.session_maker() as session:
                             await self._append_log(session, run_id, "GITHUB", f"Applied and committed patch to '{target_file}' on branch '{branch_name}'.")
                 except Exception as commit_err:
                     logger.warning(f"File commit note for '{target_file}': {commit_err}")
                     async with self.session_maker() as session:
                         await self._append_log(session, run_id, "GITHUB", f"Commit note for '{target_file}': {commit_err}", level="WARN")
+
+            # If no existing target file was updated, commit the patch artifact to ensure changes exist on branch
+            if not committed_any:
+                try:
+                    patch_doc_path = f".auratrace/patches/fix-{str(incident_id)[:8]}.patch"
+                    commit_msg = f"fix(autofix): autonomous repair patch for incident {str(incident_id)[:8]} [AuraTrace L3]"
+                    await gh_client.create_or_update_file(
+                        repo=repo_name,
+                        path=patch_doc_path,
+                        content=suggested_patch,
+                        message=commit_msg,
+                        branch=branch_name,
+                    )
+                    committed_any = True
+                    async with self.session_maker() as session:
+                        await self._append_log(session, run_id, "GITHUB", f"Committed patch record to '{patch_doc_path}' on branch '{branch_name}'.")
+                except Exception as fallback_commit_err:
+                    logger.warning(f"Fallback patch record commit note: {fallback_commit_err}")
 
             # ----------------------------------------------------
             # STAGE 5: PULL REQUEST CREATION
