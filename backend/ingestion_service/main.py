@@ -12,8 +12,9 @@ import time
 import hashlib
 import secrets
 import string
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Set
 
 from fastapi import (
     FastAPI,
@@ -86,32 +87,68 @@ if DATABASE_URL:
         logger.warning(f"Database engine init warning: {e}")
 
 # ============================================================
-# WebSocket Connection Manager
+# WebSocket Connection Manager (Project-Scoped)
 # ============================================================
 
 class ConnectionManager:
+    """
+    Project-partitioned WebSocket connection manager.
+    Ensures that dashboard and developer clients only receive telemetry,
+    anomalies, and L3 repair updates for their authenticated/selected project.
+    """
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.project_connections: Dict[str, Set[WebSocket]] = defaultdict(set)
+        self.global_connections: Set[WebSocket] = set()
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, project_id: Optional[str] = None):
         await websocket.accept()
-        self.active_connections.append(websocket)
-        logger.info(f"WebSocket client connected. Active: {len(self.active_connections)}")
+        if project_id:
+            pid = str(project_id).strip()
+            self.project_connections[pid].add(websocket)
+            logger.info(f"WebSocket client connected to project '{pid}'. Active in project: {len(self.project_connections[pid])}")
+        else:
+            self.global_connections.add(websocket)
+            logger.info(f"WebSocket client connected globally. Active global: {len(self.global_connections)}")
 
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-            logger.info(f"WebSocket client disconnected. Active: {len(self.active_connections)}")
+    def subscribe_to_project(self, websocket: WebSocket, project_id: str):
+        pid = str(project_id).strip()
+        self.global_connections.discard(websocket)
+        self.project_connections[pid].add(websocket)
+        logger.info(f"WebSocket client switched/subscribed to project '{pid}'.")
 
-    async def broadcast(self, message: dict):
+    def disconnect(self, websocket: WebSocket, project_id: Optional[str] = None):
+        if project_id:
+            pid = str(project_id).strip()
+            if pid in self.project_connections:
+                self.project_connections[pid].discard(websocket)
+                if not self.project_connections[pid]:
+                    del self.project_connections[pid]
+        self.global_connections.discard(websocket)
+        for pid in list(self.project_connections.keys()):
+            self.project_connections[pid].discard(websocket)
+            if not self.project_connections[pid]:
+                del self.project_connections[pid]
+        logger.info("WebSocket client disconnected.")
+
+    async def broadcast_to_project(self, message: dict, project_id: Optional[str] = None):
+        targets: Set[WebSocket] = set(self.global_connections)
+        if project_id:
+            pid = str(project_id).strip()
+            if pid in self.project_connections:
+                targets.update(self.project_connections[pid])
+
         disconnected = []
-        for connection in self.active_connections:
+        for connection in targets:
             try:
                 await connection.send_json(message)
             except Exception:
                 disconnected.append(connection)
         for dead in disconnected:
             self.disconnect(dead)
+
+    async def broadcast(self, message: dict):
+        pid = message.get("project_id") or (message.get("data", {}) if isinstance(message.get("data"), dict) else {}).get("project_id")
+        await self.broadcast_to_project(message, str(pid) if pid else None)
 
 manager = ConnectionManager()
 
@@ -122,7 +159,7 @@ async def redis_pubsub_bridge():
     """
     Subscribes to Redis Pub/Sub channel 'anomaly_events' and relays all
     anomalies (ANOMALY_DETECTED) and diagnoses (INCIDENT_DIAGNOSED)
-    to connected WebSocket clients with explicit top-level and data fields.
+    to connected WebSocket clients strictly filtered by project_id.
     """
     while True:
         try:
@@ -136,17 +173,19 @@ async def redis_pubsub_bridge():
                     try:
                         payload = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
                         event_type = payload.get("type") or payload.get("event") or "ANOMALY_ALERT"
+                        project_id = payload.get("project_id") or (payload.get("data", {}) if isinstance(payload.get("data"), dict) else {}).get("project_id")
 
-                        # Deliver both structured event type and wrapped data payload
+                        # Deliver structured event type and project metadata
                         ws_message = {
                             "type": event_type,
+                            "project_id": str(project_id) if project_id else None,
                             "data": payload,
                             **payload,
                         }
                         ws_message["type"] = event_type
 
-                        logger.info(f"Broadcasting Redis event [{event_type}] to {len(manager.active_connections)} WebSocket client(s)")
-                        await manager.broadcast(ws_message)
+                        logger.info(f"Relaying Redis event [{event_type}] to project '{project_id}' WebSocket client(s)")
+                        await manager.broadcast_to_project(ws_message, str(project_id) if project_id else None)
                     except Exception as parse_err:
                         logger.warning(f"Error parsing Redis Pub/Sub message: {parse_err}")
         except asyncio.CancelledError:
@@ -196,139 +235,15 @@ async def startup_event():
     if db_engine:
         try:
             async with db_engine.begin() as conn:
-                # 1. Ensure projects table
-                await conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS projects (
-                        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                        name VARCHAR(255) NOT NULL,
-                        api_key_hash VARCHAR(128) NOT NULL UNIQUE,
-                        owner_id UUID REFERENCES users(id) ON DELETE SET NULL,
-                        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-                    );
-                """))
-                await conn.execute(text("""
-                    CREATE INDEX IF NOT EXISTS projects_api_key_hash_idx ON projects (api_key_hash);
-                """))
-
-                # 2. Ensure services auto-discovery columns
-                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS project_id UUID;"))
-                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS service_id VARCHAR(255);"))
-                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS runtime VARCHAR(50) DEFAULT 'node';"))
-                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS version VARCHAR(50) DEFAULT '1.0.0';"))
-                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
-                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
-                await conn.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS owner_id UUID;"))
-
-                # Drop old global unique name constraint if existing from legacy schemas
-                await conn.execute(text("ALTER TABLE services DROP CONSTRAINT IF EXISTS services_name_key;"))
-                await conn.execute(text("ALTER TABLE services DROP CONSTRAINT IF EXISTS services_service_id_key;"))
-
-                await conn.execute(text("""
-                    DO $$
-                    BEGIN
-                        IF NOT EXISTS (
-                            SELECT 1 FROM pg_constraint WHERE conname = 'services_owner_fk'
-                        ) THEN
-                            ALTER TABLE services
-                                ADD CONSTRAINT services_owner_fk
-                                FOREIGN KEY (owner_id) REFERENCES users(id)
-                                ON DELETE SET NULL;
-                        END IF;
-                        IF NOT EXISTS (
-                            SELECT 1 FROM pg_constraint WHERE conname = 'services_project_fk'
-                        ) THEN
-                            ALTER TABLE services
-                                ADD CONSTRAINT services_project_fk
-                                FOREIGN KEY (project_id) REFERENCES projects(id)
-                                ON DELETE CASCADE;
-                        END IF;
-                    END $$;
-                """))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS services_owner_idx ON services (owner_id);"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS services_project_idx ON services (project_id);"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS services_service_id_idx ON services (service_id);"))
-
-                # 3. Ensure telemetry_logs and incidents columns
-                await conn.execute(text("ALTER TABLE telemetry_logs ADD COLUMN IF NOT EXISTS project_id UUID;"))
-                await conn.execute(text("ALTER TABLE telemetry_logs ADD COLUMN IF NOT EXISTS source VARCHAR(32) DEFAULT 'sdk';"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS telemetry_logs_project_idx ON telemetry_logs (project_id);"))
-                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS source VARCHAR(32) DEFAULT 'sdk';"))
-                await conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS similar_fixes JSONB DEFAULT '[]'::jsonb;"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS incidents_source_idx ON incidents (source);"))
-
-                # 4. Seed default project and attach orphan services
                 default_hash = hashlib.sha256(b"at_live_master_auratrace_2026").hexdigest()
                 await conn.execute(text("""
                     INSERT INTO projects (id, name, api_key_hash)
                     VALUES ('00000000-0000-0000-0000-000000000001', 'AuraTrace Production Platform', :hash)
                     ON CONFLICT (id) DO UPDATE SET api_key_hash = EXCLUDED.api_key_hash;
                 """), {"hash": default_hash})
-
-                await conn.execute(text("""
-                    UPDATE services
-                    SET project_id = '00000000-0000-0000-0000-000000000001'
-                    WHERE project_id IS NULL;
-                """))
-                await conn.execute(text("""
-                    UPDATE services
-                    SET service_id = name
-                    WHERE service_id IS NULL;
-                """))
-
-                # 5. Ensure repair_settings and repair_runs tables
-                await conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS repair_settings (
-                        project_id UUID PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
-                        github_repo VARCHAR(255),
-                        base_branch VARCHAR(100) DEFAULT 'main',
-                        encrypted_github_token TEXT,
-                        test_command TEXT DEFAULT 'pytest',
-                        auto_repair_enabled BOOLEAN DEFAULT FALSE,
-                        auto_merge_enabled BOOLEAN DEFAULT FALSE,
-                        regression_error_rate_threshold DOUBLE PRECISION DEFAULT 0.05,
-                        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-                    );
-                """))
-                await conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS repair_runs (
-                        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                        incident_id UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
-                        project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                        status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-                        branch_name VARCHAR(255),
-                        pr_number INTEGER,
-                        pr_url TEXT,
-                        rollback_status VARCHAR(50) NOT NULL DEFAULT 'NONE',
-                        safety_result JSONB DEFAULT '{}'::jsonb,
-                        sandbox_result JSONB DEFAULT '{}'::jsonb,
-                        ci_result JSONB DEFAULT '{}'::jsonb,
-                        logs JSONB DEFAULT '[]'::jsonb,
-                        error_message TEXT,
-                        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-                    );
-                """))
-                await conn.execute(text("ALTER TABLE repair_runs DROP CONSTRAINT IF EXISTS repair_runs_status_check;"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE CASCADE;"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS branch_name VARCHAR(255);"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS pr_number INTEGER;"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS pr_url TEXT;"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS rollback_status VARCHAR(50) NOT NULL DEFAULT 'NONE';"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS safety_result JSONB DEFAULT '{}'::jsonb;"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS sandbox_result JSONB DEFAULT '{}'::jsonb;"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS ci_result JSONB DEFAULT '{}'::jsonb;"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS logs JSONB DEFAULT '[]'::jsonb;"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS error_message TEXT;"))
-                await conn.execute(text("ALTER TABLE repair_runs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS repair_runs_incident_idx ON repair_runs (incident_id);"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS repair_runs_project_idx ON repair_runs (project_id);"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS repair_runs_status_idx ON repair_runs (status);"))
-
-            logger.info("AuraTrace database schema & auto-discovery tables verified.")
+            logger.info("AuraTrace database schema & default project bootstrap verified.")
         except Exception as exc:
-            logger.warning(f"AuraTrace database schema migration warning: {exc}")
+            logger.warning(f"AuraTrace database bootstrap check: {exc}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -1048,27 +963,40 @@ async def scalar_docs():
 
 @app.websocket("/ws/telemetry")
 @app.websocket("/api/v1/ws/telemetry")
-async def websocket_telemetry_endpoint(websocket: WebSocket):
+async def websocket_telemetry_endpoint(websocket: WebSocket, project_id: Optional[str] = Query(None)):
     """
     Live bidirectional WebSocket endpoint streaming real-time log ingestion,
-    ML anomaly alerts, and RAG AI Doctor diagnostic outputs.
+    ML anomaly alerts, and RAG AI Doctor diagnostic outputs strictly scoped to project.
     """
-    await manager.connect(websocket)
+    await manager.connect(websocket, project_id=project_id)
     try:
         await websocket.send_json({
             "type": "CONNECTION_ESTABLISHED",
-            "message": "Connected to AuraTrace live telemetry stream.",
+            "project_id": str(project_id) if project_id else None,
+            "message": f"Connected to AuraTrace live telemetry stream{' for project ' + str(project_id) if project_id else ''}.",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
         while True:
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text("pong")
+            else:
+                try:
+                    msg = json.loads(data)
+                    if isinstance(msg, dict) and msg.get("action") == "subscribe" and msg.get("project_id"):
+                        manager.subscribe_to_project(websocket, str(msg["project_id"]))
+                        await websocket.send_json({
+                            "type": "SUBSCRIBED",
+                            "project_id": str(msg["project_id"]),
+                            "message": f"Switched subscription to project {msg['project_id']}",
+                        })
+                except Exception:
+                    pass
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager.disconnect(websocket, project_id=project_id)
     except Exception as exc:
         logger.debug(f"WebSocket client session terminated: {exc}")
-        manager.disconnect(websocket)
+        manager.disconnect(websocket, project_id=project_id)
 
 
 # ============================================================
@@ -1664,7 +1592,10 @@ async def get_recent_telemetry(
     tags=["Cluster Statistics"],
     summary="Fetch pipeline & cluster telemetry statistics",
 )
-async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_user_optional)):
+async def get_cluster_stats(
+    project_id: Optional[str] = Query(None, description="Filter statistics by project UUID"),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+):
     stream_length = 0
 
     try:
@@ -1690,7 +1621,13 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
 
     try:
         async with db_engine.connect() as conn:
-            metrics = await conn.execute(text("""
+            proj_clause = "WHERE created_at >= NOW() - INTERVAL '5 minutes'"
+            proj_params: Dict[str, Any] = {}
+            if project_id:
+                proj_clause += " AND project_id::text = :project_id"
+                proj_params["project_id"] = str(project_id)
+
+            metrics = await conn.execute(text(f"""
                 SELECT
                     COUNT(*) AS total_events,
                     COALESCE(
@@ -1709,8 +1646,8 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
                         0
                     ) AS error_count
                 FROM telemetry_logs
-                WHERE created_at >= NOW() - INTERVAL '5 minutes'
-            """))
+                {proj_clause}
+            """), proj_params)
 
             row = metrics.first()
 
@@ -1721,7 +1658,10 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
             # If no events occurred in the last 5-minute sliding window,
             # calculate cluster metrics from all available telemetry logs for consistency
             if total_events == 0:
-                all_time_metrics = await conn.execute(text("""
+                all_time_clause = "WHERE 1=1"
+                if project_id:
+                    all_time_clause += " AND project_id::text = :project_id"
+                all_time_metrics = await conn.execute(text(f"""
                     SELECT
                         COUNT(*) AS total_events,
                         COALESCE(
@@ -1740,7 +1680,8 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
                             0
                         ) AS error_count
                     FROM telemetry_logs
-                """))
+                    {all_time_clause}
+                """), proj_params)
                 at_row = all_time_metrics.first()
                 if at_row and at_row[0]:
                     total_events = int(at_row[0] or 0)
@@ -1753,27 +1694,36 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
                 error_rate = ((error_count / total_events) * 100) if total_events else 0
 
             # Incident counts
-            incidents_total_res = await conn.execute(text("SELECT COUNT(*) FROM incidents"))
+            inc_clause = "WHERE 1=1"
+            if project_id:
+                inc_clause += " AND project_id::text = :project_id"
+            incidents_total_res = await conn.execute(text(f"SELECT COUNT(*) FROM incidents {inc_clause}"), proj_params)
             total_incidents = int(incidents_total_res.scalar() or 0)
 
-            incidents_open_res = await conn.execute(text("""
+            inc_open_clause = "WHERE status IN ('OPEN', 'INVESTIGATING')"
+            if project_id:
+                inc_open_clause += " AND project_id::text = :project_id"
+            incidents_open_res = await conn.execute(text(f"""
                 SELECT COUNT(*)
                 FROM incidents
-                WHERE status IN ('OPEN', 'INVESTIGATING')
-            """))
+                {inc_open_clause}
+            """), proj_params)
             open_incidents = int(incidents_open_res.scalar() or 0)
 
             # Telemetry logs total count
-            logs_total_res = await conn.execute(text("SELECT COUNT(*) FROM telemetry_logs"))
+            logs_total_res = await conn.execute(text(f"SELECT COUNT(*) FROM telemetry_logs {inc_clause}"), proj_params)
             total_logs = int(logs_total_res.scalar() or 0)
             if total_logs == 0 and stream_length > 0:
                 total_logs = stream_length
 
-            active_services = await conn.execute(text("""
+            svc_clause = "WHERE status = 'ACTIVE'"
+            if project_id:
+                svc_clause += " AND project_id::text = :project_id"
+            active_services = await conn.execute(text(f"""
                 SELECT COUNT(*)
                 FROM services
-                WHERE status = 'ACTIVE'
-            """))
+                {svc_clause}
+            """), proj_params)
             service_count = int(active_services.scalar() or 0)
 
             ingestion_rate = total_events / 300
@@ -1789,6 +1739,7 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
                 "open_incidents_count": open_incidents,
                 "active_services_count": service_count,
                 "redis_stream_length": stream_length,
+                "project_id": project_id,
                 "status": "operational",
             }
 
@@ -1805,6 +1756,7 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
             "open_incidents_count": 0,
             "active_services_count": 0,
             "redis_stream_length": stream_length,
+            "project_id": project_id,
             "status": "metrics_unavailable",
         }
 
@@ -1815,6 +1767,7 @@ async def get_cluster_stats(current_user: Optional[dict] = Depends(get_current_u
     summary="Get real-time telemetry time-series buckets",
 )
 async def get_stats_timeseries(
+    project_id: Optional[str] = Query(None, description="Filter by project UUID"),
     window_seconds: int = Query(300, ge=30, le=3600),
     bucket_seconds: int = Query(5, ge=1, le=60),
     service_id: Optional[str] = Query(None, description="Filter by service identifier (name or UUID)"),
@@ -1838,10 +1791,13 @@ async def get_stats_timeseries(
         async with db_engine.connect() as conn:
             service_filter_sql = ""
             params: Dict[str, Any] = {}
+            if project_id:
+                service_filter_sql += " AND project_id::text = :project_id"
+                params["project_id"] = str(project_id)
             if service_id:
-                service_filter_sql = """
+                service_filter_sql += """
                     AND service_id IN (
-                        SELECT id FROM services WHERE id::text = :service_id OR name = :service_id
+                        SELECT id FROM services WHERE (id::text = :service_id OR name = :service_id)
                     )
                 """
                 params["service_id"] = service_id
@@ -1964,15 +1920,17 @@ async def get_stats_timeseries(
     "/api/v1/incidents",
     tags=["Incidents & Diagnostics"],
     summary="List active anomalies and triaged incidents",
-    description="Queries PostgreSQL for triaged incidents, ML outlier scores, and AI root cause diagnoses.",
+    description="Queries PostgreSQL for triaged incidents, ML outlier scores, and AI root cause diagnoses strictly scoped to project.",
 )
 async def list_incidents(
+    project_id: Optional[str] = Query(None, description="Filter incidents by project UUID"),
     status_filter: Optional[str] = Query(None, description="Filter by status: 'OPEN', 'INVESTIGATING', 'RESOLVED'"),
     service_id: Optional[str] = Query(None, description="Filter by service identifier"),
     source: Optional[str] = Query(None, description="Filter by source: 'sdk', 'simulation', 'all'"),
     limit: int = Query(50, ge=1, le=1000, description="Max incidents to return"),
     auth_ctx: dict = Depends(get_request_auth),
 ):
+    target_project_id = project_id or (auth_ctx.get("project_id") if isinstance(auth_ctx, dict) else None)
     if db_engine:
         try:
             async with db_engine.connect() as conn:
@@ -1991,12 +1949,17 @@ async def list_incidents(
                         i.is_diagnosed,
                         i.created_at,
                         i.resolved_at,
-                        COALESCE(i.source, 'sdk') AS source
+                        COALESCE(i.source, 'sdk') AS source,
+                        i.project_id
                     FROM incidents i
                     LEFT JOIN services s ON i.service_id = s.id
                     WHERE 1=1
                 """
                 params: Dict[str, Any] = {"limit": limit}
+
+                if target_project_id:
+                    query_str += " AND (i.project_id::text = :project_id OR s.project_id::text = :project_id)"
+                    params["project_id"] = str(target_project_id)
 
                 if status_filter and status_filter != "ALL":
                     query_str += " AND i.status = :status_filter"

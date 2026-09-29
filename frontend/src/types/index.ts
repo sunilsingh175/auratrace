@@ -53,6 +53,7 @@ export interface SimilarIncident {
 
 export interface Incident {
   id: string;
+  project_id?: string;
   service_id: string;
   title: string;
   error_type: string;

@@ -257,11 +257,14 @@ async def persist_telemetry(
         telemetry.get("service_id", "unknown-service")
     )
 
+    target_project_id = telemetry.get("project_id") or "00000000-0000-0000-0000-000000000001"
+    source = str(telemetry.get("source") or ("simulation" if telemetry.get("type") == "SIMULATION_CRASH" else "sdk"))
+
     try:
         async with db_engine.begin() as conn:
 
             # ------------------------------------------------
-            # Resolve service UUID from UUID or service name
+            # Resolve service UUID scoped strictly to project
             # ------------------------------------------------
 
             result = await conn.execute(
@@ -269,14 +272,15 @@ async def persist_telemetry(
                     """
                     SELECT id
                     FROM services
-                    WHERE id::text = :identifier
-                       OR name = :identifier
-                       OR service_id = :identifier
+                    WHERE (project_id::text = :project_id OR project_id IS NULL)
+                      AND (id::text = :identifier OR name = :identifier OR service_id = :identifier)
+                    ORDER BY (project_id IS NOT NULL) DESC
                     LIMIT 1
                     """
                 ),
                 {
                     "identifier": service_identifier,
+                    "project_id": str(target_project_id),
                 },
             )
 
@@ -285,12 +289,16 @@ async def persist_telemetry(
             if service_row:
                 service_db_id = service_row[0]
                 await conn.execute(
+                    text("UPDATE services SET last_seen_at = CURRENT_TIMESTAMP, project_id = CAST(:project_id AS uuid) WHERE id = :id AND project_id IS NULL"),
+                    {"id": service_db_id, "project_id": str(target_project_id)}
+                )
+                await conn.execute(
                     text("UPDATE services SET last_seen_at = CURRENT_TIMESTAMP WHERE id = :id"),
                     {"id": service_db_id}
                 )
 
             else:
-                # Auto-register unknown services with telemetry runtime
+                # Auto-register unknown services with telemetry runtime under target project
                 runtime = telemetry.get("runtime", "node")
                 environment = telemetry.get("environment", "production")
                 version = telemetry.get("version", "1.0.0")
@@ -310,7 +318,7 @@ async def persist_telemetry(
                             last_seen_at
                         )
                         VALUES (
-                            '00000000-0000-0000-0000-000000000001',
+                            CAST(:project_id AS uuid),
                             :service_id,
                             :name,
                             :description,
@@ -325,6 +333,7 @@ async def persist_telemetry(
                         """
                     ),
                     {
+                        "project_id": str(target_project_id),
                         "service_id": service_identifier,
                         "name": service_identifier,
                         "runtime": runtime,
@@ -368,13 +377,14 @@ async def persist_telemetry(
                 )
 
             # ------------------------------------------------
-            # Insert telemetry record
+            # Insert telemetry record with project_id
             # ------------------------------------------------
 
             result = await conn.execute(
                 text(
                     """
                     INSERT INTO telemetry_logs (
+                        project_id,
                         service_id,
                         timestamp,
                         level,
@@ -383,9 +393,11 @@ async def persist_telemetry(
                         stack_trace,
                         latency_ms,
                         status_code,
-                        metadata
+                        metadata,
+                        source
                     )
                     VALUES (
+                        CAST(:project_id AS uuid),
                         :service_id,
                         :timestamp,
                         :level,
@@ -394,12 +406,14 @@ async def persist_telemetry(
                         :stack_trace,
                         :latency_ms,
                         :status_code,
-                        CAST(:metadata AS JSONB)
+                        CAST(:metadata AS JSONB),
+                        :source
                     )
                     RETURNING id
                     """
                 ),
                 {
+                    "project_id": str(target_project_id),
                     "service_id": service_db_id,
                     "timestamp": timestamp_value,
                     "level": (
@@ -434,6 +448,7 @@ async def persist_telemetry(
                         telemetry.get("metadata")
                         or {}
                     ),
+                    "source": source,
                 },
             )
 
@@ -444,8 +459,9 @@ async def persist_telemetry(
 
                 logger.info(
                     "Telemetry persisted to PostgreSQL | "
-                    "id=%s | service=%s",
+                    "id=%s | project=%s | service=%s",
                     telemetry_id,
+                    target_project_id,
                     service_identifier,
                 )
 
@@ -483,27 +499,25 @@ async def create_incident(
     stack_trace = telemetry.get("stack_trace") or telemetry.get("raw_stack_trace") or telemetry.get("message", "")
     error_type = telemetry.get("error_type") or "SystemAnomaly"
     severity = "CRITICAL" if anomaly_score >= 0.85 else ("HIGH" if anomaly_score >= 0.70 else "MEDIUM")
+    target_project_id = telemetry.get("project_id") or "00000000-0000-0000-0000-000000000001"
 
     try:
 
         async with db_engine.begin() as conn:
 
             # ------------------------------------------------
-            # Find or create service (handles UUID and slug)
+            # Find or create service strictly scoped to project
             # ------------------------------------------------
             service_db_id = None
 
-            target_project_id = telemetry.get("project_id") or "00000000-0000-0000-0000-000000000001"
-
-            # 1. Try match by UUID, or by (project_id, service_id/name)
             result = await conn.execute(
                 text(
                     """
                     SELECT id
                     FROM services
-                    WHERE (id::text = :identifier)
-                       OR (project_id::text = :project_id
-                           AND (name = :identifier OR service_id = :identifier))
+                    WHERE (project_id::text = :project_id OR project_id IS NULL)
+                      AND (id::text = :identifier OR name = :identifier OR service_id = :identifier)
+                    ORDER BY (project_id IS NOT NULL) DESC
                     LIMIT 1
                     """
                 ),
@@ -518,7 +532,7 @@ async def create_incident(
             if service_row:
                 service_db_id = service_row[0]
             else:
-                # 2. Auto-create service scoped to target project so incident foreign key constraint always succeeds
+                # 2. Auto-create service scoped to target project
                 runtime = telemetry.get("runtime", "node")
                 environment = telemetry.get("environment", "production")
                 version = telemetry.get("version", "1.0.0")
@@ -558,7 +572,7 @@ async def create_incident(
                 return None
 
             # ------------------------------------------------
-            # Deduplicate repeated anomalies
+            # Deduplicate repeated anomalies within 5m
             # ------------------------------------------------
 
             cooldown_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
@@ -606,6 +620,7 @@ async def create_incident(
                 text(
                     """
                     INSERT INTO incidents (
+                        project_id,
                         service_id,
                         telemetry_id,
                         anomaly_score,
@@ -618,6 +633,7 @@ async def create_incident(
                         created_at
                     )
                     VALUES (
+                        CAST(:project_id AS uuid),
                         :service_id,
                         :telemetry_id,
                         :anomaly_score,
@@ -633,6 +649,7 @@ async def create_incident(
                     """
                 ),
                 {
+                    "project_id": str(target_project_id),
                     "service_id": service_db_id,
                     "telemetry_id": telemetry.get("_telemetry_id"),
                     "anomaly_score": anomaly_score,
@@ -653,8 +670,9 @@ async def create_incident(
                 )
 
                 logger.info(
-                    "Incident created in PostgreSQL | id=%s | score=%.4f | severity=%s",
+                    "Incident created in PostgreSQL | id=%s | project=%s | score=%.4f | severity=%s",
                     incident_id,
+                    target_project_id,
                     anomaly_score,
                     severity,
                 )
@@ -684,9 +702,11 @@ def publish_anomaly(
     service_id = str(telemetry.get("service_id", "unknown-service"))
     error_type = telemetry.get("error_type") or "SystemAnomaly"
     message = telemetry.get("message") or telemetry.get("log_message") or f"Anomaly detected in {service_id}"
+    target_project_id = str(telemetry.get("project_id") or "00000000-0000-0000-0000-000000000001")
 
     event = {
         "type": "ANOMALY_DETECTED",
+        "project_id": target_project_id,
         "incident_id": incident_id,
         "service_id": service_id,
         "message": message,
@@ -718,7 +738,8 @@ def publish_anomaly(
         )
 
         logger.info(
-            "Published anomaly event | service=%s | incident=%s | score=%.4f",
+            "Published anomaly event | project=%s | service=%s | incident=%s | score=%.4f",
+            target_project_id,
             service_id,
             incident_id,
             anomaly_score,

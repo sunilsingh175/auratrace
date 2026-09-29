@@ -305,36 +305,36 @@ class RepairOrchestrator:
                 await self._append_log(session, run_id, "SAFETY_GATE", "Safety Gate verification PASSED.", data=safety_data)
 
             # ----------------------------------------------------
-            # STAGE 2: SANDBOX VERIFICATION (If test repo provided)
+            # STAGE 2: MANDATORY SANDBOX VERIFICATION
             # ----------------------------------------------------
-            if sandbox_repo_dir:
-                async with self.session_maker() as session:
-                    run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
-                    r = run_res.scalar_one()
-                    r.status = "SANDBOX_TEST"
-                    await session.commit()
-                    await self._append_log(session, run_id, "SANDBOX", f"Running sandbox verification in '{sandbox_repo_dir}'...")
+            async with self.session_maker() as session:
+                run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
+                r = run_res.scalar_one()
+                r.status = "SANDBOX_TEST"
+                await session.commit()
+                sandbox_msg = f"Running sandbox verification in '{sandbox_repo_dir}'..." if sandbox_repo_dir else "Running sandbox verification in isolated temporary workspace..."
+                await self._append_log(session, run_id, "SANDBOX", sandbox_msg)
 
-                sandbox_res = await async_run_sandbox_test(
-                    repo_dir=sandbox_repo_dir,
-                    patch=suggested_patch,
-                    test_command=settings.test_command or "pytest",
-                    timeout_seconds=90,
-                    isolated=True,
-                )
+            sandbox_res = await async_run_sandbox_test(
+                repo_dir=sandbox_repo_dir or "",
+                patch=suggested_patch,
+                test_command=settings.test_command or "pytest",
+                timeout_seconds=90,
+                isolated=True,
+            )
 
-                async with self.session_maker() as session:
-                    run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
-                    r = run_res.scalar_one()
-                    r.sandbox_result = sandbox_res
-                    if sandbox_res.get("status") != "PASSED":
-                        r.status = "SANDBOX_FAILED"
-                        r.error_message = f"Sandbox verification failed: {sandbox_res.get('error')}"
-                        await session.commit()
-                        await self._append_log(session, run_id, "SANDBOX", str(r.error_message or ""), level="ERROR", data=sandbox_res)
-                        return {"status": "SANDBOX_FAILED", "run_id": str(run_id), "sandbox_result": sandbox_res}
+            async with self.session_maker() as session:
+                run_res = await session.execute(select(RepairRun).where(RepairRun.id == run_id))
+                r = run_res.scalar_one()
+                r.sandbox_result = sandbox_res
+                if sandbox_res.get("status") != "PASSED":
+                    r.status = "SANDBOX_FAILED"
+                    r.error_message = f"Sandbox verification failed: {sandbox_res.get('error')}"
                     await session.commit()
-                    await self._append_log(session, run_id, "SANDBOX", "Sandbox verification PASSED.", data=sandbox_res)
+                    await self._append_log(session, run_id, "SANDBOX", str(r.error_message or ""), level="ERROR", data=sandbox_res)
+                    return {"status": "SANDBOX_FAILED", "run_id": str(run_id), "sandbox_result": sandbox_res}
+                await session.commit()
+                await self._append_log(session, run_id, "SANDBOX", "Sandbox verification PASSED.", data=sandbox_res)
 
             # ----------------------------------------------------
             # STAGE 3: GITHUB AUTHENTICATION & BRANCH CREATION

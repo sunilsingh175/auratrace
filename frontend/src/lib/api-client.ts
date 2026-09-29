@@ -36,11 +36,13 @@ function ensureOk(response: Response, path: string) {
 export async function fetchIncidents(params?: {
   status?: string;
   service_id?: string;
+  project_id?: string;
   limit?: number;
 }): Promise<Incident[]> {
   const query = new URLSearchParams();
   if (params?.status && params.status !== "ALL") query.set("status_filter", params.status);
   if (params?.service_id) query.set("service_id", params.service_id);
+  if (params?.project_id) query.set("project_id", params.project_id);
   if (params?.limit) query.set("limit", String(params.limit));
   const path = `incidents?${query}`;
   const res = await request(path);
@@ -49,6 +51,7 @@ export async function fetchIncidents(params?: {
   if (!Array.isArray(data)) throw new Error("Invalid incidents response");
   return data.map((item: any) => ({
     id: item.id,
+    project_id: item.project_id || undefined,
     service_id: item.service_id || "unknown",
     title: item.title || item.error_type || "Anomaly Detected",
     error_type: item.error_type || "System Anomaly",
@@ -79,6 +82,7 @@ export async function fetchIncidentById(id: string): Promise<Incident | null> {
     if (!item?.id) return null;
     return {
       id: item.id,
+      project_id: item.project_id || undefined,
       service_id: item.service_id || "unknown",
       title: item.title || item.error_type || "Anomaly Detected",
       error_type: item.error_type || "System Anomaly",
@@ -189,7 +193,8 @@ export async function cleanTestData(): Promise<{ success: boolean; message: stri
 
 export async function simulateCrash(
   scenario: string = "db_pool_exhaustion",
-  serviceId?: string
+  serviceId?: string,
+  projectId?: string
 ): Promise<{ status?: string; scenario?: string; event_id?: string; message: string }> {
   const path = "simulate-crash";
   const res = await request(path, {
@@ -197,14 +202,16 @@ export async function simulateCrash(
     body: JSON.stringify({
       scenario,
       service_id: serviceId || "checkout-service",
+      project_id: projectId || undefined,
     }),
   });
   ensureOk(res, path);
   return res.json();
 }
 
-export async function fetchServices(): Promise<Service[]> {
-  const path = "services";
+export async function fetchServices(projectId?: string): Promise<Service[]> {
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const path = `services${query}`;
   const res = await request(path);
   ensureOk(res, path);
   const data = await res.json();
@@ -231,8 +238,9 @@ export async function fetchServices(): Promise<Service[]> {
 }
 
 
-export async function fetchSystemStats(): Promise<SystemStats> {
-  const path = "stats";
+export async function fetchSystemStats(projectId?: string): Promise<SystemStats> {
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const path = `stats${query}`;
   const res = await request(path);
   ensureOk(res, path);
   const data = await res.json();

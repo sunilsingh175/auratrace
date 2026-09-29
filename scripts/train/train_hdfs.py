@@ -4,7 +4,11 @@ Trains and serializes the HDFS anomaly model to joblib format for inference.
 """
 
 import argparse
+import sys
 from pathlib import Path
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 import joblib
 import numpy as np
@@ -19,12 +23,13 @@ from evaluate_hdfs import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-OUTPUT_MODEL_PATH = REPO_ROOT / "backend" / "ml_anomaly_service" / "hdfs_isolation_forest.joblib"
+OUTPUT_BENCHMARK_PATH = REPO_ROOT / "models" / "benchmarks" / "hdfs_isolation_forest.joblib"
+BACKEND_MODEL_PATH = REPO_ROOT / "backend" / "ml_anomaly_service" / "hdfs_isolation_forest.joblib"
 
 
 def train_and_save(sample_size: int = 50000, n_trees: int = 100):
     print("=" * 70)
-    print("Training HDFS Isolation Forest Model for AuraTrace Backend")
+    print("Training HDFS Isolation Forest Benchmark Model for AuraTrace")
     print("=" * 70)
 
     event_ids = load_event_templates(TEMPLATES_PATH)
@@ -41,7 +46,7 @@ def train_and_save(sample_size: int = 50000, n_trees: int = 100):
 
     X = transform_events_to_feature_matrix(x_sample, event_ids)
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y_sample, test_size=0.3, random_state=42, stratify=y_sample
+        X, y_sample, test_size=0.2, random_state=42, stratify=y_sample
     )
 
     contamination = max(0.01, min(0.5, float(np.sum(y_train == 1)) / len(y_train)))
@@ -55,9 +60,12 @@ def train_and_save(sample_size: int = 50000, n_trees: int = 100):
     )
     model.fit(X_train)
 
-    OUTPUT_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, OUTPUT_MODEL_PATH)
-    print(f"✓ Model successfully trained and saved to: {OUTPUT_MODEL_PATH}")
+    OUTPUT_BENCHMARK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    BACKEND_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, OUTPUT_BENCHMARK_PATH)
+    joblib.dump(model, BACKEND_MODEL_PATH)
+    print(f"[OK] Model successfully trained and saved to: {OUTPUT_BENCHMARK_PATH}")
+    print(f"[OK] Copied to backend: {BACKEND_MODEL_PATH}")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { AuraTrace } from "../src/client.js";
 import { uninstallGlobalHooks } from "../src/hooks.js";
 
+process.env.AURATRACE_SUPPRESS_EXIT = "1";
+
 async function testAutomaticCrashCapture() {
   console.log("Testing Node SDK automatic crash capture hooks...");
   uninstallGlobalHooks();
