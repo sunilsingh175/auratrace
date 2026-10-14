@@ -1,6 +1,5 @@
 {
   "name": "@auratrace/node",
-<<<<<<< HEAD
   "version": "2.0.0",
   "type": "module",
   "description": "Official Node.js automatic crash-capture and AI diagnostics SDK for AuraTrace",
@@ -13,42 +12,21 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build",
     "test": "npx tsx test/automatic-crash-capture.test.ts && npx tsx test/client.test.ts && npx tsx test/transport.test.ts",
     "pack:check": "npm run build && npm pack --dry-run"
-=======
-  "version": "1.0.0",
-  "description": "AuraTrace Node.js SDK — zero-config crash capture",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": ["dist", "README.md"],
-  "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build"
->>>>>>> 9f420d2609525d61c582cceb64279c1885f42862
   },
   "keywords": ["observability", "crash-reporting", "aiops", "monitoring"],
   "license": "MIT",
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
   "devDependencies": {
-<<<<<<< HEAD
     "@types/node": "^20.11.24",
     "tsx": "^4.7.1",
     "typescript": "^5.3.3"
   }
-=======
-    "@types/node": "^20.9.0",
-    "typescript": "^5.2.2"
-  },
-  "dependencies": {}
->>>>>>> 9f420d2609525d61c582cceb64279c1885f42862
 }
