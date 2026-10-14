@@ -1,22 +1,10 @@
-"""
-<<<<<<< HEAD
-AuraTrace Python SDK — Zero-Boilerplate Automatic Crash Detection & Diagnostics
-=======
-AuraTrace Python SDK — zero-config crash capture.
+"""AuraTrace Python SDK — automatic crash capture and diagnostics."""
 
-Usage:
-    from auratrace import init
-    init(api_key="aura_live_...")
->>>>>>> 9f420d2609525d61c582cceb64279c1885f42862
-"""
-from .client import AuraTraceClient, get_client, init
-from .client import capture_exception, capture_event
-
-<<<<<<< HEAD
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from .client import (
     AuraTrace,
+    AuraTraceClient,
     AutomaticBackendDetection,
     AutoTrace,
     Trace,
@@ -49,8 +37,12 @@ def init(
     install_global_hook: bool = True,
     enable_local_diagnosis: bool = True,
 ) -> AuraTrace:
-    """Manually configure or override AuraTrace client instance."""
+    """Configure the default AuraTrace client."""
     global _default_client
+
+    if _default_client is not None:
+        _default_client.close()
+
     _default_client = AuraTrace(
         api_key=api_key,
         service_name=service_name,
@@ -72,50 +64,63 @@ def _get_or_create_client() -> AuraTrace:
     return _default_client
 
 
-def capture_message(message: str, metadata: Optional[dict] = None) -> None:
-    """Capture and send a log message to AuraTrace."""
-    _get_or_create_client().capture_message(message, metadata=metadata)
+def capture_message(
+    message: str,
+    metadata: Optional[Dict[str, Any]] = None,
+    severity: str = "info",
+) -> None:
+    """Capture a log message."""
+    _get_or_create_client().capture_message(
+        message, metadata=metadata, severity=severity
+    )
+
+
+def capture_event(event_name: str, **fields: Any) -> None:
+    """Capture a custom telemetry event."""
+    _get_or_create_client().capture_event(event_name, **fields)
 
 
 def capture_exception(
-    exception: BaseException, metadata: Optional[dict] = None
+    exception: BaseException,
+    metadata: Optional[Dict[str, Any]] = None,
+    extra_context: Optional[Dict[str, Any]] = None,
+    severity: str = "critical",
 ) -> Optional[DiagnosticReport]:
-    """Capture and diagnose an exception trace with AuraTrace."""
-    return _get_or_create_client().capture_exception(exception, metadata=metadata)
+    """Capture and diagnose an exception."""
+    return _get_or_create_client().capture_exception(
+        exception,
+        metadata=metadata,
+        extra_context=extra_context,
+        severity=severity,
+    )
 
 
 def diagnose(
     exception: BaseException, auto_sandbox: bool = False
 ) -> Optional[DiagnosticReport]:
-    """Run embedded crash diagnosis, RAG search, and Safety Gate verification."""
-    return _get_or_create_client().diagnose(exception, auto_sandbox=auto_sandbox)
+    """Run embedded crash diagnosis."""
+    return _get_or_create_client().diagnose(
+        exception, auto_sandbox=auto_sandbox
+    )
 
 
 def flush() -> None:
-    """Flush all pending telemetry batches synchronously."""
+    """Flush pending telemetry batches."""
     if _default_client is not None:
         _default_client.flush()
 
 
-# Auto-bootstrap client on import
-try:
-    _get_or_create_client()
-except Exception:
-    pass  # Fail silent during initialization if unconfigured
-
 __all__ = [
     "AuraTrace",
+    "AuraTraceClient",
     "AutoTrace",
     "TraceClient",
     "Trace",
     "AutomaticBackendDetection",
-=======
-__version__ = "1.0.0"
-__all__ = [
->>>>>>> 9f420d2609525d61c582cceb64279c1885f42862
     "init",
+    "capture_message",
+    "capture_event",
     "capture_exception",
-<<<<<<< HEAD
     "diagnose",
     "flush",
     "HTTPTransport",
@@ -126,9 +131,9 @@ __all__ = [
     "run_sandbox_test",
     "install_exception_hook",
     "uninstall_exception_hook",
-=======
-    "capture_event",
-    "AuraTraceClient",
-    "get_client",
->>>>>>> 9f420d2609525d61c582cceb64279c1885f42862
+    "get_runtime_info",
+    "resolve_api_key",
+    "resolve_endpoint",
+    "resolve_environment",
+    "resolve_service_name",
 ]

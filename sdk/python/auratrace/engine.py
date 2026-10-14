@@ -313,7 +313,8 @@ class EmbeddedDiagnosticEngine:
                 f"        return None"
             )
         else:
-            repaired_line = f"try:\n        {orig_line}\n    except Exception:\n        return None"
+            # Avoid suggesting speculative fixes for unsupported exception types.
+            return ""
 
         patch = (
             f"--- a/{target_file}\n"
@@ -346,16 +347,28 @@ class EmbeddedDiagnosticEngine:
             print(f"  • Error Type    : {report.error_type}: {report.error_message}")
             if report.failing_file:
                 print(f"  • Location      : {report.failing_file}:{report.failing_line}")
-            print(f"\n🔍 ROOT CAUSE ANALYSIS:")
+            print("\nROOT CAUSE ANALYSIS:")
             print(f"  {report.root_cause}")
-            print(f"\n🛡️ SAFETY GATE INSPECTION:")
-            print(f"  Status: {'PASSED (Safe to test/apply)' if report.safety_allowed else 'BLOCKED'}")
-            if report.safety_reasons:
-                for r in report.safety_reasons:
-                    print(f"    - {r}")
-            print(f"\n💡 PROPOSED REMEDIATION PATCH:")
-            for pline in report.suggested_patch.splitlines()[:6]:
-                print(f"    {pline}")
+
+            print("\nSAFETY GATE INSPECTION:")
+            if not report.suggested_patch.strip():
+                print("  Status: BLOCKED - No patch generated")
+            elif report.safety_allowed:
+                print("  Status: PASSED initial safety checks; validation still required")
+            else:
+                print("  Status: BLOCKED")
+
+            for reason in report.safety_reasons:
+                print(f"    - {reason}")
+
+            print("\nREMEDIATION:")
+            if report.suggested_patch.strip():
+                for pline in report.suggested_patch.splitlines()[:12]:
+                    print(f"    {pline}")
+            else:
+                print("  No automatic patch is available for this exception.")
+                print("  Review the root cause and create a fix manually.")
+
             print("=" * 68 + "\n")
         except Exception:
             pass

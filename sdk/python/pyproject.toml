@@ -3,36 +3,24 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-<<<<<<< HEAD
 name = "auratrace"
 version = "2.0.0"
-authors = [{ name="Sunil Singh", email="sunilsinghrajput192@gmail.com" }]
-description = "Official Python automatic crash-capture and AI diagnostics SDK for AuraTrace"
-=======
-name = "auratrace-sdk"
-version = "1.0.0"
-description = "AuraTrace Python SDK — zero-config crash capture"
->>>>>>> 9f420d2609525d61c582cceb64279c1885f42862
+description = "AuraTrace Python automatic crash-capture and AI diagnostics SDK"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
-authors = [{ name = "AuraTrace Team" }]
+authors = [
+    { name = "AuraTrace Team" }
+]
 keywords = ["observability", "crash-reporting", "aiops", "monitoring"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
 ]
-
-<<<<<<< HEAD
-[tool.setuptools]
-packages = ["auratrace"]
-=======
-dependencies = []  # Zero external deps — uses stdlib only
->>>>>>> 9f420d2609525d61c582cceb64279c1885f42862
+dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/your-org/auratrace"
-Documentation = "https://docs.auratrace.dev"
+Homepage = "https://github.com/sunilsingh175/auratrace"
 
 [tool.setuptools.packages.find]
 where = ["."]
