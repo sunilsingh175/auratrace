@@ -1,13 +1,9 @@
 /**
-<<<<<<< HEAD
- * AuraTrace Node.js SDK — Zero-Boilerplate Automatic Crash Detection & Diagnostics
+ * AuraTrace Node.js SDK — public API.
  */
 
 import {
   AuraTrace,
-  AuraTraceClient,
-  AutoTrace,
-  Trace,
   type AuraTraceInitOptions,
   type AutoTraceInitOptions,
 } from "./client.js";
@@ -38,7 +34,7 @@ export function captureMessage(
 }
 
 export function captureException(
-  error: Error | any,
+  error: Error | unknown,
   metadata: Record<string, any> = {},
   severity: string = "critical"
 ): Promise<void> {
@@ -46,17 +42,7 @@ export function captureException(
 }
 
 export function flush(): Promise<void> {
-  if (defaultClient) {
-    return defaultClient.flush();
-  }
-  return Promise.resolve();
-}
-
-// Auto-bootstrap client on module load
-try {
-  getOrCreateClient();
-} catch {
-  // Fail silent during auto-initialization
+  return defaultClient ? defaultClient.flush() : Promise.resolve();
 }
 
 export {
@@ -64,14 +50,13 @@ export {
   AuraTraceClient,
   AutoTrace,
   Trace,
-  HTTPTransport,
-  installGlobalHooks,
-  uninstallGlobalHooks,
-  getRuntimeMetadata,
-  type AuraTraceInitOptions,
-  type AutoTraceInitOptions,
-  type TelemetryEvent,
-};
+} from "./client.js";
+export type { AuraTraceInitOptions, AutoTraceInitOptions } from "./client.js";
+export { HTTPTransport, type TelemetryEvent } from "./transport.js";
+export { installGlobalHooks, uninstallGlobalHooks } from "./hooks.js";
+export { getRuntimeMetadata } from "./metadata.js";
+
+import { AuraTraceClient, AutoTrace, Trace } from "./client.js";
 
 export default {
   init,
@@ -80,16 +65,6 @@ export default {
   flush,
   AuraTrace,
   AuraTraceClient,
+  AutoTrace,
+  Trace,
 };
-=======
- * AuraTrace Node.js SDK — public API.
- */
-export {
-  AuraTraceClient,
-  init,
-  getClient,
-  captureException,
-  captureEvent,
-  InitOptions,
-} from './client';
->>>>>>> 9f420d2609525d61c582cceb64279c1885f42862
